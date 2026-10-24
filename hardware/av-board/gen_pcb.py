@@ -10,6 +10,7 @@ two-terminal part, array or filter is put on the free spot nearest to its anchor
 connects to), on the side given for its group.
 
     python3 gen_pcb.py            # av-board.kicad_pcb, placed and unrouted
+    python3 gen_pcb.py --route    # ... routed by Freerouting (SES=file.ses: import that session instead)
 """
 
 import math
@@ -27,8 +28,13 @@ import board  # noqa: E402
 NAME = "av-board"
 OUT = os.path.join(HERE, NAME + ".kicad_pcb")
 SYSFP = "/usr/share/kicad/footprints"
-JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"      # Freerouting 2.5 needs Java 25+
-FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-2.5.0.jar")
+JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"
+# Freerouting: 1.9.0 by default. On this board 2.3-2.5 oscillate between 120 and 220 unrouted
+# connections pass after pass; 1.9.0 gets within ~10. 1.9.0 needs an X display even in batch mode:
+# a private Xvfb (Homebrew's xorg-server) runs for it. FREEROUTING=2.5.0 picks the headless one.
+FREEROUTING_VERSION = os.environ.get("FREEROUTING", "1.9.0")
+FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-%s.jar" % FREEROUTING_VERSION)
+XVFB = "/home/linuxbrew/.linuxbrew/bin/Xvfb"
 
 # Copper layers: 4 (F.Cu signal / In1 ground / In2 rail planes + signal / B.Cu signal) or 6
 # (F.Cu / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu): LAYERS=6.
@@ -39,23 +45,23 @@ PLANE_LAYER = pcbnew.In2_Cu if LAYERS == 4 else pcbnew.In3_Cu
 TRACK, CLEAR, VIA_D, VIA_DRILL = 0.127, 0.127, 0.5, 0.3
 POWER_NETS = {"+5V", "3V3", "2V5", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_2V5", "AV_VDD", "AV_AVDD", "AV_CVDD",
               "AV_PVDD", "AV_DVDDIO", "AV_TVDD", "TX_DVDD", "TX_AVDD", "TX_PLVDD"}
-TMDS_NETS = {"TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N", "TMDS_D0P", "TMDS_D0N", "TMDS_CKP", "TMDS_CKN"}
+TMDS_NETS = {"TMDS_D2_P", "TMDS_D2_N", "TMDS_D1_P", "TMDS_D1_N", "TMDS_D0_P", "TMDS_D0_N", "TMDS_CK_P", "TMDS_CK_N"}
 
 # ADV7842 rail planes (on PLANE_LAYER), in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
 # as 0..15; outside the array < 0 or > 15). Each rail's balls lie inside its plane; the planes do
 # not touch; each reaches out of the BGA on its own side to its filter (FL1-FL5 above).
 ROWS = "ABCDEFGHJKLMNPRT"
 PLANES = {
-    # AVDD (F12-L12) and PVDD (D15, D16) out of the analog side (up)
-    "AV_AVDD": [(4.55, 10.55), (4.55, 19.5), (11.45, 19.5), (11.45, 10.55)],
-    "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 18.5), (1.6, 18.5)],
+    # AVDD (F12-L12), PVDD (D15, D16) and TVDD (A5, B5, A15, B15) out of the analog side (up), far
+    # enough to cover their filters and plane caps
+    "AV_AVDD": [(4.55, 10.55), (4.55, 24.0), (11.45, 24.0), (11.45, 10.55)],
+    "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 24.0), (1.6, 24.0)],
+    "AV_TVDD": [(-2.0, 3.55), (1.45, 3.55), (1.45, 24.0), (-2.0, 24.0)],
     # VDD (J7, K6-K9, L6-L9) and DVDDIO (F5-M5) out to the right, side by side; the VDD_SDRAM
     # balls M6-M10 (on DVDDIO) join M5 on F.Cu instead (CHAINS), so VDD can pass over them
-    "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (10.45, 10.45), (10.45, 9.45), (21.0, 9.45), (21.0, 5.55),
+    "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (10.45, 10.45), (10.45, 9.45), (30.0, 9.45), (30.0, 5.55),
                (10.45, 5.55), (10.45, 4.55)],
-    "AV_DVDDIO": [(4.55, -1.0), (21.0, -1.0), (21.0, 4.45), (4.55, 4.45)],
-    # TVDD (A5, B5, A15, B15): a strip along the row A edge, out upwards to its filter
-    "AV_TVDD": [(-2.0, 3.55), (1.45, 3.55), (1.45, 21.0), (-2.0, 21.0)],
+    "AV_DVDDIO": [(4.55, -1.0), (30.0, -1.0), (30.0, 4.45), (4.55, 4.45)],
 }
 # Balls joined on F.Cu to a neighbour instead of getting their own via: (ball, ball it joins)
 CHAINS = [("M6", "M5"), ("M7", "M6"), ("M8", "M7"), ("M9", "M8"), ("M10", "M9"),     # VDD_SDRAM -> DVDDIO
@@ -541,6 +547,12 @@ def rules(b):
         c.SetClearance(FromMM(clear))
         c.SetViaDiameter(FromMM(VIA_D))
         c.SetViaDrill(FromMM(VIA_DRILL))
+        if name == "TMDS":
+            # 100 R differential, edge-coupled on F.Cu over In1 (JLCPCB 4-layer: 0.21 mm prepreg,
+            # er ~4.4): 0.25 mm / 0.2 mm gives about 97 R by the usual microstrip formulas; check with
+            # JLCPCB's impedance calculator before ordering
+            c.SetDiffPairWidth(FromMM(0.25))
+            c.SetDiffPairGap(FromMM(0.2))
         ns.SetNetclass(name, c)
         for n in nets:
             ns.SetNetclassPatternAssignment(n, name)
@@ -880,9 +892,22 @@ def route():
     dsn, ses = os.path.join(HERE, NAME + ".dsn"), os.path.join(HERE, NAME + ".ses")
     if not pcbnew.ExportSpecctraDSN(b, dsn):
         raise SystemExit("DSN export failed")
-    subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
-                    "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
-                   check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
+    if os.environ.get("SES"):
+        ses = os.environ["SES"]             # a session routed elsewhere (another router, by hand)
+    elif FREEROUTING_VERSION.startswith("1."):
+        display = ":%d" % (90 + os.getpid() % 100)
+        xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")],
+                           check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT,
+                           env=dict(os.environ, DISPLAY=display))
+        finally:
+            xvfb.terminate()
+    else:
+        subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
+                        "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
+                       check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
     if not pcbnew.ImportSpecctraSES(b, ses):
         raise SystemExit("SES import failed")
     have = set()

@@ -387,8 +387,8 @@ for i in list(range(0, 8)) + list(range(24, 36)):
 for name, net in (("CLK", "OUT_CLK"), ("HSYNC", "OUT_HSYNC"), ("VSYNC", "OUT_VSYNC"), ("DE", "OUT_DE"),
                   ("SCL", "OUT_SCL"), ("SDA", "OUT_SDA"), ("INT", "OUT_INT"), ("PD", "OUT_PD"),
                   ("R_EXT", "R_EXT"), ("HPD", "HDMI_HPD"), ("DDCSDA", "HDMI_SDA"), ("DDCSCL", "HDMI_SCL"),
-                  ("TX2+", "TMDS_D2P"), ("TX2-", "TMDS_D2N"), ("TX1+", "TMDS_D1P"), ("TX1-", "TMDS_D1N"),
-                  ("TX0+", "TMDS_D0P"), ("TX0-", "TMDS_D0N"), ("TXC+", "TMDS_CKP"), ("TXC-", "TMDS_CKN")):
+                  ("TX2+", "TMDS_D2_P"), ("TX2-", "TMDS_D2_N"), ("TX1+", "TMDS_D1_P"), ("TX1-", "TMDS_D1_N"),
+                  ("TX0+", "TMDS_D0_P"), ("TX0-", "TMDS_D0_N"), ("TXC+", "TMDS_CK_P"), ("TXC-", "TMDS_CK_N")):
     u2[pin(name)] = net
 for name in ("I2S1", "I2S2", "I2S3", "SPDIF", "DSD0", "DSD1", "DSD2", "DSD3", "DSD4", "DSD5", "DSDCLK",
              "CEC", "CEC_CLK", "HEAC+", "HEAC-"):
@@ -411,15 +411,15 @@ for rail, n in (("TX_DVDD", 4), ("TX_AVDD", 4), ("TX_PLVDD", 2), ("3V3", 1)):
 
 # HDMI connector, type A [HWG Fig. 27, 6.3]
 part("J6", "HDMI-001", "lcsc:HDMI-001", "lcsc:HDMI-SMD_19P-P0.50-H-F", "C138388",
-     {"1": "TMDS_D2P", "2": "GND", "3": "TMDS_D2N", "4": "TMDS_D1P", "5": "GND", "6": "TMDS_D1N",
-      "7": "TMDS_D0P", "8": "GND", "9": "TMDS_D0N", "10": "TMDS_CKP", "11": "GND", "12": "TMDS_CKN",
+     {"1": "TMDS_D2_P", "2": "GND", "3": "TMDS_D2_N", "4": "TMDS_D1_P", "5": "GND", "6": "TMDS_D1_N",
+      "7": "TMDS_D0_P", "8": "GND", "9": "TMDS_D0_N", "10": "TMDS_CK_P", "11": "GND", "12": "TMDS_CK_N",
       "15": "HDMI_SCL", "16": "HDMI_SDA", "17": "GND", "18": "HDMI_5V", "19": "HDMI_HPD",
       "20": "GND", "21": "GND", "22": "GND", "23": "GND"})
 # ESD on the TMDS lines: TI TPD4E05U06, 0.5 pF per line (HWG 6.3.2.1 asks for < 0.6 pF; its example,
 # Panasonic EZAEG2A50AX, needs one part per line), flow-through: each line crosses pad n and the
 # NC pad opposite it (10, 9, 7, 6)
-for ref, (a, b_, c, d) in (("U9", ("TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N")),
-                           ("U10", ("TMDS_D0P", "TMDS_D0N", "TMDS_CKP", "TMDS_CKN"))):
+for ref, (a, b_, c, d) in (("U9", ("TMDS_D2_P", "TMDS_D2_N", "TMDS_D1_P", "TMDS_D1_N")),
+                           ("U10", ("TMDS_D0_P", "TMDS_D0_N", "TMDS_CK_P", "TMDS_CK_N"))):
     part(ref, "TPD4E05U06DQAR", "lcsc:TPD4E05U06DQAR_C138714", "lcsc:USON-10_L2.5-W1.0-P0.50-BL", "C138714",
          {"1": a, "10": a, "2": b_, "9": b_, "4": c, "7": c, "5": d, "6": d, "3": "GND", "8": "GND"})
 part("U8", "TPD4E05U06DQAR", "lcsc:TPD4E05U06DQAR_C138714", "lcsc:USON-10_L2.5-W1.0-P0.50-BL", "C138714",
