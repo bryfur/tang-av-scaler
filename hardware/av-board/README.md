@@ -4,6 +4,9 @@ One board on the Tang Console 138K's two 2x20 headers: component video and stere
 (ADV7842, PCM1808) on J10, HDMI out (ADV7511) on J9. A frame around the 138K SOM, which sits
 between the headers. Status: design in progress.
 
+- [design.md](design.md): the electrical design, connection by connection, with its sources
+- [reference-notes.md](reference-notes.md): what ADI's and TI's reference designs say
+
 ## The host's headers (Sipeed's schematic Tang_138K_Console_V32001C, sheet FPGA_EXT_CONN)
 
 J9 ("SDRAM0") and J10 ("SDRAM1"): 2x20, 2.54 mm, SMD male headers, parallel, 49 mm apart (J9 along
