@@ -933,20 +933,21 @@ def route():
         raise SystemExit("SES import failed")
     have = set()
     for t in b.GetTracks():
-        if t.GetClass() == "PCB_VIA":
-            have.add(("via", round(ToMM(t.GetPosition().x), 3), round(ToMM(t.GetPosition().y), 3)))
+        if t.GetClass() == "PCB_VIA":  # (to 10 um: routers round coordinates)
+            have.add(("via", round(ToMM(t.GetPosition().x), 2), round(ToMM(t.GetPosition().y), 2)))
         else:
-            a = (round(ToMM(t.GetStart().x), 3), round(ToMM(t.GetStart().y), 3))
-            z = (round(ToMM(t.GetEnd().x), 3), round(ToMM(t.GetEnd().y), 3))
+            a = (round(ToMM(t.GetStart().x), 2), round(ToMM(t.GetStart().y), 2))
+            z = (round(ToMM(t.GetEnd().x), 2), round(ToMM(t.GetEnd().y), 2))
             have.add(("track", t.GetLayer()) + min(a, z) + max(a, z))
+    vias_now = [(ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)) for t in b.GetTracks() if t.GetClass() == "PCB_VIA"]
     back = 0
     for f in fixed:
         if f[0] == "via":
-            if ("via", round(f[1], 3), round(f[2], 3)) not in have:
+            if not any(abs(x - f[1]) < 0.02 and abs(y - f[2]) < 0.02 for x, y in vias_now):
                 via(b, f[1], f[2], b.FindNet(f[3]))
                 back += 1
         else:
-            a, z = (round(f[1], 3), round(f[2], 3)), (round(f[3], 3), round(f[4], 3))
+            a, z = (round(f[1], 2), round(f[2], 2)), (round(f[3], 2), round(f[4], 2))
             if ("track", f[6]) + min(a, z) + max(a, z) not in have:
                 track(b, (f[1], f[2]), (f[3], f[4]), f[5], f[6], b.FindNet(f[7]))
                 back += 1
