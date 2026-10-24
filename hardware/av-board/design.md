@@ -307,6 +307,9 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
   serves; the video terminations and coupling caps at the ADV7842's analog edge [UG-214 App.
   A], the ADV7511's audio series resistors at J9 [HWG 7.3]; bias resistors, the reference caps
   and the regulators' feedback dividers are placed first, nearest their pins.
+- Routing room: a 1 mm ring round the ADV7842 is kept free of small parts on both sides (its outer two
+  rings of balls escape through it), and so is the J10 bus's fan-out between the 75 R arrays and
+  J10's pins. The two RXA/RXB_5V balls get escape vias like the signal balls.
 - Rail planes (inner layer): each ADV7842 rail's balls are inside its plane, which widens past
   the BGA to hold its filter and all its decoupling on the underside (68 of 69 caps fully over
   their plane, the last a 10 uF bulk cap beside it): AVDD over the top right, PVDD and TVDD over
@@ -317,8 +320,12 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
 
 ## Stack-up and rules
 
-Four layers, 1.6 mm (JLCPCB's standard 4-layer stack); gen_pcb.py can make six (LAYERS=6) if
-routing needs them:
+Four layers, 1.6 mm (JLCPCB's standard 4-layer stack, JLC04161H-7628); gen_pcb.py can make six
+(LAYERS=6) if routing needs them. Six layers add one full signal layer (In2), free under the
+ADV7842's BGA where the four-layer board has its rail planes, and a second ground; every signal
+layer keeps a ground or plane next to it. For six layers order JLC06161H-7628B (1.6 mm, 0.218 mm
+7628 prepreg under the outer layers, er 4.4): the outer-layer geometry, and so the TMDS pairs,
+stay as on four layers.
 
 | Layer | 4 layers | 6 layers |
 |---|---|---|

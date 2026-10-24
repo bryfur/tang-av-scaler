@@ -14,6 +14,7 @@ connects to), on the side given for its group.
                                   # ROUTER=deeppcb MINUTES=60: route on DeepPCB, see deeppcb.py)
 """
 
+import json
 import math
 import os
 import subprocess
@@ -230,6 +231,11 @@ def fit_fl(ref):
 FIT = {"U1": fit_u1, "U2": fit_u2, "U9": fit_esd, "U10": fit_esd}
 FIT.update({r: fit_fl(r) for r in FL_PLANE})
 
+U1_RING = 1.0       # mm round the ADV7842's courtyard kept free of small parts (its escape ring)
+# room kept free of small parts for routing, both sides: the J10 bus's fan-out, from under the 75 R
+# arrays to J10's pins 1-26
+RESERVED = [(103.8, 72.4, 136.6, 76.9)]
+
 # Groups for the small parts: (side, anchor) by block / net
 DECOUPLE_U1 = {"AV_TVDD", "AV_AVDD", "AV_CVDD", "AV_VDD", "AV_DVDDIO", "AV_PVDD"}
 # bias resistors, the ADC references' caps and the regulators' feedback dividers, placed before
@@ -317,6 +323,9 @@ class Occ:
                 return False
         for bx, by in BUTTONS:
             if x1 > bx - 4 and x0 < bx + 4 and y1 > by - 4 and y0 < by + 4:
+                return False
+        for rx0, ry0, rx1, ry1 in RESERVED:
+            if x1 > rx0 and x0 < rx1 and y1 > ry0 and y0 < ry1:
                 return False
         for hx, hy in HOLES:
             if x1 > hx - 3 and x0 < hx + 3 and y1 > hy - 3 and y0 < hy + 3:
@@ -470,9 +479,12 @@ def main():
         if ref == "U1":
             _u1_grid[:] = [inverse_grid(fp)]
             place_rn(fps, fp, occ)
-        occ.take(side, courtyard(fp, 0.3))
+        # the ADV7842 keeps a 1 mm ring clear of small parts on both sides: its outer two rings of
+        # balls escape on the outer layers through there (the 75 R arrays are placed already)
+        keep = U1_RING if ref == "U1" else 0.3
+        occ.take(side, courtyard(fp, keep))
         if ref in ("U1", "U2"):
-            occ.take("B" if side == "F" else "F", courtyard(fp, 0.3))
+            occ.take("B" if side == "F" else "F", courtyard(fp, keep))
         # through-hole pads (jacks, sockets, thermal vias) block the other side too
         for pad in fp.Pads():
             if pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH):
@@ -651,9 +663,10 @@ def rules(b):
         c.SetViaDiameter(FromMM(VIA_D))
         c.SetViaDrill(FromMM(VIA_DRILL))
         if name == "TMDS":
-            # 100 R differential, edge-coupled on F.Cu over In1 (JLCPCB 4-layer: 0.21 mm prepreg,
-            # er ~4.4): 0.25 mm / 0.2 mm gives about 97 R by the usual microstrip formulas; check with
-            # JLCPCB's impedance calculator before ordering
+            # 100 R differential, edge-coupled on F.Cu over In1 (JLCPCB 4-layer JLC04161H-7628: 0.21 mm
+            # prepreg, er ~4.4; six layers: JLC06161H-7628B, 0.218 mm, er 4.4): 0.25 mm / 0.2 mm gives
+            # about 97 R by the usual microstrip formulas; check with JLCPCB's impedance calculator
+            # before ordering (a thin 2116 stack would want about 0.16 / 0.2 mm)
             c.SetDiffPairWidth(FromMM(0.25))
             c.SetDiffPairGap(FromMM(0.2))
         ns.SetNetclass(name, c)
@@ -734,10 +747,10 @@ def fanout_u1(b, fp):
         net = pad.GetNetname()
         if not net or pad.GetNumber() in chained:
             continue
-        # (+5V: the two HDMI 5 V detect balls, beside unused HDMI balls: they escape on F.Cu)
+        # (+5V: the two HDMI 5 V detect balls, RXA/RXB_5V, take a via like a signal ball)
         power = net == "GND" or (net in POWER_NETS and net != "+5V")
         ring = min(r, c, 15 - r, 15 - c)
-        if not power and (ring <= 1 or net == "+5V"):
+        if not power and ring <= 1:
             continue
         cands = [(r + dr, c + dc) for dr in (-0.5, 0.5) for dc in (-0.5, 0.5)]
         if net in PLANES:
@@ -959,7 +972,8 @@ def stitch(b, pitch=2.5, gap=0.3):
         while x < X1 - 1.4:
             wx0, wy0, wx1, wy1 = WIN
             ok = not (wx0 - 1.0 < x < wx1 + 1.0 and wy0 - 1.0 < y < wy1 + 1.0)
-            ok = ok and all(((x - hx) ** 2 + (y - hy) ** 2) ** 0.5 > 3.0 for hx, hy in HOLES)
+            # (the standoffs' keepouts are 6 mm squares, see planes())
+            ok = ok and all(abs(x - hx) > 3.0 + VIA_D / 2 or abs(y - hy) > 3.0 + VIA_D / 2 for hx, hy in HOLES)
             ok = ok and all(((x - hx) ** 2 + (y - hy) ** 2) ** 0.5 > 4.5 for hx, hy in BUTTONS)
             if ok:
                 for px, py, r in pts:
@@ -1007,13 +1021,40 @@ def prune(path, rounds=5):
     print("dangling vias and stubs removed:", removed)
 
 
-def route():
-    """Freerouting on the saved board, then the ground pours on the outer layers, filled."""
-    b = pcbnew.LoadBoard(OUT)
-    # KiCad's session import replaces every track and via with what Freerouting returns, which
-    # leaves out some of the locked fanout: note it here and put back what is missing
-    fixed = []
+def freerouting(dsn, ses):
+    """Route a DSN with Freerouting (1.x under a private Xvfb, 2.x headless); copper the DSN marks
+    fixed (KiCad's locked tracks and vias) stays as it is."""
+    log = open(os.path.join(HERE, "route.log"), "w")
+    if FREEROUTING_VERSION.startswith("1."):
+        display = ":%d" % (90 + os.getpid() % 100)
+        xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")],
+                           check=True, stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, DISPLAY=display))
+        finally:
+            xvfb.terminate()
+    else:
+        subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
+                        "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
+                       check=True, stdout=log, stderr=subprocess.STDOUT)
+
+
+def copper_key(t):
+    """A track or via, by layer and position to 10 um (routers round coordinates)."""
+    if t.GetClass() == "PCB_VIA":
+        return ("via", round(ToMM(t.GetPosition().x), 2), round(ToMM(t.GetPosition().y), 2))
+    a = (round(ToMM(t.GetStart().x), 2), round(ToMM(t.GetStart().y), 2))
+    z = (round(ToMM(t.GetEnd().x), 2), round(ToMM(t.GetEnd().y), 2))
+    return ("track", t.GetLayer()) + min(a, z) + max(a, z)
+
+
+def session(b, ses_for):
+    """Export the board's copper, get a session for it (ses_for(dsn) -> path), import it. KiCad's
+    session import replaces every track and via with the session's, which leaves out some of the
+    locked copper: what is missing is put back."""
     copper = list(b.GetTracks())            # (after ExportSpecctraDSN the track list cannot be iterated)
+    fixed = []
     for t in copper:
         if t.IsLocked():
             if t.GetClass() == "PCB_VIA":
@@ -1021,42 +1062,17 @@ def route():
             else:
                 fixed.append(("track", ToMM(t.GetStart().x), ToMM(t.GetStart().y), ToMM(t.GetEnd().x),
                               ToMM(t.GetEnd().y), ToMM(t.GetWidth()), t.GetLayer(), t.GetNetname()))
-    dsn, ses = os.path.join(HERE, NAME + ".dsn"), os.path.join(HERE, NAME + ".ses")
+    dsn = os.path.join(HERE, NAME + ".dsn")
     if not pcbnew.ExportSpecctraDSN(b, dsn):
         raise SystemExit("DSN export failed")
-    if os.environ.get("SES"):
-        ses = os.environ["SES"]             # a session routed elsewhere (another router, by hand)
-    elif os.environ.get("ROUTER") == "deeppcb":
-        subprocess.run([sys.executable, os.path.join(HERE, "deeppcb.py"), "run", dsn, ses, "--minutes",
-                        os.environ.get("MINUTES", "60")], check=True)
-    elif FREEROUTING_VERSION.startswith("1."):
-        display = ":%d" % (90 + os.getpid() % 100)
-        xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        try:
-            subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")],
-                           check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT,
-                           env=dict(os.environ, DISPLAY=display))
-        finally:
-            xvfb.terminate()
-    else:
-        subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
-                        "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
-                       check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
-    # start from no copper: some sessions carry the protected fanout (DeepPCB), some leave part of it
-    # out (Freerouting); what is missing afterwards is put back from the list above
+    ses = ses_for(dsn)
+    # start from no copper: some sessions carry the locked copper (DeepPCB), some leave part of it
+    # out (Freerouting)
     for t in copper:
         b.Remove(t)
     if not pcbnew.ImportSpecctraSES(b, ses):
         raise SystemExit("SES import failed")
-    have = set()
-    for t in b.GetTracks():
-        if t.GetClass() == "PCB_VIA":  # (to 10 um: routers round coordinates)
-            have.add(("via", round(ToMM(t.GetPosition().x), 2), round(ToMM(t.GetPosition().y), 2)))
-        else:
-            a = (round(ToMM(t.GetStart().x), 2), round(ToMM(t.GetStart().y), 2))
-            z = (round(ToMM(t.GetEnd().x), 2), round(ToMM(t.GetEnd().y), 2))
-            have.add(("track", t.GetLayer()) + min(a, z) + max(a, z))
+    have = {copper_key(t) for t in b.GetTracks()}
     vias_now = [(ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)) for t in b.GetTracks() if t.GetClass() == "PCB_VIA"]
     back = 0
     for f in fixed:
@@ -1069,7 +1085,63 @@ def route():
             if ("track", f[6]) + min(a, z) + max(a, z) not in have:
                 track(b, (f[1], f[2]), (f[3], f[4]), f[5], f[6], b.FindNet(f[7]))
                 back += 1
-    print("fanout items put back after the import:", back)
+    return back
+
+
+def route():
+    """Route the saved board (Freerouting, DeepPCB or a given session), finish what another router
+    left with Freerouting, then the ground pours on the outer layers, filled. Each step runs in a
+    process of its own: after a DSN export, pcbnew can no longer list a board's tracks, nor load
+    one."""
+    b = pcbnew.LoadBoard(OUT)
+
+    def first(dsn):
+        if os.environ.get("SES"):
+            return os.environ["SES"]        # a session routed elsewhere (another router, by hand)
+        ses = os.path.join(HERE, NAME + ".ses")
+        if os.environ.get("ROUTER") == "deeppcb":
+            subprocess.run([sys.executable, os.path.join(HERE, "deeppcb.py"), "run", dsn, ses, "--minutes",
+                            os.environ.get("MINUTES", "60")], check=True)
+        else:
+            freerouting(dsn, ses)
+        return ses
+    print("fanout items put back after the import:", session(b, first))
+    pcbnew.SaveBoard(OUT, b)
+    if (os.environ.get("SES") or os.environ.get("ROUTER") == "deeppcb") and os.environ.get("FINISH", "1") == "1":
+        subprocess.run([sys.executable, os.path.abspath(__file__), "--finish"], check=True)
+    subprocess.run([sys.executable, os.path.abspath(__file__), "--pour"], check=True)
+
+
+FANOUT_JSON = OUT + ".fanout.json"          # the finishing pass's note of the locked fanout
+
+
+def finish():
+    """What another router left unconnected: Freerouting with all of its copper fixed (the fanout,
+    noted, is unlocked again by pour())."""
+    b = pcbnew.LoadBoard(OUT)
+    tracks = list(b.GetTracks())
+    with open(FANOUT_JSON, "w") as f:
+        json.dump([list(copper_key(t)) for t in tracks if t.IsLocked()], f)
+    for t in tracks:
+        t.SetLocked(True)
+
+    def ses_for(dsn):
+        ses = os.path.join(HERE, NAME + "-finish.ses")
+        freerouting(dsn, ses)
+        return ses
+    print("finishing pass: items put back after the import:", session(b, ses_for))
+    pcbnew.SaveBoard(OUT, b)
+
+
+def pour():
+    """Ground pours on the outer layers, stitching, fill, prune; only the fanout stays locked."""
+    b = pcbnew.LoadBoard(OUT)
+    if os.path.exists(FANOUT_JSON):
+        with open(FANOUT_JSON) as f:
+            fanout = {tuple(k) for k in json.load(f)}
+        for t in b.GetTracks():
+            t.SetLocked(copper_key(t) in fanout)
+        os.remove(FANOUT_JSON)
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
     zone(b, "GND", pcbnew.F_Cu, full)
     zone(b, "GND", pcbnew.B_Cu, full)
@@ -1084,4 +1156,9 @@ def route():
 
 
 if __name__ == "__main__":
-    main()
+    if "--finish" in sys.argv:              # route()'s steps, each in a process of its own
+        finish()
+    elif "--pour" in sys.argv:
+        pour()
+    else:
+        main()
