@@ -134,8 +134,9 @@ CVDD (HDMI only) up to 130 mA, DVDDIO 51-109 mA.
   VREF: 0.1 uF + 10 uF.
 - Inputs: 1 uF in series (2.7 Hz with the 60 k input). In front of it, 10 k series and 10 k to
   GND: a 2 Vrms line output comes down to 1 Vrms, under the 3 Vp-p (1.06 Vrms) full scale. A
-  1 nF to GND after the 10 k series resistor gives the optional anti-aliasing RC (8.2.2.4), at
-  about 32 kHz.
+  220 pF to GND after the 10 k series resistor gives the optional anti-aliasing RC: 5 k (the
+  divider) x 220 pF, 145 kHz, in TI's range (100 R x 10 nF to 1 k x 1 nF, about 160 kHz
+  [10.1.3]), flat to 20 kHz.
 - To J9 (bank 2), its left end, next to the PCM1808: SCKI pin 37 (A0, D19), LRCK pin 38 (A1, E19),
   DOUT pin 39 (A2, C19), BCK pin 40 (A3, C18). The FPGA is the
   audio clock master (12.288 MHz = 256 x 48 kHz).
@@ -180,7 +181,8 @@ output, forwarded by an ODDR, which any pin can do, so it does not need the head
   TPD4E05U06 (0.5 pF per line, made for HDMI 1.4b, flow-through) at the connector; the HWG asks
   for < 0.6 pF and names Panasonic's EZAEG2A50AX varistors, one per line [6.3.2.1].
 - DDCSDA/DDCSCL (54, 53) direct to the connector with 2 k pull-ups to the HDMI +5 V [6.3.3, Fig. 27].
-  HPD (30) direct from the connector (5 V tolerant).
+  HPD (30) direct from the connector (5 V tolerant), 10 k to GND so it reads 0 V with no sink
+  [6.1.4].
 - Supplies [HWG 6.8 Fig. 23, 7.1]: one 1.8 V LDO, then three 10 uH + 10 uF LC filters: DVDD
   (1, 19, 49, 76, 77); AVDD (29, 34, 41) with PVDD (24, 25); PLVDD (21) with BGVDD (26).
   0.1 uF at every supply pin (adjacent pins share one). MVDD (47) 3.3 V. No sequencing needed
@@ -196,14 +198,15 @@ ground) and the shell go to GND.
 | Rail | Source | Load (max) |
 |---|---|---|
 | +5 V | J9 pin 11 + J10 pin 11 (the Console's 5 V), 22 uF + 0.1 uF | everything, about 0.7 A |
-| 3V3 | TPS7A7001 from +5 V (R1 169 k, R2 30.1 k [TI Table 2]; 10 uF in/out) | DVDDIO 110 mA, TVDD (no HDMI input: leakage), VDD_SDRAM 3 mA, MVDD, PCM1808 VDD, pull-ups: about 0.2 A, 0.34 W |
+| 3V3 | TPS7A7001 from +5 V (R1 169 k, R2 30.1 k [TI Table 2]; 10 uF in/out; 220 pF feed-forward, required with over 47 uF on the output [TI 6.3, 8.1.2]) | DVDDIO 110 mA, TVDD (no HDMI input: leakage), VDD_SDRAM 3 mA, MVDD, PCM1808 VDD, pull-ups: about 0.2 A, 0.34 W |
 | 2V5 | TLV62569 buck from +5 V (2.2 uH, 4.7 uF in, 10 uF out, R1 316 k, R2 100 k, 6.8 pF feed-forward [TI Fig. 5, Eq. 2]) | the two 1.8 V LDOs, about 0.9 A |
-| 1V8A | TPS7A7001 from 2V5 (R1 78.7 k, R2 30.1 k); EN from 3V3 through 100 k, 470 nF to GND [PSU Fig. 2; EBZ] | ADV7842 VDD + AVDD + CVDD + PVDD, up to about 0.68 A |
+| 1V8A | TPS7A7001 from 2V5 (R1 78.7 k, R2 30.1 k; 10 uF out, about 185 uF with its filters' caps, under the 200 uF limit; 220 pF feed-forward); EN from 2V5 (its VIN: EN must not exceed VIN [TI 6.3]) through 100 k, 470 nF to GND [PSU Fig. 2; EBZ] | ADV7842 VDD + AVDD + CVDD + PVDD, up to about 0.68 A |
 | 1V8B | TPS7A7001 from 2V5, same | ADV7511 1.8 V, about 0.2 A |
 | 5VA | ferrite from +5 V | PCM1808 VCC, 10 mA |
 | HDMI_5V | 0.2 A PTC from +5 V | the sink's DDC (55 mA) |
 
-The order is 3.3 V first, then 1.8 V through the EN delay (about 50 ms), as [UG-214 App. A] asks.
+The order is 3.3 V first, then 1.8 V through the EN delay (about 30 ms after 2V5), as
+[UG-214 App. A] asks.
 There is one ground plane [UG-214 App. A; HWG; PSU].
 
 ## The two headers
@@ -245,6 +248,30 @@ inputs, never high.**
   to GND. The board ties it to GND.
 - J10 pin 2 (FPGA P19) is also the FPGA's SSPI_CLK configuration pin; it carries C1, an input to
   the FPGA, which is harmless while the FPGA configures from flash.
+
+## Review against the data sheets (2026-10-24)
+
+Every IC's connections checked pin by pin against its document:
+
+- ADV7842: every ball against UG-214 App. C (unused interfaces float, PWRDN1 4.7 k up, the four
+  SCL 10 k down, SDRAM DQ/DQS 4.7 k down, VDD_SDRAM to DVDDIO, SDRAM_VREF and TEST4 to GND,
+  RTERM 500 R, RXA/RXB_5V to 5 V); the only differences are the deviations above (TEST5) and
+  SYNC3/SYNC4/TRI4 to GND as in UG-214 Fig. 176. AIN4/5/6 = Y/Pr/Pb with SYNC2 as UG-214 Fig. 13
+  and the AIN_SEL = 001 table show. Firmware note: 480i component needs the manual ADC routing
+  (ADC_SWITCH_MAN, UG-214 6.4).
+- ADV7511 (HWG Rev D): supply domains and filters (Fig. 23), R_EXT 887 R 1 %, PD/AD, INT, SDA/SCL,
+  DDC pull-ups, CEC and ARC pins to GND, unused data inputs to GND, audio series resistors at the
+  source. Fixed: the HPD pull-down is 10 k as 6.1.4 asks (was 100 k). Layout: the CLK net gets
+  extra clearance (7.2); no switching line or via near R_EXT (7.6) is checked after routing.
+- PCM1808: pinout, slave I2S straps, VREF/VCC/VDD bypass, 1 uF inputs. Fixed: the anti-alias cap
+  (220 pF, was 1 nF, which cut 1.4 dB at 20 kHz).
+- TPS7A7001: pinout (EN 2, IN 3, OUT 6, FB 7, GND 8), R2 in 27-33 k, Table 2 values, >= 4.7 uF out.
+  Fixed: the 220 pF feed-forward the outputs need above 47 uF; 1V8A kept under the 200 uF output
+  limit (10 uF at the LDOs); EN of the 1.8 V LDOs from their own 2V5 input (it went to 3.3 V
+  with 2.5 V on VIN).
+- TLV62569: pinout, Eq. 2 (2.50 V), R2 <= 200 k, 6.8 pF for R2 = 100 k, 2.2 uH with 10-47 uF
+  out (30 uF), 4.7 uF in; inductor Isat 2 A against about 1.4 A needed.
+- TPD4E05U06: pinout (flow-through, NC pads opposite), 5.5 V stand-off for HDMI 5 V.
 
 ## Mechanics
 

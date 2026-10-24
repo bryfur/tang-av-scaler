@@ -184,13 +184,16 @@ for k in (1, 2):
 # ---------------------------------------------------------------------------
 
 block("power")
-# 3V3: TPS7A7001 from +5 V; R1 169 k, R2 30.1 k [TI Table 2]; 10 uF in and out [TI 6.3]
+# 3V3: TPS7A7001 from +5 V; R1 169 k, R2 30.1 k [TI Table 2]; 10 uF in and out [TI 6.3]. Its
+# load carries over 47 uF (the DVDDIO and TVDD filters' 33 + 10 uF), so the feed-forward 220 pF
+# across R1 is required [TI 6.3 note 2, 8.1.2: 47-200 uF]
 part("U5", "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", "C60719",
      {"3": "+5V", "2": "+5V", "6": "3V3", "7": "FB_3V3", "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
 C("10u", "+5V", size="C0805")
 C("10u", "3V3", size="C0805")
 R("169k", "3V3", "FB_3V3")
 R("30.1k", "FB_3V3", "GND")
+C("220p", "3V3", "FB_3V3")
 
 # 2V5: TLV62569 buck [TI Fig. 5]: 4.7 uF in, 2.2 uH, 10 uF out, R1 316 k / R2 100 k (Eq. 2), 6.8 pF
 part("U4", "TLV62569DBVR", "lcsc:TLV62569DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C141836",
@@ -202,18 +205,23 @@ R("316k", "2V5", "FB_2V5")
 R("100k", "FB_2V5", "GND")
 C("6.8p", "2V5", "FB_2V5")
 
-# 1.8 V enable from 3V3 through 100 k, 470 nF [PSU Fig. 2; EBZ R100/C39]: 3.3 V first
-R("100k", "3V3", "EN_1V8")
+# 1.8 V enable through 100 k, 470 nF [PSU Fig. 2; EBZ R100/C39]: the 1.8 V rails come up about
+# 30 ms after 2V5, well after 3V3. From 2V5, the LDOs' own input: EN must stay at or below VIN
+# [TI 6.3]
+R("100k", "2V5", "EN_1V8")
 C("470n", "EN_1V8")
 
-# 1V8A (ADV7842) and 1V8B (ADV7511): TPS7A7001 from 2V5, R1 78.7 k / R2 30.1 k [TI Table 2]
+# 1V8A (ADV7842) and 1V8B (ADV7511): TPS7A7001 from 2V5, R1 78.7 k / R2 30.1 k [TI Table 2];
+# 10 uF out (TI's evaluated value): 1V8A then carries about 185 uF with its four filters' 33 + 10 uF,
+# inside the 200 uF limit; 220 pF feed-forward as for 3V3 [TI 6.3, 8.1.2]
 for u, out, fb, lc in (("U6", "1V8A", "FB_1V8A", "C60719"), ("U7", "1V8B", "FB_1V8B", "C60719")):
     part(u, "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", lc,
          {"3": "2V5", "2": "EN_1V8", "6": out, "7": fb, "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
     C("10u", "2V5", size="C0805")
-    C("22u", out)
+    C("10u", out, size="C0805")
     R("78.7k", out, fb)
     R("30.1k", fb, "GND")
+    C("220p", out, fb)
 
 # ADV7842 rails: an NFE61PT472C1H9L per rail, 33 uF tantalum + 10 uF after it [EBZ sheet 10;
 # UG-214 Fig. 178]
@@ -362,7 +370,7 @@ for jack, ch, lc, colour in (("J4", "L", "C4992678", "black"), ("J5", "R", "C499
          {"2": "RCA_" + ch, "1": "GND"}, note=colour + " RCJ-01x")
     R("10k", "RCA_" + ch, "AUD_DIV_" + ch)
     R("10k", "AUD_DIV_" + ch, "GND")
-    C("1n", "AUD_DIV_" + ch)
+    C("220p", "AUD_DIV_" + ch)                   # anti-alias RC: 5 k x 220 pF, 145 kHz [TI 10.1.3]
     C("1u", "AUD_DIV_" + ch, "AUD_VIN" + ch)
 
 # ---------------------------------------------------------------------------
@@ -433,7 +441,7 @@ part("U8", "TPD4E05U06DQAR", "lcsc:TPD4E05U06DQAR_C138714", "lcsc:USON-10_L2.5-W
       "5": "HDMI_5V", "6": "HDMI_5V", "3": "GND", "8": "GND"})
 R("2k", "HDMI_5V", "HDMI_SCL")                      # [HWG 6.3.3: 1.5-2 k to the HDMI 5 V]
 R("2k", "HDMI_5V", "HDMI_SDA")
-R("100k", "HDMI_HPD", "GND", note="keeps HPD low with no cable (not in HWG Fig. 27)")
+R("10k", "HDMI_HPD", "GND", note="0 V on HPD with no sink [HWG 6.1.4: 10 k +-10 %]")
 two(nxt("F"), "PTC0805", "0.2A", "+5V", "HDMI_5V")
 C("100n", "HDMI_5V")
 

@@ -46,6 +46,7 @@ PLANE_LAYER = pcbnew.In2_Cu if LAYERS == 4 else pcbnew.In3_Cu
 TRACK, CLEAR, VIA_D, VIA_DRILL = 0.127, 0.127, 0.5, 0.3
 POWER_NETS = {"+5V", "3V3", "2V5", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_2V5", "AV_VDD", "AV_AVDD", "AV_CVDD",
               "AV_PVDD", "AV_DVDDIO", "AV_TVDD", "TX_DVDD", "TX_AVDD", "TX_PLVDD"}
+CLOCK_NETS = {"OUT_CLK", "AV_LLC", "IN_LLC"}
 TMDS_NETS = {"TMDS_D2_P", "TMDS_D2_N", "TMDS_D1_P", "TMDS_D1_N", "TMDS_D0_P", "TMDS_D0_N", "TMDS_CK_P", "TMDS_CK_N"}
 
 # ADV7842 rail planes (on PLANE_LAYER), in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
@@ -640,7 +641,10 @@ def rules(b):
     nc.SetViaDrill(FromMM(VIA_DRILL))
     # power tracks 0.25 mm: they must reach 0.5 mm-pitch supply pins (ADV7511, TPD4E05U06); the big
     # currents run in planes (ADV7842) or are short
-    for name, width, clear, nets in (("POWER", 0.25, 0.15, POWER_NETS), ("TMDS", 0.2, 0.15, TMDS_NETS)):
+    # the pixel clocks keep other lines further off [HWG 7.2: nothing near the CLK trace]: 0.19 mm,
+    # what the 0.2 mm gaps between their 0.5 mm-pitch pads (ADV7511 pin 79, the 75 R array) allow
+    for name, width, clear, nets in (("POWER", 0.25, 0.15, POWER_NETS), ("TMDS", 0.2, 0.15, TMDS_NETS),
+                                     ("CLOCK", TRACK, 0.19, CLOCK_NETS)):
         c = pcbnew.NETCLASS(name)
         c.SetTrackWidth(FromMM(width))
         c.SetClearance(FromMM(clear))
