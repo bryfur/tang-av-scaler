@@ -268,22 +268,20 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
 
 ## Stack-up and rules
 
-Six layers, 1.6 mm (JLCPCB's standard 6-layer stack):
+Four layers, 1.6 mm (JLCPCB's standard 4-layer stack); gen_pcb.py can make six (LAYERS=6) if
+routing needs them:
 
-| Layer | Use |
-|---|---|
-| F.Cu | parts, signals (pixel buses, TMDS), ground pour |
-| In1 | ground, solid |
-| In2 | signals |
-| In3 | the ADV7842's rail planes (AVDD, VDD, CVDD, DVDDIO, each from its filter to its balls), signals elsewhere |
-| In4 | ground, solid |
-| B.Cu | decoupling, signals, ground pour |
+| Layer | 4 layers | 6 layers |
+|---|---|---|
+| F.Cu | parts, signals (pixel buses, TMDS), ground pour | same |
+| In1 | ground, solid | ground, solid |
+| In2 | the ADV7842's rail planes (AVDD, VDD, DVDDIO, PVDD, TVDD, each from its filter to its balls), signals elsewhere | signals |
+| In3 | - | the rail planes, signals elsewhere |
+| In4 | - | ground, solid |
+| B.Cu | decoupling, signals, ground pour | same |
 
-Four layers were tried first: with one plane layer for ground and one shared by the rail planes
-and signals, Freerouting left about 100 connections unrouted around the 256-ball BGA and
-diverged in later passes (it also cut the ground plane up while it could route on it). Six
-layers give four signal layers, each next to a ground plane: the 148.5 MHz output bus and the
-TMDS lines run over solid ground.
+(The first layout, with a window over the SOM, needed six layers and still did not route; the
+window is gone, see Mechanics.)
 
 Rules: 0.127 mm tracks and clearance by default (JLCPCB's minimum is 0.09); power nets 0.25 mm
 with 0.15 mm clearance (they must reach 0.5 mm-pitch supply pins; the large currents run in planes); TMDS 0.2 mm; vias 0.3 mm drill, 0.5 mm pad. The ADV7842's balls are

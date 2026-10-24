@@ -27,12 +27,13 @@ import board  # noqa: E402
 NAME = "av-board"
 OUT = os.path.join(HERE, NAME + ".kicad_pcb")
 SYSFP = "/usr/share/kicad/footprints"
-JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"
-# Freerouting 1.9.0: 2.5.0 leaves about 100 connections of this board unrouted after its first pass
-# and diverges in the next ones; 1.9.0 gets within ~20. 1.9.0 needs an X display even in batch
-# mode: a private Xvfb (Homebrew's xorg-server) runs for it.
-FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-1.9.0.jar")
-XVFB = "/home/linuxbrew/.linuxbrew/bin/Xvfb"
+JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"      # Freerouting 2.5 needs Java 25+
+FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-2.5.0.jar")
+
+# Copper layers: 4 (F.Cu signal / In1 ground / In2 rail planes + signal / B.Cu signal) or 6
+# (F.Cu / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu): LAYERS=6.
+LAYERS = int(os.environ.get("LAYERS", "4"))
+PLANE_LAYER = pcbnew.In2_Cu if LAYERS == 4 else pcbnew.In3_Cu
 
 # Rules (JLCPCB 4-layer standard: 0.09 mm track/space, 0.3 mm drill; we stay well above)
 TRACK, CLEAR, VIA_D, VIA_DRILL = 0.127, 0.127, 0.5, 0.3
@@ -40,7 +41,7 @@ POWER_NETS = {"+5V", "3V3", "2V5", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_2V5", "
               "AV_PVDD", "AV_DVDDIO", "AV_TVDD", "TX_DVDD", "TX_AVDD", "TX_PLVDD"}
 TMDS_NETS = {"TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N", "TMDS_D0P", "TMDS_D0N", "TMDS_CKP", "TMDS_CKN"}
 
-# ADV7842 rail planes on In3, in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
+# ADV7842 rail planes (on PLANE_LAYER), in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
 # as 0..15; outside the array < 0 or > 15). Each rail's balls lie inside its plane; the planes do
 # not touch; each reaches out of the BGA on its own side to its filter (FL1-FL5 above).
 ROWS = "ABCDEFGHJKLMNPRT"
@@ -53,6 +54,8 @@ PLANES = {
     "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (10.45, 10.45), (10.45, 9.45), (21.0, 9.45), (21.0, 5.55),
                (10.45, 5.55), (10.45, 4.55)],
     "AV_DVDDIO": [(4.55, -1.0), (21.0, -1.0), (21.0, 4.45), (4.55, 4.45)],
+    # TVDD (A5, B5, A15, B15): a strip along the row A edge, out upwards to its filter
+    "AV_TVDD": [(-2.0, 3.55), (1.45, 3.55), (1.45, 21.0), (-2.0, 21.0)],
 }
 # Balls joined on F.Cu to a neighbour instead of getting their own via: (ball, ball it joins)
 CHAINS = [("M6", "M5"), ("M7", "M6"), ("M8", "M7"), ("M9", "M8"), ("M10", "M9"),     # VDD_SDRAM -> DVDDIO
@@ -102,10 +105,10 @@ HAND = {
     # the scaler's buttons, bottom right (near J10 pins 31/32)
     "SW1": (164.0, 76.0, 0, "F"), "SW2": (164.0, 86.0, 0, "F"),
     # ADV7842 rail filters on the bottom, at the exits of their In3 planes (see PLANES): VDD and
-    # DVDDIO leave to the right, AVDD and PVDD upwards; CVDD and TVDD are routed rails
+    # DVDDIO leave to the right, AVDD, PVDD and TVDD upwards; CVDD is a routed rail
     "FL3": (126.0, 56.5, 0, "B"), "FL1": (126.0, 61.0, None, "B"), "FL5": (126.0, 66.5, None, "B"),
     "FL4": (108.5, 48.0, None, "B"), "FL2": (113.5, 48.2, None, "B"),
-    "FL6": (126.0, 52.5, 0, "B"),
+    "FL6": (105.4, 49.0, None, "B"),
 }
 
 
@@ -177,11 +180,11 @@ def fit_esd(fp, x, y):
     return p1[0] < p10[0] and p1[1] < p5[1]
 
 
-FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL5": "AV_DVDDIO", "FL4": "AV_PVDD"}
+FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL5": "AV_DVDDIO", "FL4": "AV_PVDD", "FL6": "AV_TVDD"}
 _u1_grid = []
 
 
-FL_AXIS = {"FL1": "x", "FL5": "x", "FL2": "y", "FL4": "y"}
+FL_AXIS = {"FL1": "x", "FL5": "x", "FL2": "y", "FL4": "y", "FL6": "y"}
 
 
 def fit_fl(ref):
@@ -349,7 +352,7 @@ def place_near(occ, fp, side, anchor, angles=(0, 90)):
 
 def main():
     b = pcbnew.BOARD()
-    b.SetCopperLayerCount(6)
+    b.SetCopperLayerCount(LAYERS)
     ds = b.GetDesignSettings()
     ds.SetBoardThickness(FromMM(1.6))
     outline(b)
@@ -382,11 +385,6 @@ def main():
         fps[p.ref] = fp
 
     occ = Occ()
-    # Bus corridors stay free of small parts: from the 75 R arrays to J10's pins, and from J9's
-    # data end to the ADV7511.
-    for side in ("F", "B"):
-        occ.take(side, (103.5, 70.0, 127.0, 77.0))          # the 75 R arrays -> J10's data pins
-        occ.take(side, (141.0, 32.5, 155.5, 39.0))          # J9's data end -> ADV7511
 
     # --- hand-placed parts
     for ref, spec in list(HAND.items()):
@@ -521,12 +519,13 @@ def main():
 # ---------------------------------------------------------------------------
 
 def rules(b):
-    # Stack: F.Cu signal / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu
-    # signal. The ground layers are power layers, so Freerouting never routes on them.
+    # The ground layers are power layers, so Freerouting never routes on them; the rail planes'
+    # layer is mixed: signals may run there outside the planes (see LAYERS)
     b.SetLayerType(pcbnew.In1_Cu, pcbnew.LT_POWER)
-    b.SetLayerType(pcbnew.In2_Cu, pcbnew.LT_SIGNAL)
-    b.SetLayerType(pcbnew.In3_Cu, pcbnew.LT_MIXED)
-    b.SetLayerType(pcbnew.In4_Cu, pcbnew.LT_POWER)
+    if LAYERS == 6:
+        b.SetLayerType(pcbnew.In2_Cu, pcbnew.LT_SIGNAL)
+        b.SetLayerType(pcbnew.In4_Cu, pcbnew.LT_POWER)
+    b.SetLayerType(PLANE_LAYER, pcbnew.LT_MIXED)
     ds = b.GetDesignSettings()
     ns = ds.m_NetSettings
     nc = ns.GetDefaultNetclass()
@@ -803,13 +802,14 @@ def planes(b, fp):
     g = grid(fp)
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
     zone(b, "GND", pcbnew.In1_Cu, full)
-    zone(b, "GND", pcbnew.In4_Cu, full)
+    if LAYERS == 6:
+        zone(b, "GND", pcbnew.In4_Cu, full)
     for net, poly in PLANES.items():
         pts = [g(r, c) for r, c in poly]
         pts = [(min(max(x, X0 + 0.5), X1 - 0.5), min(max(y, Y0 + 0.5), Y1 - 0.5)) for x, y in pts]
-        zone(b, net, pcbnew.In3_Cu, pts, priority=1)
-        # no signal tracks across a rail plane on In3 (vias may pass)
-        keepout(b, 0, 0, 0, 0, pts=pts, layer=pcbnew.In3_Cu, vias=False)
+        zone(b, net, PLANE_LAYER, pts, priority=1)
+        # no signal tracks across a rail plane (vias may pass)
+        keepout(b, 0, 0, 0, 0, pts=pts, layer=PLANE_LAYER, vias=False)
 
 
 def seg_dist(px, py, ax, ay, bx, by):
@@ -880,24 +880,11 @@ def route():
     dsn, ses = os.path.join(HERE, NAME + ".dsn"), os.path.join(HERE, NAME + ".ses")
     if not pcbnew.ExportSpecctraDSN(b, dsn):
         raise SystemExit("DSN export failed")
-    display = ":%d" % (90 + os.getpid() % 100)
-    xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    log = open(os.path.join(HERE, "route.log"), "w")
-    try:
-        # stage 1 routes the board; stage 2 starts from that result and works on what is left
-        for stage in (1, 2):
-            if stage == 2 and not pcbnew.ExportSpecctraDSN(b, dsn):
-                raise SystemExit("DSN export failed")
-            subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses,
-                            "-mp", os.environ.get("PASSES", "100")],
-                           check=True, stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, DISPLAY=display))
-            if not pcbnew.ImportSpecctraSES(b, ses):
-                raise SystemExit("SES import failed")
-            b.BuildConnectivity()
-            print("stage %d: %d unrouted connections" % (stage, b.GetConnectivity().GetUnconnectedCount(False)))
-    finally:
-        xvfb.terminate()
+    subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
+                    "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
+                   check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
+    if not pcbnew.ImportSpecctraSES(b, ses):
+        raise SystemExit("SES import failed")
     have = set()
     for t in b.GetTracks():
         if t.GetClass() == "PCB_VIA":

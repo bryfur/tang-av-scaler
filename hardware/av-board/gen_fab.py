@@ -23,7 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NAME = "av-board"
 PCB = os.path.join(HERE, NAME + ".kicad_pcb")
 FAB = os.path.join(HERE, "fab")
-LAYERS = "F.Cu,In1.Cu,In2.Cu,In3.Cu,In4.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
+COPPER = {4: "F.Cu,In1.Cu,In2.Cu,B.Cu", 6: "F.Cu,In1.Cu,In2.Cu,In3.Cu,In4.Cu,B.Cu"}
+OTHER = "F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
 
 
 def main():
@@ -31,7 +32,8 @@ def main():
     gdir = os.path.join(FAB, "gerbers")
     shutil.rmtree(gdir, ignore_errors=True)
     os.makedirs(gdir)
-    subprocess.run(["kicad-cli", "pcb", "export", "gerbers", "-l", LAYERS, "--subtract-soldermask",
+    n = pcbnew.LoadBoard(PCB).GetCopperLayerCount()
+    subprocess.run(["kicad-cli", "pcb", "export", "gerbers", "-l", COPPER[n] + "," + OTHER, "--subtract-soldermask",
                     "--use-drill-file-origin", "-o", gdir + "/", PCB], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
                     "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", PCB],
