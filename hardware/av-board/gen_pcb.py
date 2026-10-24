@@ -10,7 +10,8 @@ two-terminal part, array or filter is put on the free spot nearest to its anchor
 connects to), on the side given for its group.
 
     python3 gen_pcb.py            # av-board.kicad_pcb, placed and unrouted
-    python3 gen_pcb.py --route    # ... routed by Freerouting (SES=file.ses: import that session instead)
+    python3 gen_pcb.py --route    # ... routed by Freerouting (SES=file.ses: import that session instead;
+                                  # ROUTER=deeppcb MINUTES=60: route on DeepPCB, see deeppcb.py)
 """
 
 import math
@@ -56,7 +57,7 @@ PLANES = {
     # enough to cover their filters and plane caps
     "AV_AVDD": [(4.55, 10.55), (4.55, 24.0), (11.45, 24.0), (11.45, 10.55)],
     "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 24.0), (1.6, 24.0)],
-    "AV_TVDD": [(-2.0, 3.55), (1.45, 3.55), (1.45, 24.0), (-2.0, 24.0)],
+    "AV_TVDD": [(-14.0, 3.55), (1.45, 3.55), (1.45, 24.0), (-14.0, 24.0)],   # also left, under the jack strip
     # VDD (J7, K6-K9, L6-L9) and DVDDIO (F5-M5) out to the right, side by side; the VDD_SDRAM
     # balls M6-M10 (on DVDDIO) join M5 on F.Cu instead (CHAINS), so VDD can pass over them
     "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (10.45, 10.45), (10.45, 9.45), (30.0, 9.45), (30.0, 5.55),
@@ -327,7 +328,7 @@ def courtyard(fp, margin=0.25):
             ToMM(bb.GetRight()) + margin, ToMM(bb.GetBottom()) + margin)
 
 
-def place_near(occ, fp, side, anchor, angles=(0, 90)):
+def place_near(occ, fp, side, anchor, angles=(0, 90), where=None):
     """Put fp on the free spot nearest anchor (spiral search)."""
     ax, ay = anchor
     if side == "B" and not fp.IsFlipped():
@@ -342,13 +343,16 @@ def place_near(occ, fp, side, anchor, angles=(0, 90)):
                 fp.SetOrientationDegrees(ang)
                 fp.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
                 box = courtyard(fp)
-                if occ.free(side, box):
+                if occ.free(side, box) and (where is None or where(box)):
                     best = (x, y, ang, box)
                     break
             if best:
                 break
         if best:
             break
+    if not best and where is not None:
+        print("note: %s placed off its plane (no room on it)" % fp.GetReference())
+        return place_near(occ, fp, side, anchor, angles)
     assert best, "no room for %s near %s" % (fp.GetReference(), anchor)
     x, y, ang, box = best
     fp.SetOrientationDegrees(ang)
@@ -500,7 +504,15 @@ def main():
     order.sort(key=rank)
     for p in order:
         (ax, ay), side = anchor_for(p)
-        place_near(occ, fps[p.ref], side, (ax, ay))
+        # a rail's decoupling goes where its whole footprint is over the rail's plane: a via straight
+        # down then connects it, with nothing for the router to do
+        plane = [n for n in p.pins.values() if n in PLANES]
+        where = None
+        if plane and p.ref.startswith("C"):
+            poly, to_grid = PLANES[plane[0]], _u1_grid[0]
+            where = (lambda box, poly=poly, to_grid=to_grid: all(
+                inside(poly, *to_grid(x, y)) for x in (box[0], box[2]) for y in (box[1], box[3])))
+        place_near(occ, fps[p.ref], side, (ax, ay), where=where)
 
     # orientation checks: the jacks open to the left edge, U2's data side faces J9 (above it)
     for ref in ("J1", "J2", "J3", "J4", "J5"):
@@ -894,6 +906,9 @@ def route():
         raise SystemExit("DSN export failed")
     if os.environ.get("SES"):
         ses = os.environ["SES"]             # a session routed elsewhere (another router, by hand)
+    elif os.environ.get("ROUTER") == "deeppcb":
+        subprocess.run([sys.executable, os.path.join(HERE, "deeppcb.py"), "run", dsn, ses, "--minutes",
+                        os.environ.get("MINUTES", "60")], check=True)
     elif FREEROUTING_VERSION.startswith("1."):
         display = ":%d" % (90 + os.getpid() % 100)
         xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
@@ -908,6 +923,10 @@ def route():
         subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
                         "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
                        check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
+    # start from no copper: some sessions carry the protected fanout (DeepPCB), some leave part of it
+    # out (Freerouting); what is missing afterwards is put back from the list above
+    for t in list(b.GetTracks()):
+        b.Remove(t)
     if not pcbnew.ImportSpecctraSES(b, ses):
         raise SystemExit("SES import failed")
     have = set()

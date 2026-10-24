@@ -18,7 +18,7 @@ KiCad files. On a machine with KiCad 9 (here: the build host):
 | schematic | `python3 gen_sch.py` | `av-board.kicad_sch`, project and library tables |
 | ERC | `kicad-cli sch erc av-board.kicad_sch` | (clean) |
 | netlist check | `kicad-cli sch export netlist -o /tmp/av.net av-board.kicad_sch && python3 check_netlist.py /tmp/av.net` | schematic = board.py, pin by pin |
-| PCB | `python3 gen_pcb.py --route` | `av-board.kicad_pcb`: placed, fanned out, routed by Freerouting 2.5 (headless, Java 25+), ground poured; `LAYERS=6` for six layers |
+| PCB | `python3 gen_pcb.py --route` | `av-board.kicad_pcb`: placed, fanned out, routed, ground poured. Router: Freerouting (`FREEROUTING=1.9.0` default, under a private Xvfb; `2.5.0` headless), or DeepPCB (`ROUTER=deeppcb MINUTES=60`, API key in `~/.config/deeppcb/key`), or any session (`SES=file.ses`); `LAYERS=6` for six layers |
 | DRC | `kicad-cli pcb drc av-board.kicad_pcb` | |
 | fab files | `python3 gen_fab.py` | `fab/`: Gerbers + drill zip, JLCPCB BOM and CPL |
 | parts library | `./fetch_lib.sh` | `lib/`: LCSC symbols/footprints (committed) and 3D models (not) |
