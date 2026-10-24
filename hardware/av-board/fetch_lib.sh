@@ -10,7 +10,7 @@ EDA=${EDA:-$HOME/tools/eda-venv/bin/easyeda2kicad}
 # 75 R and 4.7 k arrays, 2.2 uH (RCJ-012 has no EasyEDA model: it shares RCJ-011's footprint)
 "$EDA" --full --output lib/lcsc --overwrite --lcsc_id C138388 C4991844 C4992678 C362486 C79933 \
     C5124634 C22436166 C60719 C222882 C883105 C514382 C179459 C55513 C141836 C138714 C242174 \
-    C7202 C39128 C29586 C167747
+    C7202 C39128 C29586 C167747 C318884
 kicad-cli sym upgrade --force lib/lcsc.kicad_sym
 kicad-cli fp upgrade --force lib/lcsc.pretty
 python3 fix_lib.py

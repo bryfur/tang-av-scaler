@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NAME = "av-board"
 PCB = os.path.join(HERE, NAME + ".kicad_pcb")
 FAB = os.path.join(HERE, "fab")
-LAYERS = "F.Cu,In1.Cu,In2.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
+LAYERS = "F.Cu,In1.Cu,In2.Cu,In3.Cu,In4.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
 
 
 def main():

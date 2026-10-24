@@ -210,11 +210,12 @@ On the bottom of the AV board: two 2x20 2.54 mm female sockets, mating with the 
 | 23-26 | MCLK, SCLK, LRCLK, I2S0 | SCKI, BCK, LRCK, DOUT |
 | 27, 28 | SCL, SDA | SCL, SDA |
 | 29, 30 | INT, PD | RESET, INT1 |
-| 31-40 | GND | GND |
+| 31, 32 | GND | KEY1, KEY2 (buttons SW1/SW2 to GND, 10 k pull-ups: low = pressed) |
+| 33-40 | GND | GND |
 
-Pins 31-40 (CAS, RAS, CS, BA0, BA1, A10, A0-A3) are tied to the AV board's ground. They add
-returns next to the only real GND pin (12). **The FPGA design must drive them low or leave them
-as inputs, never high.**
+J9 pins 31-40 and J10 pins 33-40 (CAS, RAS, CS, BA0, BA1, A10, A0-A3) are tied to the AV board's
+ground. They add returns next to the only real GND pin (12). **The FPGA design must drive them
+low or leave them as inputs, never high.**
 
 ## Deviations from the references
 
@@ -245,16 +246,45 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
 - SOM: 45 x 35 mm on the four holes H1-H4 at x 106/147, y 39/70, so x 104-149, y 37-72. Its
   fan and heat sink sit on it. The AV board has a window over it (x 102-151, y 35-74): the SOM's
   height does not matter.
-- What the AV board's area would cover on the Console's top side: buttons S1 (98.9, 38.0) and
-  S2 (98.9, 71.0), 7 mm tall, and SW2 (160.5, 54.5), 6 mm; the LCD FPC J4 at the left edge;
-  PMOD sockets J6/J7 and the 2 mm fan socket J5 at the right edge. They all fit under the
-  board (11 mm above the Console), and the board has 7 mm holes over the three buttons. The
-  Console's HDMI, USB and USB-C are on its bottom side and stay usable.
+- What the AV board's area covers on the Console's top side: buttons S1 (98.9, 38.0) and S2
+  (98.9, 71.0), 7 mm tall, and SW2 (160.5, 54.5), 6 mm; the LCD FPC J4 at the left edge; PMOD
+  sockets J6/J7 and the 2 mm fan socket J5 at the right edge. They all fit under the board (11
+  mm above the Console). SW2 gets a 7 mm hole; S1 and S2 sit right where the input bus runs
+  from J10 to the ADV7842, so they are covered, and the AV board has two buttons of its own
+  (SW1, SW2 at its bottom right edge, on J10 pins 31/32) for the scaler's menu. The Console's
+  HDMI, USB and USB-C are on its bottom side and stay usable.
 - Stack: the Console's SMD male headers (2.5 mm plastic) into 8.5 mm female sockets on the AV
-  board's bottom: the AV board's bottom is 11 mm above the Console's top. Four M2.5 standoffs,
-  11 mm, on the Console's four holes beside the headers (H7_*: x 100/158, y 30/79).
+  board's bottom: the AV board's bottom is 11 mm above the Console's top. Two M2.5
+  standoffs, 11 mm, diagonally on two of the Console's four holes beside the headers (H7_*:
+  (100, 30) and (158, 79)); the other two, (100, 79) and (158, 30), sit where the video buses
+  enter J10 and J9.
 - Wings: the input side (ADV7842, PCM1808, five RCA jacks facing left) sits left of the SOM,
-  over the end of J10 where its data pins are (pins 1-18 at x 105-115); the output side
+  over the end of J10 where its data pins are (pins 1-18 at x 105-115). The ADV7842 sits at
+  J10's height, so its pixel balls (its right edge, y 71-82), the series resistors beside
+  them and J10's pins line up and the bus runs straight across; the output side
   (ADV7511, HDMI facing right) right of the SOM, over the end of J9 where its data pins are
   (x 142-153). Both wings reach past the Console's edges: board x 60-190, y 20.6-90.0
   (130 x 69.4 mm). It does not fit Sipeed's retail case.
+
+## Stack-up and rules
+
+Six layers, 1.6 mm (JLCPCB's standard 6-layer stack):
+
+| Layer | Use |
+|---|---|
+| F.Cu | parts, signals (pixel buses, TMDS), ground pour |
+| In1 | ground, solid |
+| In2 | signals |
+| In3 | the ADV7842's rail planes (AVDD, VDD, CVDD, DVDDIO, each from its filter to its balls), signals elsewhere |
+| In4 | ground, solid |
+| B.Cu | decoupling, signals, ground pour |
+
+Four layers were tried first: with one plane layer for ground and one shared by the rail planes
+and signals, Freerouting left about 100 connections unrouted around the 256-ball BGA and
+diverged in later passes (it also cut the ground plane up while it could route on it). Six
+layers give four signal layers, each next to a ground plane: the 148.5 MHz output bus and the
+TMDS lines run over solid ground.
+
+Rules: 0.127 mm tracks and clearance by default (JLCPCB's minimum is 0.09); power nets 0.25 mm
+with 0.15 mm clearance (they must reach 0.5 mm-pitch supply pins; the large currents run in planes); TMDS 0.2 mm; vias 0.3 mm drill, 0.5 mm pad. The ADV7842's balls are
+1.0 mm apart with 0.4 mm pads: a dogbone via sits on the diagonal between four balls.

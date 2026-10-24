@@ -143,7 +143,7 @@ J10_BALL = {"D0": "R19", "D1": "P19", "D2": "U21", "D3": "T21", "D4": "R17", "D5
 J10_SIG = {1: "Y0", 2: "Y1", 3: "Y2", 4: "Y3", 5: "Y4", 6: "Y5", 7: "Y6", 8: "Y7",
            18: "C0", 17: "C1", 16: "C2", 15: "C3", 14: "C4", 13: "C5", 10: "C6", 9: "C7",
            19: "HS", 20: "LLC", 21: "VS", 22: "DE", 23: "SCKI", 24: "BCK", 25: "LRCK", 26: "DOUT",
-           27: "SCL", 28: "SDA", 29: "RESET_N", 30: "INT1"}
+           27: "SCL", 28: "SDA", 29: "RESET_N", 30: "INT1", 31: "KEY1", 32: "KEY2"}
 J9_SIG = {1: "Y0", 2: "Y1", 3: "Y2", 4: "Y3", 5: "Y4", 6: "Y5", 7: "Y6", 8: "Y7",
           18: "C0", 17: "C1", 16: "C2", 15: "C3", 14: "C4", 13: "C5", 10: "C6", 9: "C7",
           19: "HSYNC", 20: "CLK", 21: "VSYNC", 22: "DE", 23: "MCLK", 24: "SCLK", 25: "LRCLK", 26: "I2S0",
@@ -153,7 +153,7 @@ J9_SIG = {1: "Y0", 2: "Y1", 3: "Y2", 4: "Y3", 5: "Y4", 6: "Y5", 7: "Y6", 8: "Y7"
 def header(ref, sig, prefix, note):
     pins = {}
     for n in range(1, 41):
-        pins[str(n)] = "+5V" if n == 11 else "GND" if n == 12 or n >= 31 else prefix + sig[n]
+        pins[str(n)] = "+5V" if n == 11 else prefix + sig[n] if n in sig else "GND"
     return part(ref, "2x20 socket", "lcsc:2.54-2*20P", "lcsc:HDR-TH_40P-P2.54-V-F-R2-C20-S2.54-2", "C5124634",
                 pins, note=note)
 
@@ -164,6 +164,14 @@ header("J9", J9_SIG, "OUT_", "to the Console's J9 (FPGA bank 2)")
 C("22u", "+5V")
 C("22u", "+5V")
 C("100n", "+5V")
+
+# Two buttons for the scaler's menu (the board covers the Console's own S1/S2): to J10 pins 31/32,
+# 10 k pull-ups. Wired across a diagonal (pins 1 and 4), which is open/closed whichever way the
+# switch pairs its pins inside.
+for k in (1, 2):
+    part("SW%d" % k, "TS-1187A-B-A-B", "lcsc:TS-1187A-B-A-B", "lcsc:SW-SMD_4P-L5.1-W5.1-P3.70-LS6.5-TL_H1.5",
+         "C318884", {"1": "IN_KEY%d" % k, "4": "GND"})
+    R("10k", "3V3", "IN_KEY%d" % k)
 
 # ---------------------------------------------------------------------------
 # Power (design.md "Power")
@@ -271,10 +279,12 @@ R("499", "RTERM", "GND")                        # [UG-214 Fig. 177 R3]
 u1[ball("RTERM")] = "RTERM"
 
 # Pixel port: series resistors next to the ADV7842 [EBZ sheet 6: 75 R arrays]
-OUT_BALLS = [("P16", "Y0"), ("P17", "Y1"), ("P18", "Y2"), ("P19", "Y3"), ("P20", "Y4"), ("P21", "Y5"),
-             ("P22", "Y6"), ("P23", "Y7"), ("P4", "C0"), ("P5", "C1"), ("P6", "C2"), ("P7", "C3"),
-             ("P8", "C4"), ("P9", "C5"), ("P10", "C6"), ("P11", "C7"), ("LLC", "LLC"), ("HS/CS", "HS"),
-             ("VS/FIELD", "VS"), ("FIELD/DE", "DE")]
+# in ball-row order (B, C, D ... N), so each array serves four neighbouring balls
+OUT_BALLS = [("P4", "C0"), ("P5", "C1"), ("P6", "C2"), ("P7", "C3"),
+             ("VS/FIELD", "VS"), ("HS/CS", "HS"), ("P8", "C4"), ("P9", "C5"),
+             ("FIELD/DE", "DE"), ("P10", "C6"), ("P11", "C7"), ("P16", "Y0"),
+             ("P17", "Y1"), ("P18", "Y2"), ("P19", "Y3"), ("P20", "Y4"),
+             ("P21", "Y5"), ("P22", "Y6"), ("P23", "Y7"), ("LLC", "LLC")]
 for k in range(0, len(OUT_BALLS), 4):
     pins = {}
     for j, (pname, sig) in enumerate(OUT_BALLS[k:k + 4]):

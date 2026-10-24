@@ -27,8 +27,12 @@ import board  # noqa: E402
 NAME = "av-board"
 OUT = os.path.join(HERE, NAME + ".kicad_pcb")
 SYSFP = "/usr/share/kicad/footprints"
-JAVA = os.path.expanduser("~/tools/jdk17/bin/java")
-FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-2.5.0.jar")
+JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"
+# Freerouting 1.9.0: 2.5.0 leaves about 100 connections of this board unrouted after its first pass
+# and diverges in the next ones; 1.9.0 gets within ~20. 1.9.0 needs an X display even in batch
+# mode: a private Xvfb (Homebrew's xorg-server) runs for it.
+FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-1.9.0.jar")
+XVFB = "/home/linuxbrew/.linuxbrew/bin/Xvfb"
 
 # Rules (JLCPCB 4-layer standard: 0.09 mm track/space, 0.3 mm drill; we stay well above)
 TRACK, CLEAR, VIA_D, VIA_DRILL = 0.127, 0.127, 0.5, 0.3
@@ -36,7 +40,7 @@ POWER_NETS = {"+5V", "3V3", "2V5", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_2V5", "
               "AV_PVDD", "AV_DVDDIO", "AV_TVDD", "TX_DVDD", "TX_AVDD", "TX_PLVDD"}
 TMDS_NETS = {"TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N", "TMDS_D0P", "TMDS_D0N", "TMDS_CKP", "TMDS_CKN"}
 
-# ADV7842 rail planes on In2, in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
+# ADV7842 rail planes on In3, in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
 # as 0..15; outside the array < 0 or > 15). Each rail's balls lie inside its plane; the planes do
 # not touch; each reaches out of the BGA on its own side to its filter (FL1-FL5 above).
 ROWS = "ABCDEFGHJKLMNPRT"
@@ -45,17 +49,18 @@ PLANES = {
     "AV_VDD": [(10.45, 4.55), (7.55, 4.55), (7.55, 5.55), (-9.0, 5.55), (-9.0, 9.45), (7.55, 9.45),
                (7.55, 10.45), (10.45, 10.45)],
     "AV_CVDD": [(-9.0, 9.55), (4.45, 9.55), (4.45, 13.45), (-9.0, 13.45)],
-    "AV_DVDDIO": [(4.55, -4.5), (4.55, 4.45), (10.55, 4.45), (10.55, 10.45), (12.45, 10.45), (12.45, -4.5)],
+    "AV_DVDDIO": [(4.55, -1.0), (21.0, -1.0), (21.0, 4.45), (12.45, 4.45), (12.45, 10.45), (10.55, 10.45),
+                  (10.55, 4.45), (4.55, 4.45)],
 }
 
 # Board: x 60-190, y 20.6-90 (the Console's y extent), a window over the SOM
 X0, X1, Y0, Y1 = 60.0, 190.0, 20.6, 90.0
 WIN = (102.0, 35.0, 151.0, 74.0)
-# the window reaches out to the Console's buttons S1 (98.9, 38.0) and S2 (98.9, 71.0)
-WIN_POLY = [(96.4, 35.0), (151.0, 35.0), (151.0, 74.0), (96.4, 74.0), (96.4, 68.0), (102.0, 68.0),
-            (102.0, 41.0), (96.4, 41.0)]
-NOTCHES = [(96.4, 35.0, 102.0, 41.0), (96.4, 68.0, 102.0, 74.0)]
-HOLES = [(100.0, 30.0), (158.0, 30.0), (100.0, 79.0), (158.0, 79.0)]     # Console H7_*: M2.5 standoffs
+WIN_POLY = [(WIN[0], WIN[1]), (WIN[2], WIN[1]), (WIN[2], WIN[3]), (WIN[0], WIN[3])]
+NOTCHES = []
+# M2.5 standoffs on two of the Console's four H7_* holes, diagonally: the other two, at J10's pin 1
+# end (100, 79) and J9's (158, 30), sit where the video buses enter the headers
+HOLES = [(100.0, 30.0), (158.0, 79.0)]
 BUTTONS = [(160.5, 54.5)]                                               # SW2: a 7 mm access hole
 
 
@@ -74,23 +79,74 @@ HAND = {
     # input wing: RCA jacks facing left, audio at the top, video at the bottom next to the ADV7842
     # (13 mm apart: the shell lugs are 10 mm apart with 2.6 mm holes)
     "J4": (71.0, 28.0, 90, "F"), "J5": (71.0, 41.0, 90, "F"),
-    "J1": (71.0, 54.0, 90, "F"), "J2": (71.0, 67.0, 90, "F"), "J3": (71.0, 80.0, 90, "F"),
-    "U1": (87.5, 60.5, None, "F"),          # rotation chosen below: analog side left, pixel side right
+    "J1": (71.0, 56.5, 90, "F"), "J2": (71.0, 69.5, 90, "F"), "J3": (71.0, 82.5, 90, "F"),
+    # at J10's height: its pixel balls (right edge, y 71-82) face J10's pins (y 77.7/80.3) across
+    # the series resistors, so the bus runs straight over
+    "U1": (87.5, 75.5, None, "F"),          # rotation chosen below: analog side left, pixel side right
     "U3": (86.0, 33.0, 0, "F"),
-    "Y1": (80.5, 72.5, 0, "F"),
+    "Y1": (78.5, 87.0, 0, "F"),
     "U5": (95.0, 26.0, 0, "F"), "U4": (84.0, 47.0, 0, "F"), "U6": (95.0, 47.0, 0, "F"),
     # output wing: ADV7511 data side facing J9, TMDS side facing the HDMI connector
-    "U2": (167.5, 40.0, 0, "F"),
-    "J6": (184.8, 42.0, 90, "F"),
+    "U2": (167.5, 35.0, 0, "F"),        # its data pins level with J9's
+    # the scaler's buttons, bottom edge of the output wing (near J10 pins 31/32)
+    "SW1": (172.0, 85.0, 0, "F"), "SW2": (181.0, 85.0, 0, "F"),
+    "J6": (184.8, 37.0, 90, "F"),
     "U7": (170.0, 62.0, 0, "F"),
     # ADV7842 rail filters on the bottom, at the exits of their In2 planes (see PLANES)
-    "FL1": (87.5, 73.5, 90, "B"), "FL3": (83.5, 73.5, 90, "B"),      # VDD, CVDD: below the BGA
-    "FL2": (77.0, 60.0, 90, "B"),                                    # AVDD: left of it
-    "FL5": (99.5, 59.5, 90, "B"),                                    # DVDDIO: right of it
-    "FL4": (78.5, 78.5, 0, "B"), "FL6": (93.0, 77.0, 0, "B"),        # PVDD, TVDD: routed rails
+    "FL1": (89.6, 87.7, None, "B"), "FL3": (81.0, 87.7, None, "B"),  # VDD, CVDD: below the BGA
+    "FL2": (76.8, 75.0, None, "B"),                                  # AVDD: left of it
+    "FL5": (93.5, 62.0, None, "B"),                                  # DVDDIO: above it
+    "FL4": (77.0, 63.0, 90, "B"), "FL6": (89.0, 62.0, 90, "B"),      # PVDD, TVDD: routed rails
     # TMDS ESD, in line between U2's TMDS pins (x 176.6, y 37.5-43) and the HDMI pads (x 183.1)
-    "U9": (178.8, 38.75, None, "F"), "U10": (178.8, 41.75, None, "F"),
+    "U9": (178.8, 33.75, None, "F"), "U10": (178.8, 36.75, None, "F"),
 }
+
+
+def inverse_grid(fp):
+    """board mm -> (r, c) in the ADV7842's ball grid."""
+    a1, a16, t1 = pad_pos(fp, "A1"), pad_pos(fp, "A16"), pad_pos(fp, "T1")
+    dcx, dcy = (a16[0] - a1[0]) / 15, (a16[1] - a1[1]) / 15
+    drx, dry = (t1[0] - a1[0]) / 15, (t1[1] - a1[1]) / 15
+    det = dcx * dry - dcy * drx
+
+    def f(x, y):
+        u, v = x - a1[0], y - a1[1]
+        return (dcx * v - dcy * u) / det, (u * dry - v * drx) / det
+    return f
+
+
+def place_rn(fps, u1, occ):
+    """The pixel port's 75 R arrays in a column beside the ADV7842's pixel balls, each level with
+    the four balls it serves, its ADV7842 side (pads 1-4) towards the chip."""
+    cx = ToMM(u1.GetPosition().x)
+    want = []
+    for p in board.PARTS:
+        if not (p.ref.startswith("RN") and p.value == "75"):
+            continue
+        ys = []
+        for pad in u1.Pads():
+            if pad.GetNetname() in [p.pins[str(k)] for k in (1, 2, 3, 4)]:
+                ys.append(ToMM(pad.GetPosition().y))
+        want.append((sum(ys) / len(ys), p.ref))
+    # spread to at least 2.3 mm apart, keeping the order and the mean
+    want.sort()
+    ys = [w[0] for w in want]
+    for _ in range(50):
+        for k in range(1, len(ys)):
+            if ys[k] - ys[k - 1] < 2.3:
+                d = (2.3 - (ys[k] - ys[k - 1])) / 2
+                ys[k - 1] -= d
+                ys[k] += d
+    for (_, ref), y in zip(want, ys):
+        fp = fps[ref]
+        fp.SetPosition(VECTOR2I(FromMM(cx + 8.5 + 1.6), FromMM(y)))
+        for a in (0, 90, 180, 270):
+            fp.SetOrientationDegrees(a)
+            # pads 1-4 face the chip; pad 1 (the lowest ball row, row B at the bottom) at the bottom
+            if pad_pos(fp, "1")[0] < pad_pos(fp, "8")[0] and pad_pos(fp, "1")[1] - pad_pos(fp, "4")[1] > 1:
+                break
+        occ.take("F", courtyard(fp))
+        HAND[ref] = None
 
 
 def fit_u1(fp, x, y):
@@ -105,7 +161,31 @@ def fit_esd(fp, x, y):
     return p1[0] < p10[0] and p1[1] < p5[1]
 
 
+FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL3": "AV_CVDD", "FL5": "AV_DVDDIO"}
+_u1_grid = []
+
+
+FL_AXIS = {"FL1": "x", "FL3": "x", "FL2": "y", "FL5": "y"}
+
+
+def fit_fl(ref):
+    """The filter along its axis, its output pad (3) inside its rail's In3 plane, on the side
+    nearer the ADV7842."""
+    def f(fp, x, y):
+        to_grid = _u1_grid[0]
+        plane = PLANES[FL_PLANE[ref]]
+        p1, p3 = pad_pos(fp, "1"), pad_pos(fp, "3")
+        along = abs(p1[0] - p3[0]) > abs(p1[1] - p3[1])
+        if along != (FL_AXIS[ref] == "x"):
+            return False
+        r3, c3 = to_grid(*p3)
+        r1, c1 = to_grid(*p1)
+        return inside(plane, r3, c3) and (r3 - 7.5) ** 2 + (c3 - 7.5) ** 2 < (r1 - 7.5) ** 2 + (c1 - 7.5) ** 2
+    return f
+
+
 FIT = {"U1": fit_u1, "U9": fit_esd, "U10": fit_esd}
+FIT.update({r: fit_fl(r) for r in FL_PLANE})
 
 # Groups for the small parts: (side, anchor) by block / net
 DECOUPLE_U1 = {"AV_TVDD", "AV_AVDD", "AV_CVDD", "AV_VDD", "AV_DVDDIO", "AV_PVDD"}
@@ -253,7 +333,7 @@ def place_near(occ, fp, side, anchor, angles=(0, 90)):
 
 def main():
     b = pcbnew.BOARD()
-    b.SetCopperLayerCount(4)
+    b.SetCopperLayerCount(6)
     ds = b.GetDesignSettings()
     ds.SetBoardThickness(FromMM(1.6))
     outline(b)
@@ -288,7 +368,10 @@ def main():
     occ = Occ()
 
     # --- hand-placed parts
-    for ref, (x, y, ang, side) in HAND.items():
+    for ref, spec in list(HAND.items()):
+        if spec is None:
+            continue
+        x, y, ang, side = spec
         fp = fps[ref]
         if side == "B":
             fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
@@ -302,6 +385,9 @@ def main():
                 raise SystemExit("no rotation of %s fits" % ref)
         else:
             fp.SetOrientationDegrees(ang)
+        if ref == "U1":
+            _u1_grid[:] = [inverse_grid(fp)]
+            place_rn(fps, fp, occ)
         occ.take(side, courtyard(fp, 0.3))
         if ref in ("U1", "U2"):
             occ.take("B" if side == "F" else "F", courtyard(fp, 0.3))
@@ -329,7 +415,7 @@ def main():
 
     # --- small parts next to their anchors
     ic_pads = {}
-    for ref in ("U1", "U2", "U3", "U4", "U5", "U6", "U7", "U9", "U10", "J6", "J9", "J10", "J1", "J2", "J3", "J4", "J5", "Y1"):
+    for ref in ("U1", "U2", "U3", "U4", "U5", "U6", "U7", "U9", "U10", "J6", "FL1", "FL2", "FL3", "FL4", "FL5", "FL6", "J9", "J10", "J1", "J2", "J3", "J4", "J5", "Y1"):
         for pad in fps[ref].Pads():
             v = pad.GetPosition()
             ic_pads.setdefault(pad.GetNetname(), []).append((ToMM(v.x), ToMM(v.y), ref))
@@ -339,6 +425,11 @@ def main():
         # decoupling for U1: spread over its rail's balls, bottom side
         nets_ = [n for n in p.pins.values() if n != "GND"]
         for n in nets_:
+            if n in DECOUPLE_U1 and p.ref.startswith("C") and p.value in ("220p", "33u"):
+                # plane caps and bulk: anywhere on the plane; by the rail's filter
+                fl = [(x, y) for x, y, r in ic_pads.get(n, []) if r.startswith("FL")]
+                if fl:
+                    return fl[0], "B"
             if n in DECOUPLE_U1 and p.ref.startswith("C"):
                 balls = [(x, y) for x, y, r in ic_pads.get(n, []) if r == "U1"]
                 if balls:
@@ -370,6 +461,7 @@ def main():
 
     rules(b)
     fanout_u1(b, fps["U1"])
+    fanout_planes(b, fps["U1"])
     planes(b, fps["U1"])
     pcbnew.SaveBoard(OUT, b)
     print("%s: %d footprints" % (OUT, len(fps)))
@@ -382,6 +474,12 @@ def main():
 # ---------------------------------------------------------------------------
 
 def rules(b):
+    # Stack: F.Cu signal / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu
+    # signal. The ground layers are power layers, so Freerouting never routes on them.
+    b.SetLayerType(pcbnew.In1_Cu, pcbnew.LT_POWER)
+    b.SetLayerType(pcbnew.In2_Cu, pcbnew.LT_SIGNAL)
+    b.SetLayerType(pcbnew.In3_Cu, pcbnew.LT_MIXED)
+    b.SetLayerType(pcbnew.In4_Cu, pcbnew.LT_POWER)
     ds = b.GetDesignSettings()
     ns = ds.m_NetSettings
     nc = ns.GetDefaultNetclass()
@@ -389,7 +487,9 @@ def rules(b):
     nc.SetClearance(FromMM(CLEAR))
     nc.SetViaDiameter(FromMM(VIA_D))
     nc.SetViaDrill(FromMM(VIA_DRILL))
-    for name, width, clear, nets in (("POWER", 0.4, 0.2, POWER_NETS), ("TMDS", 0.2, 0.15, TMDS_NETS)):
+    # power tracks 0.25 mm: they must reach 0.5 mm-pitch supply pins (ADV7511, TPD4E05U06); the big
+    # currents run in planes (ADV7842) or are short
+    for name, width, clear, nets in (("POWER", 0.25, 0.15, POWER_NETS), ("TMDS", 0.2, 0.15, TMDS_NETS)):
         c = pcbnew.NETCLASS(name)
         c.SetTrackWidth(FromMM(width))
         c.SetClearance(FromMM(clear))
@@ -404,6 +504,7 @@ def rules(b):
     ds.m_ViasMinSize = FromMM(0.45)
     ds.m_MinThroughDrill = FromMM(0.3)
     ds.m_CopperEdgeClearance = FromMM(0.3)
+    ds.m_HoleClearance = FromMM(0.2)        # JLCPCB multilayer: 0.2 mm hole to copper
 
 
 def grid(fp):
@@ -469,6 +570,9 @@ def fanout_u1(b, fp):
         cands = [(r + dr, c + dc) for dr in (-0.5, 0.5) for dc in (-0.5, 0.5)]
         if net in PLANES:
             cands = [p for p in cands if inside(PLANES[net], *p)]
+        elif power and ring <= 1:
+            # ground on the outer two rings: via inwards, keeping the signals' escape channels open
+            cands.sort(key=lambda p: (p[0] - 7.5) ** 2 + (p[1] - 7.5) ** 2)
         else:
             cands.sort(key=lambda p: -((p[0] - 7.5) ** 2 + (p[1] - 7.5) ** 2))
         cands = [p for p in cands if p not in used]
@@ -497,6 +601,96 @@ def fanout_u1(b, fp):
     print("U1 fanout: %d vias, %d ground balls joined to a neighbour" % (len(used), len(pending_gnd)))
 
 
+def fanout_planes(b, u1):
+    """A via next to every surface pad on a plane net (ground; an ADV7842 rail where its In3 plane
+    reaches): the router then only routes signals. Each via goes on the first spot, walking out
+    from the pad, that clears every other pad, track, via and edge."""
+    g = grid(u1)
+    a1, a16, t1 = pad_pos(u1, "A1"), pad_pos(u1, "A16"), pad_pos(u1, "T1")
+
+    def to_grid(x, y):
+        # invert g: solve x = a1x + c*dcx + r*drx, y = a1y + c*dcy + r*dry
+        dcx, dcy = (a16[0] - a1[0]) / 15, (a16[1] - a1[1]) / 15
+        drx, dry = (t1[0] - a1[0]) / 15, (t1[1] - a1[1]) / 15
+        det = dcx * dry - dcy * drx
+        u, v = x - a1[0], y - a1[1]
+        return (dcx * v - dcy * u) / det, (u * dry - v * drx) / det     # r, c
+
+    obst = []                       # (x0, y0, x1, y1, net, is_hole) boxes
+    for fp in b.GetFootprints():
+        for pad in fp.Pads():
+            r = pad.GetBoundingBox()
+            obst.append((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()),
+                         pad.GetNetname(), pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD))
+    for t in b.GetTracks():
+        r = t.GetBoundingBox()
+        obst.append((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()),
+                     t.GetNetname(), t.GetClass() == "PCB_VIA"))
+    gap = 0.2
+
+    def clear(x, y, net, skip, rv, hole):
+        """Is a circle of radius rv at (x, y) clear of everything but its own net (and, for a
+        hole, of other holes too)?"""
+        if x - rv < X0 + 0.5 or x + rv > X1 - 0.5 or y - rv < Y0 + 0.5 or y + rv > Y1 - 0.5:
+            return False
+        wx0, wy0, wx1, wy1 = WIN
+        if x + rv > wx0 - 0.3 and x - rv < wx1 + 0.3 and y + rv > wy0 - 0.3 and y - rv < wy1 + 0.3:
+            return False
+        for k, (x0, y0, x1, y1, n, ishole) in enumerate(obst):
+            if k == skip:
+                continue
+            if x + rv > x0 and x - rv < x1 and y + rv > y0 and y - rv < y1:
+                if n == net and n and not (hole and ishole):
+                    continue
+                return False
+        return True
+
+    def path_clear(px, py, x, y, net, skip):
+        for t in [i / 10 for i in range(3, 10)]:
+            if not clear(px + (x - px) * t, py + (y - py) * t, net, skip, 0.125 + gap, False):
+                return False
+        return clear(x, y, net, skip, VIA_D / 2 + gap, True)
+
+    n = 0
+    for fp in b.GetFootprints():
+        if fp.GetReference() == "U1":
+            continue
+        for pad in fp.Pads():
+            net = pad.GetNetname()
+            if pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD or not net:
+                continue
+            px, py = ToMM(pad.GetPosition().x), ToMM(pad.GetPosition().y)
+            if net == "GND":
+                pass
+            elif net in PLANES and inside(PLANES[net], *to_grid(px, py)):
+                pass
+            else:
+                continue
+            onf = pad.IsOnLayer(pcbnew.F_Cu)
+            k_self = [k for k, o in enumerate(obst) if abs((o[0] + o[2]) / 2 - px) < 1e-3 and abs((o[1] + o[3]) / 2 - py) < 1e-3]
+            r = pad.GetBoundingBox()
+            hw, hh = ToMM(r.GetWidth()) / 2, ToMM(r.GetHeight()) / 2
+            spot = None
+            for d in (0.0, 0.3, 0.6, 1.0, 1.5):
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)):
+                    x = px + dx * (hw + VIA_D / 2 + gap + d)
+                    y = py + dy * (hh + VIA_D / 2 + gap + d)
+                    if path_clear(px, py, x, y, net, k_self[0] if k_self else -1):
+                        spot = (x, y)
+                        break
+                if spot:
+                    break
+            if not spot:
+                continue
+            x, y = spot
+            track(b, (px, py), (x, y), 0.25, pcbnew.F_Cu if onf else pcbnew.B_Cu, pad.GetNet())
+            via(b, x, y, pad.GetNet())
+            obst.append((x - VIA_D / 2, y - VIA_D / 2, x + VIA_D / 2, y + VIA_D / 2, net, True))
+            obst.append((min(px, x) - 0.125, min(py, y) - 0.125, max(px, x) + 0.125, max(py, y) + 0.125, net, False))
+            n += 1
+    print("plane fanout: %d vias" % n)
+
+
 def zone(b, netname, layer, pts, clearance=0.25, priority=0):
     z = pcbnew.ZONE(b)
     z.SetLayer(layer)
@@ -504,7 +698,7 @@ def zone(b, netname, layer, pts, clearance=0.25, priority=0):
     z.SetLocalClearance(FromMM(clearance))
     z.SetMinThickness(FromMM(0.2))
     z.SetAssignedPriority(priority)
-    z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL if layer in (pcbnew.In1_Cu, pcbnew.In2_Cu)
+    z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL if layer not in (pcbnew.F_Cu, pcbnew.B_Cu)
                        else pcbnew.ZONE_CONNECTION_THERMAL)
     z.SetIslandRemovalMode(pcbnew.ISLAND_REMOVAL_MODE_ALWAYS)
     o = z.Outline()
@@ -515,12 +709,36 @@ def zone(b, netname, layer, pts, clearance=0.25, priority=0):
     return z
 
 
+def keepout(b, x0, y0, x1, y1):
+    """A rule area on all copper layers with no tracks or vias: Freerouting does not keep the edge
+    clearance by itself."""
+    z = pcbnew.ZONE(b)
+    z.SetIsRuleArea(True)
+    z.SetDoNotAllowTracks(True)
+    z.SetDoNotAllowVias(True)
+    z.SetDoNotAllowPads(False)
+    z.SetDoNotAllowFootprints(False)
+    z.SetDoNotAllowCopperPour(False)
+    z.SetLayerSet(pcbnew.LSET.AllCuMask())
+    o = z.Outline()
+    o.NewOutline()
+    for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+        o.Append(FromMM(x), FromMM(y))
+    b.Add(z)
+
+
 def planes(b, fp):
+    m = 0.45
+    for x0, y0, x1, y1 in ((X0, Y0, X1, Y0 + m), (X0, Y1 - m, X1, Y1), (X0, Y0, X0 + m, Y1), (X1 - m, Y0, X1, Y1)):
+        keepout(b, x0, y0, x1, y1)
+    wx0, wy0, wx1, wy1 = WIN
+    keepout(b, wx0 - m, wy0 - m, wx1 + m, wy1 + m)
     g = grid(fp)
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
     zone(b, "GND", pcbnew.In1_Cu, full)
+    zone(b, "GND", pcbnew.In4_Cu, full)
     for net, poly in PLANES.items():
-        zone(b, net, pcbnew.In2_Cu, [g(r, c) for r, c in poly], priority=1)
+        zone(b, net, pcbnew.In3_Cu, [g(r, c) for r, c in poly], priority=1)
 
 
 def route():
@@ -529,9 +747,15 @@ def route():
     dsn, ses = os.path.join(HERE, NAME + ".dsn"), os.path.join(HERE, NAME + ".ses")
     if not pcbnew.ExportSpecctraDSN(b, dsn):
         raise SystemExit("DSN export failed")
-    subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", "200", "-mt", "1",
-                    "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
-                   check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
+    display = ":%d" % (90 + os.getpid() % 100)
+    xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")],
+                       check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT,
+                       env=dict(os.environ, DISPLAY=display))
+    finally:
+        xvfb.terminate()
     if not pcbnew.ImportSpecctraSES(b, ses):
         raise SystemExit("SES import failed")
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
