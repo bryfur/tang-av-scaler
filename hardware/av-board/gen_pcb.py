@@ -38,9 +38,10 @@ FREEROUTING_VERSION = os.environ.get("FREEROUTING", "1.9.0")
 FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-%s.jar" % FREEROUTING_VERSION)
 XVFB = "/home/linuxbrew/.linuxbrew/bin/Xvfb"
 
-# Copper layers: 4 (F.Cu signal / In1 ground / In2 rail planes + signal / B.Cu signal) or 6
-# (F.Cu / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu): LAYERS=6.
-LAYERS = int(os.environ.get("LAYERS", "4"))
+# Copper layers: 6 (F.Cu / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu),
+# or LAYERS=4 (F.Cu signal / In1 ground / In2 rail planes + signal / B.Cu signal), which does not
+# route: under the ADV7842 the inner balls' escapes need In2 free (design.md "Stack-up")
+LAYERS = int(os.environ.get("LAYERS", "6"))
 PLANE_LAYER = pcbnew.In2_Cu if LAYERS == 4 else pcbnew.In3_Cu
 
 # Rules (JLCPCB 4-layer standard: 0.09 mm track/space, 0.3 mm drill; we stay well above)
@@ -150,17 +151,19 @@ def inverse_grid(fp):
     return f
 
 
-def place_rn(fps, u1, occ):
-    """The pixel port's 75 R arrays in a row along the ADV7842's pixel side, each beside the four
-    balls it serves, its ADV7842 side (pads 1-4) towards the chip, pad 1 at its first ball's end."""
+def place_arrays(fps, u1, occ, value, edge):
+    """A group of 4-resistor arrays (by value) in a row along one side of the ADV7842, each beside
+    the four balls it serves, its ADV7842 side (pads 1-4) towards the chip, pad 1 at its first
+    ball's end. edge: two ball-grid points, (outside, inside) the side, that give its direction."""
     g = grid(u1)
     cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
-    ox, oy = g(7.5, -1)[0] - g(7.5, 0)[0], g(7.5, -1)[1] - g(7.5, 0)[1]     # out of the pixel side
+    (r0, c0), (r1, c1) = edge
+    ox, oy = g(r0, c0)[0] - g(r1, c1)[0], g(r0, c0)[1] - g(r1, c1)[1]     # out of that side
     ax, ay = -oy, ox                                                        # along it
     balls = {pad.GetNetname(): (ToMM(pad.GetPosition().x), ToMM(pad.GetPosition().y)) for pad in u1.Pads()}
     want = []
     for p in board.PARTS:
-        if p.ref.startswith("RN") and p.value == "75":
+        if p.ref.startswith("RN") and p.value == value:
             pts = [balls[p.pins[str(k)]] for k in (1, 2, 3, 4)]
             t = sum((x - cx) * ax + (y - cy) * ay for x, y in pts) / 4
             first = (pts[0][0] - cx) * ax + (pts[0][1] - cy) * ay
@@ -478,7 +481,10 @@ def main():
             fp.SetOrientationDegrees(ang)
         if ref == "U1":
             _u1_grid[:] = [inverse_grid(fp)]
-            place_rn(fps, fp, occ)
+            # the pixel port's 75 R arrays along its pixel side (down, towards J10); the unused
+            # SDRAM port's 4.7 k pull-down arrays along its T-row side (right)
+            place_arrays(fps, fp, occ, "75", ((7.5, -1), (7.5, 0)))
+            place_arrays(fps, fp, occ, "4.7k", ((16, 7.5), (15, 7.5)))
         # the ADV7842 keeps a 1 mm ring clear of small parts on both sides: its outer two rings of
         # balls escape on the outer layers through there (the 75 R arrays are placed already)
         keep = U1_RING if ref == "U1" else 0.3

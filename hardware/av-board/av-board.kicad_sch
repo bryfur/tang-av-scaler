@@ -15835,46 +15835,46 @@
     (pts (xy 739.14 252.73) (xy 736.6 252.73))
     (stroke (width 0) (type default))
     (uuid "a9d41af5-e032-528e-ac57-ed3660ebd562"))
-  (label "PD_SDRAM_DQ0"
+  (label "PD_SDRAM_DQ7"
     (at 736.6 252.73 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "0a30a3a7-ff1b-579c-b940-72368a397a26"))
+    (uuid "d918be21-2800-5ff6-9a93-c95fda7d7add"))
   (wire
     (pts (xy 739.14 255.27) (xy 736.6 255.27))
     (stroke (width 0) (type default))
     (uuid "7e6db28f-abad-5482-a77d-580af4f69726"))
-  (label "PD_SDRAM_DQ1"
+  (label "PD_SDRAM_DQ6"
     (at 736.6 255.27 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "ac71edc5-ab09-521d-b908-32d4cf1c2d53"))
+    (uuid "c0f8e1d3-0e35-5d97-a556-3a28a69c8787"))
   (wire
     (pts (xy 739.14 257.81) (xy 736.6 257.81))
     (stroke (width 0) (type default))
     (uuid "81f85132-3902-51cb-a782-4330e4950f58"))
-  (label "PD_SDRAM_DQ2"
+  (label "PD_SDRAM_DQ5"
     (at 736.6 257.81 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "1be3bf8d-6f7a-5d44-9c2c-67d399ce6f7c"))
+    (uuid "a15f74d5-56a1-5979-950a-e7d3fc45a5b4"))
   (wire
     (pts (xy 739.14 260.35) (xy 736.6 260.35))
     (stroke (width 0) (type default))
     (uuid "fad3ed95-97b7-5519-9722-17768bcab5f9"))
-  (label "PD_SDRAM_DQ3"
+  (label "PD_SDRAM_DQ4"
     (at 736.6 260.35 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "c44cfaf8-f002-599c-a18c-4907aaad3351"))
+    (uuid "718792c6-ad73-565d-a851-495b216fade9"))
   (wire
     (pts (xy 756.92 252.73) (xy 759.46 252.73))
     (stroke (width 0) (type default))
@@ -15963,96 +15963,96 @@
     (instances
       (project "av-board" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN6") (unit 1)))))
   (wire
-    (pts (xy 793.75 252.73) (xy 791.21 252.73))
+    (pts (xy 795.02 252.73) (xy 792.48 252.73))
     (stroke (width 0) (type default))
     (uuid "f0c3f3c3-93e5-56ab-b7e6-97fe80cb5248"))
-  (label "PD_SDRAM_DQ4"
-    (at 791.21 252.73 180)
+  (label "PD_SDRAM_DQ3"
+    (at 792.48 252.73 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "5e4b358d-f75b-5b3d-b140-676eca0468e7"))
+    (uuid "bd609829-9470-5dc0-862d-4405f438c570"))
   (wire
-    (pts (xy 793.75 255.27) (xy 791.21 255.27))
+    (pts (xy 795.02 255.27) (xy 792.48 255.27))
     (stroke (width 0) (type default))
     (uuid "69972c2d-1de9-59cd-a72e-bc672ec40e20"))
-  (label "PD_SDRAM_DQ5"
-    (at 791.21 255.27 180)
+  (label "PD_SDRAM_DQ2"
+    (at 792.48 255.27 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "0017b4c3-33e1-50d7-93d6-47dc71075068"))
+    (uuid "3f8656b8-a6d8-59bc-af3d-e952e5665342"))
   (wire
-    (pts (xy 793.75 257.81) (xy 791.21 257.81))
+    (pts (xy 795.02 257.81) (xy 792.48 257.81))
     (stroke (width 0) (type default))
     (uuid "4e03d9c2-19a6-58f3-9201-4c82537adb49"))
-  (label "PD_SDRAM_DQ6"
-    (at 791.21 257.81 180)
+  (label "PD_SDRAM_DQ15"
+    (at 792.48 257.81 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "21a8a546-64ff-5039-a842-2dbfb7bc7bbf"))
+    (uuid "ac9041dc-9299-58a1-a71b-4ddc28d8d36c"))
   (wire
-    (pts (xy 793.75 260.35) (xy 791.21 260.35))
+    (pts (xy 795.02 260.35) (xy 792.48 260.35))
     (stroke (width 0) (type default))
     (uuid "f2364fa5-bde5-532e-b423-7d52dbd39efb"))
-  (label "PD_SDRAM_DQ7"
-    (at 791.21 260.35 180)
+  (label "PD_SDRAM_DQ0"
+    (at 792.48 260.35 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "22adff8d-c8d0-595b-88f4-1cec257f8562"))
+    (uuid "05ad284e-ad61-5f08-9b46-b7933da221d0"))
   (wire
-    (pts (xy 811.53 252.73) (xy 814.07 252.73))
+    (pts (xy 812.8 252.73) (xy 815.34 252.73))
     (stroke (width 0) (type default))
     (uuid "33a96f57-d65b-5a8f-a546-c408d9cb5506"))
   (label "GND"
-    (at 814.07 252.73 0)
+    (at 815.34 252.73 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "ac86e056-a311-5c77-812d-f7971a421b7b"))
+    (uuid "e5c04ce1-b9b0-57dd-98d7-5dde771b74d5"))
   (wire
-    (pts (xy 811.53 255.27) (xy 814.07 255.27))
+    (pts (xy 812.8 255.27) (xy 815.34 255.27))
     (stroke (width 0) (type default))
     (uuid "49a5bef6-1dd5-5c57-afe8-470fc21e0a9a"))
   (label "GND"
-    (at 814.07 255.27 0)
+    (at 815.34 255.27 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "5b30d0bb-c4ed-539d-bc03-1f3df0a317f0"))
+    (uuid "b58685a2-f578-5f68-bd80-9e6a8cf4a242"))
   (wire
-    (pts (xy 811.53 257.81) (xy 814.07 257.81))
+    (pts (xy 812.8 257.81) (xy 815.34 257.81))
     (stroke (width 0) (type default))
     (uuid "a73fceea-2d13-525c-acb8-6ff0037196b4"))
   (label "GND"
-    (at 814.07 257.81 0)
+    (at 815.34 257.81 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "7b79b20f-518a-53c1-8325-3c32b05e5557"))
+    (uuid "86570df3-061e-58e8-872e-86afd19541aa"))
   (wire
-    (pts (xy 811.53 260.35) (xy 814.07 260.35))
+    (pts (xy 812.8 260.35) (xy 815.34 260.35))
     (stroke (width 0) (type default))
     (uuid "e25dc64d-7fe2-52ad-9250-a9ac7029d908"))
   (label "GND"
-    (at 814.07 260.35 0)
+    (at 815.34 260.35 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "fdef8a69-d7c7-583f-8a46-d4540f101bdd"))
+    (uuid "6ee6e718-7cf5-50c1-9722-84615943bf7d"))
   (symbol
     (lib_id "lcsc:4D02WGJ0472TCE")
-    (at 802.64 256.54 0)
+    (at 803.91 256.54 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -16061,25 +16061,25 @@
     (fields_autoplaced yes)
     (uuid "285c622f-de95-5023-bd00-d577c61a2147")
     (property "Reference" "RN7"
-      (at 802.64 248.92 0)
+      (at 803.91 248.92 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "4.7k"
-      (at 802.64 264.16 0)
+      (at 803.91 264.16 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
-      (at 802.64 256.54 0)
+      (at 803.91 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 802.64 256.54 0)
+      (at 803.91 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C29586"
-      (at 802.64 256.54 0)
+      (at 803.91 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -16094,96 +16094,96 @@
     (instances
       (project "av-board" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN7") (unit 1)))))
   (wire
-    (pts (xy 849.63 252.73) (xy 847.09 252.73))
+    (pts (xy 850.9 252.73) (xy 848.36 252.73))
     (stroke (width 0) (type default))
     (uuid "dd862a42-c3d1-5e9f-969e-f96eaee9aa2d"))
-  (label "PD_SDRAM_DQ8"
-    (at 847.09 252.73 180)
+  (label "PD_SDRAM_DQ1"
+    (at 848.36 252.73 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "1d4ebf28-5c28-58a3-b8c5-6f73a8bc5e40"))
+    (uuid "bbe2a961-db49-55ff-9b45-e394b128f757"))
   (wire
-    (pts (xy 849.63 255.27) (xy 847.09 255.27))
+    (pts (xy 850.9 255.27) (xy 848.36 255.27))
     (stroke (width 0) (type default))
     (uuid "9ed2ad0b-ddcb-5778-bf3c-352825db1689"))
-  (label "PD_SDRAM_DQ9"
-    (at 847.09 255.27 180)
+  (label "PD_SDRAM_DQ11"
+    (at 848.36 255.27 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "ca4fe855-8bb4-575d-af1b-aa6bce6f74d5"))
+    (uuid "5c4f0ec3-4027-5acd-b058-61d8e52233bd"))
   (wire
-    (pts (xy 849.63 257.81) (xy 847.09 257.81))
+    (pts (xy 850.9 257.81) (xy 848.36 257.81))
     (stroke (width 0) (type default))
     (uuid "64cbe39c-c83f-5fa0-8f15-39dfb15fb5e2"))
-  (label "PD_SDRAM_DQ10"
-    (at 847.09 257.81 180)
+  (label "PD_SDRAM_DQ12"
+    (at 848.36 257.81 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "0b966144-7328-5097-909b-2b6475380586"))
+    (uuid "f10c84cb-bb89-5950-9bc4-778478c20867"))
   (wire
-    (pts (xy 849.63 260.35) (xy 847.09 260.35))
+    (pts (xy 850.9 260.35) (xy 848.36 260.35))
     (stroke (width 0) (type default))
     (uuid "3b063ddd-0131-528c-9c5e-a357ce689745"))
-  (label "PD_SDRAM_DQ11"
-    (at 847.09 260.35 180)
+  (label "PD_SDRAM_DQ13"
+    (at 848.36 260.35 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "912b4521-99ce-5270-85fb-b6826ee57177"))
+    (uuid "0f03552e-6f0a-599e-859e-d5fde04eea6a"))
   (wire
-    (pts (xy 867.41 252.73) (xy 869.95 252.73))
+    (pts (xy 868.68 252.73) (xy 871.22 252.73))
     (stroke (width 0) (type default))
     (uuid "223ac913-b598-5075-ac43-da0c60b84d5e"))
   (label "GND"
-    (at 869.95 252.73 0)
+    (at 871.22 252.73 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "aa3b471c-af56-51e2-9112-8df2bfd4110e"))
+    (uuid "6930005e-90d9-5e9d-bca1-1f5ec8a4245d"))
   (wire
-    (pts (xy 867.41 255.27) (xy 869.95 255.27))
+    (pts (xy 868.68 255.27) (xy 871.22 255.27))
     (stroke (width 0) (type default))
     (uuid "1ffca79b-47a2-5be3-a7b4-7f49c6f05724"))
   (label "GND"
-    (at 869.95 255.27 0)
+    (at 871.22 255.27 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "b99eb54c-f0ab-51bc-9be1-c6a07f9b7c0c"))
+    (uuid "b02661c5-f241-5e97-b763-f986b9c85e87"))
   (wire
-    (pts (xy 867.41 257.81) (xy 869.95 257.81))
+    (pts (xy 868.68 257.81) (xy 871.22 257.81))
     (stroke (width 0) (type default))
     (uuid "75317bfc-a6cc-51e5-a8f7-dcc7629b309d"))
   (label "GND"
-    (at 869.95 257.81 0)
+    (at 871.22 257.81 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "6966065d-6106-5af5-9f14-d16d20e3ee4e"))
+    (uuid "4304afd6-ad53-5a92-a06b-7b9c411bca6e"))
   (wire
-    (pts (xy 867.41 260.35) (xy 869.95 260.35))
+    (pts (xy 868.68 260.35) (xy 871.22 260.35))
     (stroke (width 0) (type default))
     (uuid "bb5b5765-571e-5db6-a841-1b1cae333d4d"))
   (label "GND"
-    (at 869.95 260.35 0)
+    (at 871.22 260.35 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "6246fbc5-0501-5d59-a1b1-9e0a914e264c"))
+    (uuid "02aa41d0-b523-598a-a93e-f30efe11633c"))
   (symbol
     (lib_id "lcsc:4D02WGJ0472TCE")
-    (at 858.52 256.54 0)
+    (at 859.79 256.54 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -16192,25 +16192,25 @@
     (fields_autoplaced yes)
     (uuid "ddc917ca-b2e1-5c60-a774-d7010ca41fbf")
     (property "Reference" "RN8"
-      (at 858.52 248.92 0)
+      (at 859.79 248.92 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "4.7k"
-      (at 858.52 264.16 0)
+      (at 859.79 264.16 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
-      (at 858.52 256.54 0)
+      (at 859.79 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 858.52 256.54 0)
+      (at 859.79 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C29586"
-      (at 858.52 256.54 0)
+      (at 859.79 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -16225,96 +16225,96 @@
     (instances
       (project "av-board" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN8") (unit 1)))))
   (wire
-    (pts (xy 906.78 252.73) (xy 904.24 252.73))
+    (pts (xy 908.05 252.73) (xy 905.51 252.73))
     (stroke (width 0) (type default))
     (uuid "5ff638ec-53e5-5a0b-aa5e-bedd2b4d531a"))
-  (label "PD_SDRAM_DQ12"
-    (at 904.24 252.73 180)
+  (label "PD_SDRAM_DQ14"
+    (at 905.51 252.73 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "6f2df3a4-ca10-58c1-9777-16fb5a0de48d"))
+    (uuid "d48f61e4-2b5a-5f97-89f1-45981cceb4b7"))
   (wire
-    (pts (xy 906.78 255.27) (xy 904.24 255.27))
+    (pts (xy 908.05 255.27) (xy 905.51 255.27))
     (stroke (width 0) (type default))
     (uuid "01278179-a5ab-5c5c-b20b-4dbec9aa442e"))
-  (label "PD_SDRAM_DQ13"
-    (at 904.24 255.27 180)
+  (label "PD_SDRAM_UDQS"
+    (at 905.51 255.27 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "37cda1e3-ec27-5aef-a30f-8d4fc9f358a3"))
+    (uuid "99bf3c97-042b-5c04-a651-4e8f1ce7e99a"))
   (wire
-    (pts (xy 906.78 257.81) (xy 904.24 257.81))
+    (pts (xy 908.05 257.81) (xy 905.51 257.81))
     (stroke (width 0) (type default))
     (uuid "e5cd5cdb-997a-503d-82bf-be53668dcc5e"))
-  (label "PD_SDRAM_DQ14"
-    (at 904.24 257.81 180)
+  (label "PD_SDRAM_DQ9"
+    (at 905.51 257.81 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "687171ec-8e40-5245-9292-85ef1a451168"))
+    (uuid "de1973ad-33c9-52a2-9cd2-b61be0399149"))
   (wire
-    (pts (xy 906.78 260.35) (xy 904.24 260.35))
+    (pts (xy 908.05 260.35) (xy 905.51 260.35))
     (stroke (width 0) (type default))
     (uuid "5edbe943-29e3-5377-b4e2-4484268f2211"))
-  (label "PD_SDRAM_DQ15"
-    (at 904.24 260.35 180)
+  (label "PD_SDRAM_DQ10"
+    (at 905.51 260.35 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "96806a18-c9a7-5170-beb9-efb9a26f5edc"))
+    (uuid "251ef1e7-6158-5e35-81ba-def639a56cc1"))
   (wire
-    (pts (xy 924.56 252.73) (xy 927.1 252.73))
+    (pts (xy 925.83 252.73) (xy 928.37 252.73))
     (stroke (width 0) (type default))
     (uuid "bf2f3380-2f69-5419-8aea-d6d5fccaffaf"))
   (label "GND"
-    (at 927.1 252.73 0)
+    (at 928.37 252.73 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "8573cc2b-a68d-5f8f-bfaa-2ad6caf7e4d6"))
+    (uuid "9f5c609b-de97-55a5-b5b6-bd25c96cbb5a"))
   (wire
-    (pts (xy 924.56 255.27) (xy 927.1 255.27))
+    (pts (xy 925.83 255.27) (xy 928.37 255.27))
     (stroke (width 0) (type default))
     (uuid "f8cefbe0-53b2-5564-8c41-ed3d83717a1a"))
   (label "GND"
-    (at 927.1 255.27 0)
+    (at 928.37 255.27 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "6f3a79ae-6028-598a-91a1-0941b15f5198"))
+    (uuid "3d8e5fff-f1b4-5281-b23b-8b5118f69e7c"))
   (wire
-    (pts (xy 924.56 257.81) (xy 927.1 257.81))
+    (pts (xy 925.83 257.81) (xy 928.37 257.81))
     (stroke (width 0) (type default))
     (uuid "efc48d4e-ec1f-5ee7-8821-93d403e8a23e"))
   (label "GND"
-    (at 927.1 257.81 0)
+    (at 928.37 257.81 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "b5add0c2-9dc5-5564-9960-7cf3c40b3baf"))
+    (uuid "b9eb02c8-0889-5e13-87fe-9b788ab31b46"))
   (wire
-    (pts (xy 924.56 260.35) (xy 927.1 260.35))
+    (pts (xy 925.83 260.35) (xy 928.37 260.35))
     (stroke (width 0) (type default))
     (uuid "d2746fe0-d902-58b2-8e79-8c89813f8031"))
   (label "GND"
-    (at 927.1 260.35 0)
+    (at 928.37 260.35 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "17eace55-b478-5875-b328-5a100d3b55f3"))
+    (uuid "e65d23e2-c17c-508d-b046-38a7f08af040"))
   (symbol
     (lib_id "lcsc:4D02WGJ0472TCE")
-    (at 915.67 256.54 0)
+    (at 916.94 256.54 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -16323,25 +16323,25 @@
     (fields_autoplaced yes)
     (uuid "9d59c12f-eddb-5a74-ad25-8028b22bb874")
     (property "Reference" "RN9"
-      (at 915.67 248.92 0)
+      (at 916.94 248.92 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "4.7k"
-      (at 915.67 264.16 0)
+      (at 916.94 264.16 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
-      (at 915.67 256.54 0)
+      (at 916.94 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 915.67 256.54 0)
+      (at 916.94 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C29586"
-      (at 915.67 256.54 0)
+      (at 916.94 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -16356,30 +16356,30 @@
     (instances
       (project "av-board" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN9") (unit 1)))))
   (wire
-    (pts (xy 963.93 252.73) (xy 963.93 250.19))
+    (pts (xy 966.47 252.73) (xy 966.47 250.19))
     (stroke (width 0) (type default))
     (uuid "966e2bf0-65c0-58da-9e4d-f0dc175a1395"))
   (label "PD_SDRAM_LDQS"
-    (at 963.93 250.19 90)
+    (at 966.47 250.19 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "74fae9af-1ecd-56b7-9750-fd6997a7ae5b"))
+    (uuid "1374ff65-3990-5b13-ab2a-4f79b73505a1"))
   (wire
-    (pts (xy 963.93 260.35) (xy 963.93 262.89))
+    (pts (xy 966.47 260.35) (xy 966.47 262.89))
     (stroke (width 0) (type default))
     (uuid "4c257946-4d58-59ec-8045-1c01f8f3afec"))
   (label "GND"
-    (at 963.93 262.89 270)
+    (at 966.47 262.89 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "fc863da9-e673-549d-86b4-1f31ca87a4a6"))
+    (uuid "388c7466-2da1-5401-b98b-ff1370f4b67d"))
   (symbol
     (lib_id "Device:R")
-    (at 963.93 256.54 0)
+    (at 966.47 256.54 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -16388,25 +16388,25 @@
     (fields_autoplaced yes)
     (uuid "065e5d9a-933b-5e3b-9e3c-de2da56f0550")
     (property "Reference" "R31"
-      (at 963.93 248.92 0)
+      (at 966.47 248.92 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "4.7k"
-      (at 963.93 264.16 0)
+      (at 966.47 264.16 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 963.93 256.54 0)
+      (at 966.47 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 963.93 256.54 0)
+      (at 966.47 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C25900"
-      (at 963.93 256.54 0)
+      (at 966.47 256.54 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -16418,13 +16418,13 @@
     (pts (xy 1005.84 252.73) (xy 1005.84 250.19))
     (stroke (width 0) (type default))
     (uuid "a6f9fb00-ccb8-5cb3-9751-6dc1ac9d836f"))
-  (label "PD_SDRAM_UDQS"
+  (label "PD_SDRAM_DQ8"
     (at 1005.84 250.19 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "8ebbe146-0d9e-5203-b519-cba101a7ec7d"))
+    (uuid "9d9ecd7e-bfc5-5f1e-97ec-9a2529b23534"))
   (wire
     (pts (xy 1005.84 260.35) (xy 1005.84 262.89))
     (stroke (width 0) (type default))

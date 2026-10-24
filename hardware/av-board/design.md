@@ -320,12 +320,14 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
 
 ## Stack-up and rules
 
-Four layers, 1.6 mm (JLCPCB's standard 4-layer stack, JLC04161H-7628); gen_pcb.py can make six
-(LAYERS=6) if routing needs them. Six layers add one full signal layer (In2), free under the
-ADV7842's BGA where the four-layer board has its rail planes, and a second ground; every signal
-layer keeps a ground or plane next to it. For six layers order JLC06161H-7628B (1.6 mm, 0.218 mm
-7628 prepreg under the outer layers, er 4.4): the outer-layer geometry, and so the TMDS pairs,
-stay as on four layers.
+Six layers, 1.6 mm, JLCPCB's JLC06161H-7628B (0.218 mm 7628 prepreg under the outer layers,
+er 4.4). Four layers (JLC04161H-7628, LAYERS=4) did not route: under the ADV7842 its inner layer
+is the rail planes, so every inner ball escapes on B.Cu, which runs out of room (the best
+four-layer result, DeepPCB, left 14 connections, 9 of them escapes from under the BGA; on six
+layers DeepPCB routed every escape but the SDRAM pull-down corner, and Freerouting left 9 against
+15 on the same placement in four). Six layers add a full signal layer (In2), free
+under the BGA, and a second ground; every signal layer keeps a ground or plane next to it, and
+the outer layers' geometry, so the TMDS pairs, is the same as on four.
 
 | Layer | 4 layers | 6 layers |
 |---|---|---|

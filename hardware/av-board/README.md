@@ -18,7 +18,7 @@ KiCad files. On a machine with KiCad 9 (here: the build host):
 | schematic | `python3 gen_sch.py` | `av-board.kicad_sch`, project and library tables |
 | ERC | `kicad-cli sch erc av-board.kicad_sch` | (clean) |
 | netlist check | `kicad-cli sch export netlist -o /tmp/av.net av-board.kicad_sch && python3 check_netlist.py /tmp/av.net` | schematic = board.py, pin by pin |
-| PCB | `python3 gen_pcb.py --route` | `av-board.kicad_pcb`: placed, fanned out, routed, ground poured. Router: Freerouting (`FREEROUTING=1.9.0` default, under a private Xvfb; `2.5.0` headless), or DeepPCB (`ROUTER=deeppcb MINUTES=60`, API key in `~/.config/deeppcb/key`), or any session (`SES=file.ses`); a session from elsewhere gets a Freerouting finishing pass with its copper fixed (`FINISH=0`: none); `LAYERS=6` for six layers; `PCB=path` for a trial board elsewhere |
+| PCB | `python3 gen_pcb.py --route` | `av-board.kicad_pcb`: placed, fanned out, routed, ground poured. Router: Freerouting (`FREEROUTING=1.9.0` default, under a private Xvfb; `2.5.0` headless), or DeepPCB (`ROUTER=deeppcb MINUTES=60`, API key in `~/.config/deeppcb/key`), or any session (`SES=file.ses`); a session from elsewhere gets a Freerouting finishing pass with its copper fixed (`FINISH=0`: none); six layers (`LAYERS=4` for four, which does not route); `PCB=path` for a trial board elsewhere |
 | placement check | `python3 placecheck.py [--min 8]` | the small parts' signal pins far from the rest of their net (a part by the wrong anchor); `gen_pcb.py` itself prints the crossings left in each header bus |
 | picture | `python3 snap.py av-board.kicad_pcb out.png` | a PNG of the board (needs PyMuPDF in `~/tools/eda-venv`) |
 | DRC | `kicad-cli pcb drc av-board.kicad_pcb` | |
