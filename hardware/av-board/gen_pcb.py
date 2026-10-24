@@ -824,6 +824,8 @@ def planes(b, fp):
         keepout(b, wx0 - m, wy0 - m, wx1 + m, wy1 + m)
     for bx, by in BUTTONS:
         keepout(b, bx - 3.5 - m, by - 3.5 - m, bx + 3.5 + m, by + 3.5 + m)
+    for hx, hy in HOLES:                    # standoffs: the M2.5 head and the standoff sit there
+        keepout(b, hx - 3.0, hy - 3.0, hx + 3.0, hy + 3.0)
     g = grid(fp)
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
     zone(b, "GND", pcbnew.In1_Cu, full)
@@ -887,6 +889,32 @@ def stitch(b, pitch=2.5, gap=0.3):
             x += pitch
         y += pitch
     print("stitching vias:", n)
+
+
+def prune(path, rounds=5):
+    """Remove the vias and track ends KiCad's DRC reports as dangling (fanout the router did not
+    use, stubs it left), round after round, refilling the zones each time."""
+    import json
+    import tempfile
+    removed = 0
+    for _ in range(rounds):
+        rpt = tempfile.mktemp(suffix=".json")
+        subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", rpt, path],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        dead = {it["uuid"] for v in json.load(open(rpt))["violations"]
+                if v["type"] in ("via_dangling", "track_dangling") for it in v["items"]}
+        os.unlink(rpt)
+        if not dead:
+            break
+        b = pcbnew.LoadBoard(path)
+        gone = [t for t in list(b.GetTracks()) if t.m_Uuid.AsString() in dead]
+        for t in gone:
+            b.Remove(t)
+        removed += len(gone)
+        b.BuildConnectivity()
+        pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+        pcbnew.SaveBoard(path, b)
+    print("dangling vias and stubs removed:", removed)
 
 
 def route():
@@ -961,6 +989,7 @@ def route():
     b.BuildConnectivity()
     pcbnew.ZONE_FILLER(b).Fill(b.Zones())
     pcbnew.SaveBoard(OUT, b)
+    prune(OUT)
     print("routed:", OUT)
 
 
