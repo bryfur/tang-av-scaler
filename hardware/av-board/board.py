@@ -139,28 +139,34 @@ J10_BALL = {"D0": "R19", "D1": "P19", "D2": "U21", "D3": "T21", "D4": "R17", "D5
             "BA0": "N15", "BA1": "U18", "CLK": "U20", "EXIO0": "AA18", "EXIO1": "AB18", "CAS": "Y19", "CS": "T20",
             "RAS": "Y18", "WE": "AB20"}
 
-# Signal on each header pin (design.md "The two headers").  Pins 31-40 are grounds.
-J10_SIG = {1: "Y0", 2: "Y1", 3: "Y2", 4: "Y3", 5: "Y4", 6: "Y5", 7: "Y6", 8: "Y7",
-           18: "C0", 17: "C1", 16: "C2", 15: "C3", 14: "C4", 13: "C5", 10: "C6", 9: "C7",
-           19: "HS", 20: "LLC", 21: "VS", 22: "DE", 23: "SCKI", 24: "BCK", 25: "LRCK", 26: "DOUT",
-           27: "SCL", 28: "SDA", 29: "RESET_N", 30: "INT1", 31: "KEY1", 32: "KEY2"}
-J9_SIG = {1: "Y0", 2: "Y1", 3: "Y2", 4: "Y3", 5: "Y4", 6: "Y5", 7: "Y6", 8: "Y7",
-          18: "C0", 17: "C1", 16: "C2", 15: "C3", 14: "C4", 13: "C5", 10: "C6", 9: "C7",
-          19: "HSYNC", 20: "CLK", 21: "VSYNC", 22: "DE", 23: "MCLK", 24: "SCLK", 25: "LRCLK", 26: "I2S0",
-          27: "SCL", 28: "SDA", 29: "INT", 30: "PD"}
+# Net on each header pin (design.md "The two headers"); the rest are grounds. The FPGA can take
+# any bit on any pin, so each bus is in the order its lines leave the chip (seen from the header),
+# which keeps them from crossing: J10 in the order of the 75 R arrays under the ADV7842 (only LLC,
+# held to the clock-capable CLK pin, crosses Y6/Y7); J9 round the ADV7511 from its left side
+# (audio, VSYNC) over its top (HSYNC .. C1) down its right (C2 .. SCL), then INT/PD from its
+# bottom. The PCM1808's I2S is on J9's left end, next to it. gen_pcb.py counts the crossings.
+J10_NET = {n: "IN_" + s for n, s in {
+    1: "C0", 2: "C1", 3: "C2", 4: "C3", 5: "VS", 6: "HS", 7: "C4", 8: "C5", 9: "DE", 10: "C6",
+    13: "C7", 14: "Y0", 15: "Y1", 16: "Y2", 17: "Y3", 18: "Y4", 19: "Y5", 20: "LLC", 21: "Y6", 22: "Y7",
+    23: "SCL", 24: "INT1", 25: "SDA", 26: "RESET_N", 31: "KEY1", 32: "KEY2"}.items()}
+J9_NET = {n: "OUT_" + s for n, s in {
+    30: "LRCLK", 29: "SCLK", 28: "I2S0", 27: "MCLK", 26: "VSYNC", 25: "HSYNC", 24: "DE", 23: "Y0",
+    22: "Y1", 21: "Y2", 20: "Y3", 19: "Y4", 18: "Y5", 17: "Y6", 16: "Y7", 15: "C0", 14: "CLK", 13: "C1",
+    10: "C2", 9: "C3", 8: "C4", 7: "C5", 6: "C6", 5: "C7", 4: "SDA", 3: "SCL", 2: "INT", 1: "PD"}.items()}
+J9_NET.update({39: "IN_DOUT", 40: "IN_BCK", 37: "IN_SCKI", 38: "IN_LRCK"})
 
 
-def header(ref, sig, prefix, note):
+def header(ref, nets, note):
     pins = {}
     for n in range(1, 41):
-        pins[str(n)] = "+5V" if n == 11 else prefix + sig[n] if n in sig else "GND"
+        pins[str(n)] = "+5V" if n == 11 else nets.get(n, "GND")
     return part(ref, "2x20 socket", "lcsc:2.54-2*20P", "lcsc:HDR-TH_40P-P2.54-V-F-R2-C20-S2.54-2", "C5124634",
                 pins, note=note)
 
 
 block("headers")
-header("J10", J10_SIG, "IN_", "to the Console's J10 (FPGA bank 4)")
-header("J9", J9_SIG, "OUT_", "to the Console's J9 (FPGA bank 2)")
+header("J10", J10_NET, "to the Console's J10 (FPGA bank 4)")
+header("J9", J9_NET, "to the Console's J9 (FPGA bank 2)")
 C("22u", "+5V")
 C("22u", "+5V")
 C("100n", "+5V")

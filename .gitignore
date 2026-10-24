@@ -8,6 +8,7 @@ fp-info-cache
 *.dsn
 *.ses
 route.log
+hardware/*/logs/
 drc.rpt
 __pycache__/
 

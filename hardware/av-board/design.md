@@ -26,7 +26,7 @@ something the references do not, the reason is listed under "Deviations" at the 
                       CVDD, PVDD              PLVDD+BGVDD
 
  3 RCA (Y Pb Pr) -> 24R/51R, 0.1 uF -> ADV7842 AIN4/5/6 -> 16-bit 4:2:2 + LLC/HS/VS/DE -> J10 (bank 4)
- 2 RCA (L R)     -> 10k/10k, 1 uF   -> PCM1808 (I2S slave)  <- SCKI/BCK/LRCK, DOUT ->      J10
+ 2 RCA (L R)     -> 10k/10k, 1 uF   -> PCM1808 (I2S slave)  <- SCKI/BCK/LRCK, DOUT ->      J9
  J9 (bank 2) -> 16-bit 4:2:2 + CLK/HS/VS/DE, I2S -> ADV7511 -> HDMI type A
 ```
 
@@ -61,38 +61,41 @@ D4. All of these go through a series resistor next to the ADV7842: 75 R in 4x040
 
 | Signal | Ball | J10 pin | FPGA ball (bank 4) |
 |---|---|---|---|
-| Y0 = P16 | H1 | 1 (D0) | R19 |
-| Y1 = P17 | J2 | 2 (D1) | P19 |
-| Y2 = P18 | J1 | 3 (D2) | U21 |
-| Y3 = P19 | K2 | 4 (D3) | T21 |
-| Y4 = P20 | K1 | 5 (D4) | R17 |
-| Y5 = P21 | L2 | 6 (D5) | P16 |
-| Y6 = P22 | L1 | 7 (D6) | T18 |
-| Y7 = P23 | M2 | 8 (D7) | R18 |
-| C0 = P4 | B2 | 18 (D8) | N13 |
-| C1 = P5 | B1 | 17 (D9) | N14 |
-| C2 = P6 | C2 | 16 (D10) | N17 |
-| C3 = P7 | C1 | 15 (D11) | P17 |
-| C4 = P8 | D2 | 14 (D12) | W21 |
-| C5 = P9 | D1 | 13 (D13) | W22 |
+| C0 = P4 | B2 | 1 (D0) | R19 |
+| C1 = P5 | B1 | 2 (D1) | P19 |
+| C2 = P6 | C2 | 3 (D2) | U21 |
+| C3 = P7 | C1 | 4 (D3) | T21 |
+| VS | C3 | 5 (D4) | R17 |
+| HS | C4 | 6 (D5) | P16 |
+| C4 = P8 | D2 | 7 (D6) | T18 |
+| C5 = P9 | D1 | 8 (D7) | R18 |
+| DE | D4 | 9 (D15) | W17 |
 | C6 = P10 | E2 | 10 (D14) | V17 |
-| C7 = P11 | F2 | 9 (D15) | W17 |
+| C7 = P11 | F2 | 13 (D13) | W22 |
+| Y0 = P16 | H1 | 14 (D12) | W21 |
+| Y1 = P17 | J2 | 15 (D11) | P17 |
+| Y2 = P18 | J1 | 16 (D10) | N17 |
+| Y3 = P19 | K2 | 17 (D9) | N14 |
+| Y4 = P20 | K1 | 18 (D8) | N13 |
+| Y5 = P21 | L2 | 19 (A12) | V20 |
 | LLC | N1 | 20 (CLK) | U20 (SGCLK_5) |
-| HS | C4 | 19 (A12) | V20 |
-| VS | C3 | 21 (A9) | Y22 |
-| DE | D4 | 22 (A11) | Y21 |
+| Y6 = P22 | L1 | 21 (A9) | Y22 |
+| Y7 = P23 | M2 | 22 (A11) | Y21 |
 
 The LLC goes to the header's CLK pin, the P side of the clock-capable pair V20/U20, where
-Sipeed's SDRAM modules take their clock. The FPGA's assignment of each bit is free; the order
-above keeps the traces from crossing.
+Sipeed's SDRAM modules take their clock. The FPGA's assignment of each bit is free, so the pins
+follow the order in which the lines leave the 75 R arrays under the ADV7842 (left to right, as
+the arrays sit in ball order): the bus to J10 is then flat, except LLC, which has to be on the CLK
+pin and crosses Y6/Y7 (pins 21, 22) at the header, where the through-hole pins give it the other
+layer.
 
 Control [UG-214 App. C; DS; EBZ sheets 7, 9]:
 
 | Ball | Pin | Connection |
 |---|---|---|
-| L3, M3 | SCL, SDA | J10 pins 27, 28 (WE, A4); 4.7 k pull-ups to 3.3 V [EBZ R54, R57] |
-| N5 | RESET | J10 pin 29 (EXIO0/DM0); 4.7 k to GND, so the part is held in reset until the FPGA drives it (low while the supplies come up, at least 5 ms [UG-214 App. A; DS]) |
-| M4 | INT1 | J10 pin 30 (EXIO1/DM1); 4.7 k pull-up to 3.3 V |
+| L3, M3 | SCL, SDA | J10 pins 23, 25 (A7, A5); 4.7 k pull-ups to 3.3 V [EBZ R54, R57] |
+| N5 | RESET | J10 pin 26 (A6); 4.7 k to GND, so the part is held in reset until the FPGA drives it (low while the supplies come up, at least 5 ms [UG-214 App. A; DS]) |
+| M4 | INT1 | J10 pin 24 (A8); 4.7 k pull-up to 3.3 V |
 | C10 | PWRDN1 | 4.7 k to 3.3 V [App. C] |
 | C11 | TEST8 | 4.7 k to 3.3 V [UG-214 Table 1, App. C, Fig. 176]; a DNP 4.7 k to GND beside it ([DS] Rev B says to GND) |
 | N4, P3 | TEST4, TEST5 | GND [DS; Fig. 176] |
@@ -133,7 +136,8 @@ CVDD (HDMI only) up to 130 mA, DVDDIO 51-109 mA.
   GND: a 2 Vrms line output comes down to 1 Vrms, under the 3 Vp-p (1.06 Vrms) full scale. A
   1 nF to GND after the 10 k series resistor gives the optional anti-aliasing RC (8.2.2.4), at
   about 32 kHz.
-- To J10: SCKI pin 23 (A7), BCK pin 24 (A8), LRCK pin 25 (A5), DOUT pin 26 (A6). The FPGA is the
+- To J9 (bank 2), its left end, next to the PCM1808: SCKI pin 37 (A0, D19), LRCK pin 38 (A1, E19),
+  DOUT pin 39 (A2, C19), BCK pin 40 (A3, C18). The FPGA is the
   audio clock master (12.288 MHz = 256 x 48 kHz).
 
 ## ADV7511KSTZ (U2, LQFP-100)
@@ -145,19 +149,24 @@ GND [HWG 6.1.1].
 
 | Signal | ADV7511 pin | J9 pin | FPGA ball (bank 2) |
 |---|---|---|---|
-| Y0-Y7 = D8-D15 | 88 87 86 85 84 83 82 81 | 1 2 3 4 5 6 7 8 (D0-D7) | E14 E13 C15 C14 B13 C13 A14 A13 |
-| C0-C7 = D16-D23 | 80 78 74 73 72 71 70 69 | 18 17 16 15 14 13 10 9 (D8-D15) | B21 A21 B20 A20 A15 A16 B15 B16 |
-| CLK | 79 | 20 (CLK) | B17 |
-| HSYNC | 98 | 19 (A12) | B18 |
-| VSYNC | 2 | 21 (A9) | C17 |
-| DE | 97 | 22 (A11) | D17 |
-| MCLK | 11 | 23 (A7) | A19 |
-| SCLK | 16 | 24 (A8) | A18 |
-| LRCLK | 17 | 25 (A5) | D15 |
-| I2S0 | 12 | 26 (A6) | D14 |
-| SCL, SDA | 55, 56 | 27, 28 (WE, A4) | D16, E16 |
-| INT | 45 | 29 (EXIO0/DM0) | F14 |
-| PD/AD | 38 | 30 (EXIO1/DM1) | F13 |
+| Y0-Y7 = D8-D15 | 88 87 86 85 84 83 82 81 | 23 22 21 20 19 18 17 16 (A7 A11 A9 CLK A12 D8 D9 D10) | A19 D17 C17 B17 B18 B21 A21 B20 |
+| C0-C7 = D16-D23 | 80 78 74 73 72 71 70 69 | 15 13 10 9 8 7 6 5 (D11 D13 D14 D15 D7 D6 D5 D4) | A20 A16 B15 B16 A13 A14 C13 B13 |
+| CLK | 79 | 14 (D12) | A15 |
+| HSYNC | 98 | 25 (A5) | D15 |
+| VSYNC | 2 | 26 (A6) | D14 |
+| DE | 97 | 24 (A8) | A18 |
+| MCLK | 11 | 27 (WE) | D16 |
+| SCLK | 16 | 29 (EXIO0/DM0) | F14 |
+| LRCLK | 17 | 30 (EXIO1/DM1) | F13 |
+| I2S0 | 12 | 28 (A4) | E16 |
+| SCL, SDA | 55, 56 | 3, 4 (D2, D3) | C15, C14 |
+| INT | 45 | 2 (D1) | E13 |
+| PD/AD | 38 | 1 (D0) | E14 |
+
+The pins follow the order in which the lines leave the ADV7511, seen from J9 above it: up its left
+side (the audio, VSYNC), along its top (HSYNC, DE, D8-D23, CLK) and down its right side (D19-D23,
+SDA, SCL), then INT and PD from its bottom, round the right. The bus is then flat. CLK is an
+output, forwarded by an ODDR, which any pin can do, so it does not need the header's CLK pin.
 
 - Audio inputs: series 50 R (51 R) next to the source, the FPGA side [HWG 7.3]. I2S1-3, SPDIF,
   DSD0-5, DSD_CLK to GND [6.1.1].
@@ -203,19 +212,22 @@ On the bottom of the AV board: two 2x20 2.54 mm female sockets, mating with the 
 
 | Pin | J9 (bank 2) | J10 (bank 4) |
 |---|---|---|
-| 1-10, 13-18 | ADV7511 D8-D23 | ADV7842 P16-P23, P4-P11 |
+| 1, 2, 3, 4 | PD, INT, SCL, SDA | C0, C1, C2, C3 |
+| 5-10 | C7, C6, C5, C4, C3, C2 | VS, HS, C4, C5, DE, C6 |
 | 11 | +5 V | +5 V |
 | 12 | GND | GND |
-| 19, 20, 21, 22 | HSYNC, CLK, VSYNC, DE | HS, LLC, VS, DE |
-| 23-26 | MCLK, SCLK, LRCLK, I2S0 | SCKI, BCK, LRCK, DOUT |
-| 27, 28 | SCL, SDA | SCL, SDA |
-| 29, 30 | INT, PD | RESET, INT1 |
+| 13-18 | C1, CLK, C0, Y7, Y6, Y5 | C7, Y0, Y1, Y2, Y3, Y4 |
+| 19-22 | Y4, Y3, Y2, Y1 | Y5, LLC (CLK pin), Y6, Y7 |
+| 23-26 | Y0, DE, HSYNC, VSYNC | SCL, INT1, SDA, RESET |
+| 27-30 | MCLK, I2S0, SCLK, LRCLK | GND |
 | 31, 32 | GND | KEY1, KEY2 (buttons SW1/SW2 to GND, 10 k pull-ups: low = pressed) |
-| 33-40 | GND | GND |
+| 33-36 | GND | GND |
+| 37-40 | PCM1808 SCKI, LRCK, DOUT, BCK | GND |
 
-J9 pins 31-40 and J10 pins 33-40 (CAS, RAS, CS, BA0, BA1, A10, A0-A3) are tied to the AV board's
-ground. They add returns next to the only real GND pin (12). **The FPGA design must drive them
-low or leave them as inputs, never high.**
+Each bus is in the order its lines leave its chip, so the traces do not cross (the tables above).
+J9 pins 31-36 and J10 pins 27-30 and 33-40 are tied to the AV board's ground. They add returns
+next to the only real GND pin (12). **The FPGA design must drive them low or leave them as
+inputs, never high.**
 
 ## Deviations from the references
 
@@ -231,7 +243,7 @@ low or leave them as inputs, never high.**
   has the pull-down's pads (DNP).
 - TEST5: UG-214 Appendix C says float, but the data sheet and both evaluation schematics tie it
   to GND. The board ties it to GND.
-- J10 pin 2 (FPGA P19) is also the FPGA's SSPI_CLK configuration pin; it carries Y1, an input to
+- J10 pin 2 (FPGA P19) is also the FPGA's SSPI_CLK configuration pin; it carries C1, an input to
   the FPGA, which is harmless while the FPGA configures from flash.
 
 ## Mechanics

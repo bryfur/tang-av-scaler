@@ -5,7 +5,8 @@ anti-aliased with SMAA, scaled, and sent out as 1080p60 HDMI with the console's 
 
 ```
 PS2 component (YPbPr) + stereo audio
-  -> AV board: ADV7842 (video ADC/decoder) + PCM1808 (audio ADC)   on the Console's J10 header
+  -> AV board: ADV7842 (video ADC/decoder)                         on the Console's J10 header
+               PCM1808 (audio ADC)                                on the Console's J9 header
   -> GW5AST-138 FPGA: capture -> deinterlace -> SMAA 1x -> scale
   -> AV board: ADV7511 (HDMI transmitter)                           on the Console's J9 header
   -> HDMI 1080p60 with audio

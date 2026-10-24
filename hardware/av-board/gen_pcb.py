@@ -103,10 +103,14 @@ HAND = {
     "U1": (113.0, 61.0, None, "F"),
     "Y1": (108.0, 49.0, 0, "F"),          # beside XTALP/XTALN (B16, C16), the top-left corner
     "U3": (95.0, 37.5, 0, "F"),          # PCM1808 beside the audio jacks
-    "U4": (127.0, 37.0, 0, "F"), "U5": (135.0, 37.0, 0, "F"), "U6": (126.0, 44.0, 0, "F"),
-    # ADV7511 below J9's data end, data side up, TMDS side down towards the HDMI connector
+    # ADV7511 below J9's data end, data side up, TMDS side down towards the HDMI connector; the
+    # band between it and J9 is its bus's (see board.J9_NET)
     "U2": (148.0, 47.0, None, "F"),
-    "U7": (134.0, 53.0, 0, "F"),
+    # the supplies under it, right of the ADV7842's rail filters, clear of both buses: 1V8A next
+    # to the filters (FL1, FL3, FL5 at x 126), 1V8B under the ADV7511, 3V3 and the 2V5 buck
+    # beside them; +5 V comes from J10 pin 11 along the edge below J10
+    "U6": (132.5, 61.0, 0, "F"), "U7": (140.0, 61.5, 0, "F"),
+    "U5": (147.0, 63.0, 0, "F"), "U4": (147.0, 70.5, 0, "F"),
     "J6": (163.6, 62.0, 90, "F"),
     # TMDS ESD, in line before the HDMI pads (pins 1-12 at x 160.2, y 57.5-63)
     "U9": (156.3, 58.75, None, "F"), "U10": (156.3, 61.75, None, "F"),
@@ -329,6 +333,38 @@ def courtyard(fp, margin=0.25):
             ToMM(bb.GetRight()) + margin, ToMM(bb.GetBottom()) + margin)
 
 
+def crossings(hdr, ic, fps):
+    """How many pairs of an IC's lines to a header must cross: each line's near end (the pad on
+    its net nearest the header pin, within reach of the IC) in order round the IC, cut on the side
+    away from the header, against the order of the header pins (pins in one column do not count)."""
+    cx, cy = ToMM(ic.GetPosition().x), ToMM(ic.GetPosition().y)
+    bx = courtyard(ic, 0)
+    reach = math.hypot(bx[2] - bx[0], bx[3] - bx[1]) / 2 + 6
+    above = ToMM(hdr.GetPosition().y) < cy
+    pads = {}
+    for fp in fps.values():
+        if fp is not hdr:
+            for pad in fp.Pads():
+                v = pad.GetPosition()
+                pads.setdefault(pad.GetNetname(), []).append((ToMM(v.x), ToMM(v.y)))
+    lines = []
+    for pad in hdr.Pads():
+        n = pad.GetNetname()
+        if n in ("GND", "+5V") or n not in pads:
+            continue
+        hx, hy = ToMM(pad.GetPosition().x), ToMM(pad.GetPosition().y)
+        sx, sy = min(pads[n], key=lambda q: math.hypot(q[0] - hx, q[1] - hy))
+        if math.hypot(sx - cx, sy - cy) > reach:
+            continue
+        # (the cut a little to the left of straight away from the header: lines from right under
+        # the IC go round its right)
+        t = math.atan2(sy - cy, sx - cx)
+        key = (t - math.pi / 2 - 0.4) % (2 * math.pi) if above else -((t + math.pi / 2 - 0.4) % (2 * math.pi))
+        lines.append((round(hx, 2), key))
+    return sum(1 for i, a in enumerate(lines) for b in lines[i + 1:]
+               if a[0] != b[0] and (a[0] < b[0]) != (a[1] < b[1]))
+
+
 def place_near(occ, fp, side, anchor, angles=(0, 90), where=None):
     """Put fp on the free spot nearest anchor (spiral search)."""
     ax, ay = anchor
@@ -444,15 +480,20 @@ def main():
             pad.SetNet(net(p.pins[str(hit[0])]))
 
     # --- small parts next to their anchors
+    # pads already placed, by net: the hand-placed parts now, each small part as it is placed
     ic_pads = {}
-    for ref in ("U1", "U2", "U3", "U4", "U5", "U6", "U7", "U9", "U10", "J6", "FL1", "FL2", "FL3", "FL4", "FL5", "FL6", "J9", "J10", "J1", "J2", "J3", "J4", "J5", "Y1"):
-        for pad in fps[ref].Pads():
+
+    def add_pads(fp):
+        for pad in fp.Pads():
             v = pad.GetPosition()
-            ic_pads.setdefault(pad.GetNetname(), []).append((ToMM(v.x), ToMM(v.y), ref))
+            ic_pads.setdefault(pad.GetNetname(), []).append((ToMM(v.x), ToMM(v.y), fp.GetReference()))
+    for ref in HAND:
+        add_pads(fps[ref])
     rr = {}
     net_pins = board.nets()
 
     def anchor_for(p):
+        """Where a small part goes, or None while nothing it hangs on is placed yet."""
         # decoupling for U1: spread over its rail's balls, bottom side
         nets_ = [n for n in p.pins.values() if n != "GND"]
         for n in nets_:
@@ -467,8 +508,25 @@ def main():
                     k = rr.get(n, 0)
                     rr[n] = k + 1
                     return balls[k % len(balls)], "B"
-        # otherwise the IC or connector it was written down with: the nearest one before it in
-        # board.py that shares a net with it (a regulator's caps and divider follow the regulator)
+        # a part on a signal (a pull-up, a termination, a series resistor, a divider) goes where
+        # that signal is: at the IC pin it serves, else beside the part it hangs on (a
+        # termination's 51 R by its coupling cap), else at the connector pin. Its supply net does
+        # not count: a pull-up to 3V3 belongs at its pin, not at the 3V3 regulator.
+        sig = sorted((n for n in nets_ if n not in POWER_NETS), key=lambda n: len(net_pins.get(n, [])))
+        # except a series resistor on a line the FPGA drives (OUT_*, to the ADV7511): it goes at
+        # the source end, the header [HWG 7.3]
+        drive = [n for n in sig if n.startswith("OUT_")]
+        if p.ref.startswith("R") and len(sig) == 2 and drive:
+            return [(x, y) for x, y, r in ic_pads[drive[0]] if r == "J9"][0], "F"
+        if sig:
+            for kind in (lambda r: r.startswith("U"), lambda r: r not in HAND, lambda r: True):
+                for n in sig:
+                    cands = [(x, y) for x, y, r in ic_pads.get(n, []) if kind(r) and r != p.ref]
+                    if cands:
+                        return cands[0], "F"
+            return None
+        # a part on supplies only (a regulator's caps): the IC or connector it was written down
+        # with, the nearest one before it in board.py on one of its nets
         k = board.PARTS.index(p)
         for q in reversed(board.PARTS[:k]):
             if q.ref.startswith(("U", "J")) and q.ref in fps:
@@ -478,14 +536,12 @@ def main():
                     pads = [(x, y) for x, y, r in ic_pads.get(shared[0], []) if r == q.ref]
                     if pads:
                         return pads[0], "F"
-        # else an IC pad on its most specific net (fewest pins)
-        nets_ = sorted(nets_, key=lambda n: len(net_pins.get(n, [])))
-        for pref in ("U", "Y", "J"):
-            for n in nets_:
-                cands = [(x, y) for x, y, r in ic_pads.get(n, []) if r.startswith(pref)]
-                if cands:
-                    return cands[0], "F"
-        return ((X0 + X1) / 2, Y1 - 5), "F"
+        # else whatever is placed on its most specific supply (the buck's output is its inductor)
+        for n in sorted(nets_, key=lambda n: len(net_pins.get(n, []))):
+            cands = [(x, y) for x, y, r in ic_pads.get(n, []) if r != p.ref]
+            if cands:
+                return cands[0], "F"
+        return None
 
     order = [p for p in board.PARTS if p.ref not in HAND]
 
@@ -503,8 +559,16 @@ def main():
             return 2
         return 4
     order.sort(key=rank)
-    for p in order:
-        (ax, ay), side = anchor_for(p)
+    while order:
+        # the first part in rank order whose anchor is placed (a chain fills in from its IC end)
+        for p in order:
+            a = anchor_for(p)           # (once per part: the rail-cap round robin counts calls)
+            if a is not None:
+                break
+        else:
+            raise SystemExit("nothing placed that %s hangs on" % order[0].ref)
+        order.remove(p)
+        (ax, ay), side = a
         # a rail's decoupling goes where its whole footprint is over the rail's plane: a via straight
         # down then connects it, with nothing for the router to do
         plane = [n for n in p.pins.values() if n in PLANES]
@@ -514,6 +578,10 @@ def main():
             where = (lambda box, poly=poly, to_grid=to_grid: all(
                 inside(poly, *to_grid(x, y)) for x in (box[0], box[2]) for y in (box[1], box[3])))
         place_near(occ, fps[p.ref], side, (ax, ay), where=where)
+        add_pads(fps[p.ref])
+
+    for ref, ic in (("J10", "U1"), ("J9", "U2")):
+        print("%s bus: %d crossings" % (ref, crossings(fps[ref], fps[ic], fps)))
 
     # orientation checks: the jacks open to the left edge, U2's data side faces J9 (above it)
     for ref in ("J1", "J2", "J3", "J4", "J5"):
