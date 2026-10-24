@@ -26,6 +26,7 @@ In `refs/` (not in git). Every circuit on the board follows these.
 | ADV7842_datasheet_adi.pdf | ADV7842 data sheet, Rev B: supplies, currents, crystal (28.63636 MHz), 256-ball map | analog.com data-sheets/ADV7842.pdf |
 | UG-214_ADV7842_hardware.pdf | ADV7842 Hardware User Guide: analog input configuration (6.2.1), reset, pixel port, PCB layout recommendations, recommended decoupling (Fig. 168, 179), 75 R input termination (Appendix B) | analog.com user-guides/UG-214.pdf (via docs.ampnuts.ru mirror) |
 | HDMI_RX_PowerSupplies_RevA_050411.pdf | ADI "PCB Layout and Power Supply Design Recommendations for HDMI RX Products", Rev A (April 2011): a ferrite per supply rail (Murata NFE61PT472C1H9), 10 nF + 100 nF per pin, 10 uF bulk on AVDD/CVDD/PVDD, LDOs not switchers, 3.3 V before 1.8 V; Fig. 2 the reference LDO supply (10 uH + 10 uF after the 1.8 V LDO, 100 nF + 1 uF on AVDD/CVDD/PVDD, 100 nF on DVDD/DVDDIO/TVDD, 1.8 V enable from 3.3 V via 100 k / 470 nF) | ADI EngineerZone, ADV7842 design support files (downloaded by hand) |
+| adv7844ebz/ | ADI's ADV7844 evaluation board ("ADV7844 Input Module", Rev C, July 2010): schematic (11 sheets, image-only PDF), manufacturing BOM (.xls), IPC-356 netlist, Gerbers. The main circuit reference: see reference-notes.md | ADI EngineerZone, ADV7844 evaluation board info (downloaded by hand) |
 | ADV7844-VER.5.8c.txt | ADI's recommended register scripts for the ADV7844 (v5.8c, 2012), the ADV7842's sibling: I2C write sequences per input mode, configuring the receiver (0x40 IO, 0x44 CP, 0x4C AFE ...) and the ADV7511 (0x72) together; "CP YPbPr SD/ED/HD" are the PS2's component modes. For bring-up; the ADV7842's own file (Rev 1.9) is the exact match | ADI EngineerZone, ADV7842 design support files (downloaded by hand) |
 | UG-206_ADV7842_software.pdf | ADV7842 software (register) guide | analog.com user-guides/UG-206.pdf |
 | UG-235_eval_ADV7842_7511.pdf | EVAL-ADV7842-7511 user guide (placement drawing, jumpers; no schematic) | farnell.com mirror of UG-235 |
@@ -41,8 +42,10 @@ In `refs/` (not in git). Every circuit on the board follows these.
 | console138k_C.pdf | Sipeed Tang_138K_Console_V32001C schematic | dl.sipeed.com TANG/Console/02_Schematic |
 | ibom_C.html | Sipeed's interactive BOM for board 32001C (part positions) | dl.sipeed.com TANG/Console/03_Designator_drawing |
 
-Still wanted, for cross-checking: the EVAL-ADV7842-7511 / ADV7844 evaluation board schematics and
-the ADV7511 evaluation schematic (ADI's design support files).
+Still wanted, for cross-checking: the ADV7842 recommended settings (Rev 1.9) and the ADV7511
+evaluation schematic (ADI's design support files).
+
+What these documents say, circuit by circuit: [reference-notes.md](reference-notes.md).
 
 Fetching: analog.com serves its PDFs to `wget` (HTTP/1.1); curl over HTTP/2 stalls. EngineerZone
 (ez.analog.com) refuses automated clients ("Access Denied"): its files are downloaded by hand.
