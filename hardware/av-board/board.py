@@ -314,15 +314,9 @@ for name in ("DDCB_SCL", "DDCA_SCL", "VGA_SCL", "TTX_SCL"):
     R("10k", "PD_" + name, "GND")
 for name in ("RXA_5V", "RXB_5V"):
     u1[ball(name)] = "+5V"
-dq = ["SDRAM_DQ%d" % i for i in range(16)] + ["SDRAM_LDQS", "SDRAM_UDQS"]
-for k in range(0, 16, 4):
-    pins = {}
-    for j, name in enumerate(dq[k:k + 4]):
-        u1[ball(name)] = "PD_" + name
-        pins[str(1 + j)] = "PD_" + name
-        pins[str(8 - j)] = "GND"
-    part(nxt("RN"), "4.7k", "lcsc:4D02WGJ0472TCE", "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL", "C29586", pins)
-for name in dq[16:]:
+# (single resistors, each beside its ball: arrays would gather four scattered balls of the
+# BGA's crowded corner onto pads 0.5 mm apart)
+for name in ["SDRAM_DQ%d" % i for i in range(16)] + ["SDRAM_LDQS", "SDRAM_UDQS"]:
     u1[ball(name)] = "PD_" + name
     R("4.7k", "PD_" + name, "GND")
 

@@ -49,6 +49,8 @@ PLANES = {
     "AV_VDD": [(10.45, 4.55), (7.55, 4.55), (7.55, 5.55), (-9.0, 5.55), (-9.0, 9.45), (7.55, 9.45),
                (7.55, 10.45), (10.45, 10.45)],
     "AV_CVDD": [(-9.0, 9.55), (4.45, 9.55), (4.45, 13.45), (-9.0, 13.45)],
+    # PVDD (D15, D16): a small plane out to the left, to its filter
+    "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 18.5), (1.6, 18.5)],
     "AV_DVDDIO": [(4.55, -1.0), (21.0, -1.0), (21.0, 4.45), (12.45, 4.45), (12.45, 10.45), (10.55, 10.45),
                   (10.55, 4.45), (4.55, 4.45)],
 }
@@ -94,9 +96,10 @@ HAND = {
     "U7": (170.0, 62.0, 0, "F"),
     # ADV7842 rail filters on the bottom, at the exits of their In2 planes (see PLANES)
     "FL1": (89.6, 87.7, None, "B"), "FL3": (81.0, 87.7, None, "B"),  # VDD, CVDD: below the BGA
-    "FL2": (76.8, 75.0, None, "B"),                                  # AVDD: left of it
+    "FL2": (76.0, 75.0, None, "B"),                                  # AVDD: left of it
     "FL5": (93.5, 62.0, None, "B"),                                  # DVDDIO: above it
-    "FL4": (77.0, 63.0, 90, "B"), "FL6": (89.0, 62.0, 90, "B"),      # PVDD, TVDD: routed rails
+    "FL4": (78.0, 82.2, None, "B"),                                  # PVDD: left, below AVDD's
+    "FL6": (89.0, 62.0, 90, "B"),                                    # TVDD: a routed rail
     # TMDS ESD, in line between U2's TMDS pins (x 176.6, y 37.5-43) and the HDMI pads (x 183.1)
     "U9": (178.8, 33.75, None, "F"), "U10": (178.8, 36.75, None, "F"),
 }
@@ -161,11 +164,11 @@ def fit_esd(fp, x, y):
     return p1[0] < p10[0] and p1[1] < p5[1]
 
 
-FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL3": "AV_CVDD", "FL5": "AV_DVDDIO"}
+FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL3": "AV_CVDD", "FL5": "AV_DVDDIO", "FL4": "AV_PVDD"}
 _u1_grid = []
 
 
-FL_AXIS = {"FL1": "x", "FL3": "x", "FL2": "y", "FL5": "y"}
+FL_AXIS = {"FL1": "x", "FL3": "x", "FL2": "y", "FL5": "y", "FL4": "y"}
 
 
 def fit_fl(ref):
@@ -366,6 +369,13 @@ def main():
         fps[p.ref] = fp
 
     occ = Occ()
+    # Bus corridors stay free of small parts: from the 75 R arrays (x 98) to J10's pins, and the
+    # strips above and below J10 the bus runs along; likewise from J9's data end to the ADV7511.
+    for side in ("F", "B"):
+        occ.take(side, (98.6, 70.0, 104.0, 89.5))           # arrays -> J10's pin 1 end
+        occ.take(side, (103.0, 74.5, 132.0, 77.0))          # above J10's even row
+        occ.take(side, (103.0, 81.0, 132.0, 89.5))          # below J10's odd row
+        occ.take(side, (141.0, 26.0, 160.5, 34.5))          # J9's data end -> ADV7511
 
     # --- hand-placed parts
     for ref, spec in list(HAND.items()):
@@ -505,6 +515,7 @@ def rules(b):
     ds.m_MinThroughDrill = FromMM(0.3)
     ds.m_CopperEdgeClearance = FromMM(0.3)
     ds.m_HoleClearance = FromMM(0.2)        # JLCPCB multilayer: 0.2 mm hole to copper
+    ds.m_MinResolvedSpokes = 1              # pads on the outer pours have their own vias too
 
 
 def grid(fp):
@@ -525,7 +536,9 @@ def inside(poly, r, c):
 
 
 def track(b, a, z, width, layer, net):
+    """A locked track: the fanout stays as placed (Freerouting reroutes unlocked copper)."""
     t = pcbnew.PCB_TRACK(b)
+    t.SetLocked(True)
     t.SetStart(VECTOR2I(FromMM(a[0]), FromMM(a[1])))
     t.SetEnd(VECTOR2I(FromMM(z[0]), FromMM(z[1])))
     t.SetWidth(FromMM(width))
@@ -536,6 +549,7 @@ def track(b, a, z, width, layer, net):
 
 def via(b, x, y, net):
     v = pcbnew.PCB_VIA(b)
+    v.SetLocked(True)
     v.SetViaType(pcbnew.VIATYPE_THROUGH)
     v.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
     v.SetWidth(FromMM(VIA_D))
@@ -563,9 +577,10 @@ def fanout_u1(b, fp):
         net = pad.GetNetname()
         if not net:
             continue
-        power = net == "GND" or net in POWER_NETS
+        # (+5V: the two HDMI 5 V detect balls, beside unused HDMI balls: they escape on F.Cu)
+        power = net == "GND" or (net in POWER_NETS and net != "+5V")
         ring = min(r, c, 15 - r, 15 - c)
-        if not power and ring <= 1:
+        if not power and (ring <= 1 or net == "+5V"):
             continue
         cands = [(r + dr, c + dc) for dr in (-0.5, 0.5) for dc in (-0.5, 0.5)]
         if net in PLANES:
@@ -691,12 +706,15 @@ def fanout_planes(b, u1):
     print("plane fanout: %d vias" % n)
 
 
-def zone(b, netname, layer, pts, clearance=0.25, priority=0):
+def zone(b, netname, layer, pts, clearance=None, priority=0):
     z = pcbnew.ZONE(b)
     z.SetLayer(layer)
     z.SetNet(b.FindNet(netname))
-    z.SetLocalClearance(FromMM(clearance))
-    z.SetMinThickness(FromMM(0.2))
+    inner = layer not in (pcbnew.F_Cu, pcbnew.B_Cu)
+    # inner planes: 0.127 mm, or the other nets' via holes (1 mm apart under the BGA) would leave no
+    # copper between them and cut the planes into islands
+    z.SetLocalClearance(FromMM(clearance if clearance is not None else 0.127 if inner else 0.25))
+    z.SetMinThickness(FromMM(0.15 if inner else 0.2))
     z.SetAssignedPriority(priority)
     z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL if layer not in (pcbnew.F_Cu, pcbnew.B_Cu)
                        else pcbnew.ZONE_CONNECTION_THERMAL)
@@ -709,20 +727,23 @@ def zone(b, netname, layer, pts, clearance=0.25, priority=0):
     return z
 
 
-def keepout(b, x0, y0, x1, y1):
-    """A rule area on all copper layers with no tracks or vias: Freerouting does not keep the edge
-    clearance by itself."""
+def keepout(b, x0, y0, x1, y1, pts=None, layer=None, vias=True):
+    """A rule area with no tracks (and no vias unless vias=False) on all copper layers or one:
+    Freerouting keeps neither the edge clearance nor the planes free by itself."""
     z = pcbnew.ZONE(b)
     z.SetIsRuleArea(True)
     z.SetDoNotAllowTracks(True)
-    z.SetDoNotAllowVias(True)
+    z.SetDoNotAllowVias(vias)
     z.SetDoNotAllowPads(False)
     z.SetDoNotAllowFootprints(False)
     z.SetDoNotAllowCopperPour(False)
-    z.SetLayerSet(pcbnew.LSET.AllCuMask())
+    if layer is None:
+        z.SetLayerSet(pcbnew.LSET.AllCuMask())
+    else:
+        z.SetLayer(layer)
     o = z.Outline()
     o.NewOutline()
-    for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+    for x, y in pts or ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
         o.Append(FromMM(x), FromMM(y))
     b.Add(z)
 
@@ -733,34 +754,130 @@ def planes(b, fp):
         keepout(b, x0, y0, x1, y1)
     wx0, wy0, wx1, wy1 = WIN
     keepout(b, wx0 - m, wy0 - m, wx1 + m, wy1 + m)
+    for bx, by in BUTTONS:
+        keepout(b, bx - 3.5 - m, by - 3.5 - m, bx + 3.5 + m, by + 3.5 + m)
     g = grid(fp)
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
     zone(b, "GND", pcbnew.In1_Cu, full)
     zone(b, "GND", pcbnew.In4_Cu, full)
     for net, poly in PLANES.items():
-        zone(b, net, pcbnew.In3_Cu, [g(r, c) for r, c in poly], priority=1)
+        pts = [g(r, c) for r, c in poly]
+        pts = [(min(max(x, X0 + 0.5), X1 - 0.5), min(max(y, Y0 + 0.5), Y1 - 0.5)) for x, y in pts]
+        zone(b, net, pcbnew.In3_Cu, pts, priority=1)
+        # no signal tracks across a rail plane on In3 (vias may pass)
+        keepout(b, 0, 0, 0, 0, pts=pts, layer=pcbnew.In3_Cu, vias=False)
+
+
+def seg_dist(px, py, ax, ay, bx, by):
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy
+    t = 0.0 if l2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / l2))
+    return ((px - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** 0.5
+
+
+def stitch(b, pitch=2.5, gap=0.3):
+    """Ground vias on a grid wherever they clear every pad, track, via, edge and the window: they
+    tie the outer pours to the two ground planes (and the islands the tracks cut out of them)."""
+    gnd = b.FindNet("GND")
+    pts, segs = [], []
+    for fp in b.GetFootprints():
+        for p in fp.Pads():
+            r = p.GetBoundingBox()
+            pts.append((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y),
+                        (ToMM(r.GetWidth()) ** 2 + ToMM(r.GetHeight()) ** 2) ** 0.5 / 2))
+    for t in b.GetTracks():
+        if t.GetClass() == "PCB_VIA":
+            pts.append((ToMM(t.GetPosition().x), ToMM(t.GetPosition().y), VIA_D / 2))
+        else:
+            segs.append((ToMM(t.GetStart().x), ToMM(t.GetStart().y), ToMM(t.GetEnd().x), ToMM(t.GetEnd().y),
+                         ToMM(t.GetWidth()) / 2))
+    n = 0
+    y = Y0 + 1.5
+    while y < Y1 - 1.4:
+        x = X0 + 1.5
+        while x < X1 - 1.4:
+            wx0, wy0, wx1, wy1 = WIN
+            ok = not (wx0 - 1.0 < x < wx1 + 1.0 and wy0 - 1.0 < y < wy1 + 1.0)
+            ok = ok and all(((x - hx) ** 2 + (y - hy) ** 2) ** 0.5 > 3.0 for hx, hy in HOLES)
+            ok = ok and all(((x - hx) ** 2 + (y - hy) ** 2) ** 0.5 > 4.5 for hx, hy in BUTTONS)
+            if ok:
+                for px, py, r in pts:
+                    if abs(px - x) < 4 and abs(py - y) < 4 and ((x - px) ** 2 + (y - py) ** 2) ** 0.5 < VIA_D / 2 + gap + r:
+                        ok = False
+                        break
+            if ok:
+                for ax, ay, bx, by, hw in segs:
+                    if min(ax, bx) - 2 < x < max(ax, bx) + 2 and min(ay, by) - 2 < y < max(ay, by) + 2 and \
+                            seg_dist(x, y, ax, ay, bx, by) < VIA_D / 2 + gap + hw:
+                        ok = False
+                        break
+            if ok:
+                via(b, x, y, gnd)
+                pts.append((x, y, VIA_D / 2))
+                n += 1
+            x += pitch
+        y += pitch
+    print("stitching vias:", n)
 
 
 def route():
     """Freerouting on the saved board, then the ground pours on the outer layers, filled."""
     b = pcbnew.LoadBoard(OUT)
+    # KiCad's session import replaces every track and via with what Freerouting returns, which
+    # leaves out some of the locked fanout: note it here and put back what is missing
+    fixed = []
+    for t in b.GetTracks():
+        if t.IsLocked():
+            if t.GetClass() == "PCB_VIA":
+                fixed.append(("via", ToMM(t.GetPosition().x), ToMM(t.GetPosition().y), t.GetNetname()))
+            else:
+                fixed.append(("track", ToMM(t.GetStart().x), ToMM(t.GetStart().y), ToMM(t.GetEnd().x),
+                              ToMM(t.GetEnd().y), ToMM(t.GetWidth()), t.GetLayer(), t.GetNetname()))
     dsn, ses = os.path.join(HERE, NAME + ".dsn"), os.path.join(HERE, NAME + ".ses")
     if not pcbnew.ExportSpecctraDSN(b, dsn):
         raise SystemExit("DSN export failed")
     display = ":%d" % (90 + os.getpid() % 100)
     xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    log = open(os.path.join(HERE, "route.log"), "w")
     try:
-        subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")],
-                       check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT,
-                       env=dict(os.environ, DISPLAY=display))
+        # stage 1 routes the board; stage 2 starts from that result and works on what is left
+        for stage in (1, 2):
+            if stage == 2 and not pcbnew.ExportSpecctraDSN(b, dsn):
+                raise SystemExit("DSN export failed")
+            subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses,
+                            "-mp", os.environ.get("PASSES", "100")],
+                           check=True, stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, DISPLAY=display))
+            if not pcbnew.ImportSpecctraSES(b, ses):
+                raise SystemExit("SES import failed")
+            b.BuildConnectivity()
+            print("stage %d: %d unrouted connections" % (stage, b.GetConnectivity().GetUnconnectedCount(False)))
     finally:
         xvfb.terminate()
-    if not pcbnew.ImportSpecctraSES(b, ses):
-        raise SystemExit("SES import failed")
+    have = set()
+    for t in b.GetTracks():
+        if t.GetClass() == "PCB_VIA":
+            have.add(("via", round(ToMM(t.GetPosition().x), 3), round(ToMM(t.GetPosition().y), 3)))
+        else:
+            a = (round(ToMM(t.GetStart().x), 3), round(ToMM(t.GetStart().y), 3))
+            z = (round(ToMM(t.GetEnd().x), 3), round(ToMM(t.GetEnd().y), 3))
+            have.add(("track", t.GetLayer()) + min(a, z) + max(a, z))
+    back = 0
+    for f in fixed:
+        if f[0] == "via":
+            if ("via", round(f[1], 3), round(f[2], 3)) not in have:
+                via(b, f[1], f[2], b.FindNet(f[3]))
+                back += 1
+        else:
+            a, z = (round(f[1], 3), round(f[2], 3)), (round(f[3], 3), round(f[4], 3))
+            if ("track", f[6]) + min(a, z) + max(a, z) not in have:
+                track(b, (f[1], f[2]), (f[3], f[4]), f[5], f[6], b.FindNet(f[7]))
+                back += 1
+    print("fanout items put back after the import:", back)
     full = [(X0 + 0.3, Y0 + 0.3), (X1 - 0.3, Y0 + 0.3), (X1 - 0.3, Y1 - 0.3), (X0 + 0.3, Y1 - 0.3)]
     zone(b, "GND", pcbnew.F_Cu, full)
     zone(b, "GND", pcbnew.B_Cu, full)
+    stitch(b)
     pcbnew.SaveBoard(OUT, b)
     b = pcbnew.LoadBoard(OUT)
     b.BuildConnectivity()
