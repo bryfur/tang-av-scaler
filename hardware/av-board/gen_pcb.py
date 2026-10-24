@@ -895,7 +895,8 @@ def route():
     # KiCad's session import replaces every track and via with what Freerouting returns, which
     # leaves out some of the locked fanout: note it here and put back what is missing
     fixed = []
-    for t in b.GetTracks():
+    copper = list(b.GetTracks())            # (after ExportSpecctraDSN the track list cannot be iterated)
+    for t in copper:
         if t.IsLocked():
             if t.GetClass() == "PCB_VIA":
                 fixed.append(("via", ToMM(t.GetPosition().x), ToMM(t.GetPosition().y), t.GetNetname()))
@@ -926,7 +927,7 @@ def route():
                        check=True, stdout=open(os.path.join(HERE, "route.log"), "w"), stderr=subprocess.STDOUT)
     # start from no copper: some sessions carry the protected fanout (DeepPCB), some leave part of it
     # out (Freerouting); what is missing afterwards is put back from the list above
-    for t in list(b.GetTracks()):
+    for t in copper:
         b.Remove(t)
     if not pcbnew.ImportSpecctraSES(b, ses):
         raise SystemExit("SES import failed")
