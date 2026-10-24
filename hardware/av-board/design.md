@@ -167,8 +167,9 @@ GND [HWG 6.1.1].
 - R_EXT pin 28: 887 R 1 % to GND, short trace, no switching lines near it [7.6].
 - CEC and CEC_CLK to GND (CEC not used) [6.4.1]. HEAC+/HEAC- (51, 52) to GND (ARC not used)
   [6.2.1].
-- TMDS to the HDMI connector: 100 R differential pairs, matched, short [6.3.2]. Panasonic
-  EZAEG2A50AX varistors (0.05 pF) on each of the 8 lines at the connector [6.3.2.1].
+- TMDS to the HDMI connector: 100 R differential pairs, matched, short [6.3.2]. ESD: two TI
+  TPD4E05U06 (0.5 pF per line, made for HDMI 1.4b, flow-through) at the connector; the HWG asks
+  for < 0.6 pF and names Panasonic's EZAEG2A50AX varistors, one per line [6.3.2.1].
 - DDCSDA/DDCSCL (54, 53) direct to the connector with 2 k pull-ups to the HDMI +5 V [6.3.3, Fig. 27].
   HPD (30) direct from the connector (5 V tolerant).
 - Supplies [HWG 6.8 Fig. 23, 7.1]: one 1.8 V LDO, then three 10 uH + 10 uF LC filters: DVDD
@@ -223,7 +224,8 @@ as inputs, never high.**
 - ADI's crystal is 30 pF CL; the board uses a 20 pF part, with load caps from UG-214's formula.
 - No HDMI input, CVBS, S-video, SCART, VGA, EDID EEPROMs, external SDRAM or teletext. Those pins
   are terminated per UG-214 Appendix C.
-- ADV7511: no CEC oscillator (CEC unused), no ARC.
+- ADV7511: no CEC oscillator (CEC unused), no ARC. TMDS ESD with TPD4E05U06 arrays instead of
+  one varistor per line (same capacitance class, easier to route).
 - TEST8: UG-214 says pull it up, the data sheet says pull it down. The board fits the pull-up and
   has the pull-down's pads (DNP).
 - TEST5: UG-214 Appendix C says float, but the data sheet and both evaluation schematics tie it

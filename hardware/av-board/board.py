@@ -56,7 +56,6 @@ TWO = {
     "L4018": ("lcsc:NRS4018T100MDGJ", "lcsc:IND-SMD_L4.0-W4.0_SMNR4012"),
     "L3015": ("lcsc:FNR3015S2R2MT", "lcsc:IND-SMD_L3.0-W3.0_FNR30XXS"),
     "PTC0805": ("lcsc:BSMD0805-020-30V", "lcsc:F0805"),
-    "ESD0402": ("lcsc:EZAEG2A50AX", "lcsc:D0402"),
 }
 LCSC = {
     ("R0402", "0"): "C17168", ("R0402", "24"): "C2909340", ("R0402", "51"): "C25125",
@@ -69,7 +68,7 @@ LCSC = {
     ("C0603", "470n"): "C1623", ("C0603", "1u"): "C15849", ("C0603", "10u"): "C19702",
     ("C0805", "4.7u"): "C1779", ("C0805", "10u"): "C15850", ("C0805", "22u"): "C45783",
     ("FB0603", "600R"): "C1002", ("TANT_B", "33u"): "C7202", ("L4018", "10uH"): "C222882",
-    ("L3015", "2.2uH"): "C167747", ("PTC0805", "0.2A"): "C883105", ("ESD0402", "EZAEG2A50AX"): "C242174",
+    ("L3015", "2.2uH"): "C167747", ("PTC0805", "0.2A"): "C883105",
 }
 POLAR = {"TANT_B"}           # pin 1 is + (the band side of the footprint)
 
@@ -406,10 +405,16 @@ part("J6", "HDMI-001", "lcsc:HDMI-001", "lcsc:HDMI-SMD_19P-P0.50-H-F", "C138388"
       "7": "TMDS_D0P", "8": "GND", "9": "TMDS_D0N", "10": "TMDS_CKP", "11": "GND", "12": "TMDS_CKN",
       "15": "HDMI_SCL", "16": "HDMI_SDA", "17": "GND", "18": "HDMI_5V", "19": "HDMI_HPD",
       "20": "GND", "21": "GND", "22": "GND", "23": "GND"})
-for net in ("TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N", "TMDS_D0P", "TMDS_D0N", "TMDS_CKP", "TMDS_CKN"):
-    two(nxt("D"), "ESD0402", "EZAEG2A50AX", net, "GND")   # [HWG 6.3.2.1]
+# ESD on the TMDS lines: TI TPD4E05U06, 0.5 pF per line (HWG 6.3.2.1 asks for < 0.6 pF; its example,
+# Panasonic EZAEG2A50AX, needs one part per line), flow-through: each line crosses pad n and the
+# NC pad opposite it (10, 9, 7, 6)
+for ref, (a, b_, c, d) in (("U9", ("TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N")),
+                           ("U10", ("TMDS_D0P", "TMDS_D0N", "TMDS_CKP", "TMDS_CKN"))):
+    part(ref, "TPD4E05U06DQAR", "lcsc:TPD4E05U06DQAR_C138714", "lcsc:USON-10_L2.5-W1.0-P0.50-BL", "C138714",
+         {"1": a, "10": a, "2": b_, "9": b_, "4": c, "7": c, "5": d, "6": d, "3": "GND", "8": "GND"})
 part("U8", "TPD4E05U06DQAR", "lcsc:TPD4E05U06DQAR_C138714", "lcsc:USON-10_L2.5-W1.0-P0.50-BL", "C138714",
-     {"1": "HDMI_SCL", "2": "HDMI_SDA", "4": "HDMI_HPD", "5": "HDMI_5V", "3": "GND", "8": "GND"})
+     {"1": "HDMI_SCL", "10": "HDMI_SCL", "2": "HDMI_SDA", "9": "HDMI_SDA", "4": "HDMI_HPD", "7": "HDMI_HPD",
+      "5": "HDMI_5V", "6": "HDMI_5V", "3": "GND", "8": "GND"})
 R("2k", "HDMI_5V", "HDMI_SCL")                      # [HWG 6.3.3: 1.5-2 k to the HDMI 5 V]
 R("2k", "HDMI_5V", "HDMI_SDA")
 R("100k", "HDMI_HPD", "GND", note="keeps HPD low with no cable (not in HWG Fig. 27)")
