@@ -1,0 +1,12 @@
+# vendors' documents (copyright): fetched, not committed
+hardware/*/refs/
+
+# KiCad and the generator's by-products
+*.kicad_prl
+*-backups/
+fp-info-cache
+*.dsn
+*.ses
+route.log
+drc.rpt
+__pycache__/
