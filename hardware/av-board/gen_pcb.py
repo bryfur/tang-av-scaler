@@ -542,6 +542,12 @@ def main():
         # termination's 51 R by its coupling cap), else at the connector pin. Its supply net does
         # not count: a pull-up to 3V3 belongs at its pin, not at the 3V3 regulator.
         sig = sorted((n for n in nets_ if n not in POWER_NETS), key=lambda n: len(net_pins.get(n, [])))
+        # the unused SDRAM port's pull-downs carry no signal: they go to the ADV7842's right side,
+        # level with their balls, clear of the analog inputs above its top right corner
+        if any(n.startswith("PD_SDRAM") for n in sig):
+            bx, by = [(x, y) for x, y, r in ic_pads[[n for n in sig if n.startswith("PD_SDRAM")][0]] if r == "U1"][0]
+            right = courtyard(fps["U1"], 0)[2] + U1_RING + 1.0
+            return (right, min(by, courtyard(fps["U1"], 0)[3] - 1.0)), "F"
         # except a series resistor on a line the FPGA drives (OUT_*, to the ADV7511): it goes at
         # the source end, the header [HWG 7.3]
         drive = [n for n in sig if n.startswith("OUT_")]
@@ -750,7 +756,10 @@ def fanout_u1(b, fp):
         # (+5V: the two HDMI 5 V detect balls, RXA/RXB_5V, take a via like a signal ball)
         power = net == "GND" or (net in POWER_NETS and net != "+5V")
         ring = min(r, c, 15 - r, 15 - c)
-        if not power and ring <= 1:
+        # a ball with only a pull-down on it (PD_*: unused inputs, no signal) takes a via even in the
+        # outer two rings, so it drops to the inner layers and leaves the outer layers' escape
+        # channels to the signals (the SDRAM pull-downs in the corner under the analog inputs)
+        if not power and ring <= 1 and not net.startswith("PD_"):
             continue
         cands = [(r + dr, c + dc) for dr in (-0.5, 0.5) for dc in (-0.5, 0.5)]
         if net in PLANES:
@@ -1024,7 +1033,7 @@ def prune(path, rounds=5):
 def freerouting(dsn, ses):
     """Route a DSN with Freerouting (1.x under a private Xvfb, 2.x headless); copper the DSN marks
     fixed (KiCad's locked tracks and vias) stays as it is."""
-    log = open(os.path.join(HERE, "route.log"), "w")
+    log = open(os.path.splitext(ses)[0] + "-route.log", "w")
     if FREEROUTING_VERSION.startswith("1."):
         display = ":%d" % (90 + os.getpid() % 100)
         xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
@@ -1062,7 +1071,7 @@ def session(b, ses_for):
             else:
                 fixed.append(("track", ToMM(t.GetStart().x), ToMM(t.GetStart().y), ToMM(t.GetEnd().x),
                               ToMM(t.GetEnd().y), ToMM(t.GetWidth()), t.GetLayer(), t.GetNetname()))
-    dsn = os.path.join(HERE, NAME + ".dsn")
+    dsn = os.path.splitext(OUT)[0] + ".dsn"     # (named after the board: trials can run side by side)
     if not pcbnew.ExportSpecctraDSN(b, dsn):
         raise SystemExit("DSN export failed")
     ses = ses_for(dsn)
@@ -1098,7 +1107,7 @@ def route():
     def first(dsn):
         if os.environ.get("SES"):
             return os.environ["SES"]        # a session routed elsewhere (another router, by hand)
-        ses = os.path.join(HERE, NAME + ".ses")
+        ses = os.path.splitext(OUT)[0] + ".ses"
         if os.environ.get("ROUTER") == "deeppcb":
             subprocess.run([sys.executable, os.path.join(HERE, "deeppcb.py"), "run", dsn, ses, "--minutes",
                             os.environ.get("MINUTES", "60")], check=True)
@@ -1126,7 +1135,7 @@ def finish():
         t.SetLocked(True)
 
     def ses_for(dsn):
-        ses = os.path.join(HERE, NAME + "-finish.ses")
+        ses = os.path.splitext(OUT)[0] + "-finish.ses"
         freerouting(dsn, ses)
         return ses
     print("finishing pass: items put back after the import:", session(b, ses_for))
