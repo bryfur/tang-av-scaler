@@ -13,3 +13,4 @@ EDA=${EDA:-$HOME/tools/eda-venv/bin/easyeda2kicad}
     C7202 C39128 C29586 C167747
 kicad-cli sym upgrade --force lib/lcsc.kicad_sym
 kicad-cli fp upgrade --force lib/lcsc.pretty
+python3 fix_lib.py
