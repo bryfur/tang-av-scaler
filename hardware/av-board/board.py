@@ -229,8 +229,6 @@ for rail in ("TX_DVDD", "TX_AVDD", "TX_PLVDD"):
     two(nxt("L"), "L4018", "10uH", "1V8B", rail)
     C("10u", rail)
 
-# PCM1808 VCC: ferrite from +5 V
-two(nxt("FB"), "FB0603", "600R", "+5V", "5VA")
 
 # ---------------------------------------------------------------------------
 # ADV7842 (design.md "ADV7842KBCZ-5")
@@ -354,6 +352,8 @@ part("U3", "PCM1808PWR", "lcsc:PCM1808PWR", "lcsc:TSSOP-14_L5.0-W4.4-P0.65-LS6.4
       "9": "IN_DOUT", "10": "MD0", "11": "MD1", "12": "FMT", "13": "AUD_VINL", "14": "AUD_VINR"})
 for pin in ("MD0", "MD1", "FMT"):
     R("10k", pin, "GND")                         # slave mode, I2S [TI 8.2.2.1]
+# VCC: ferrite from +5 V, at the PCM1808
+two(nxt("FB"), "FB0603", "600R", "+5V", "5VA")
 for rail in ("VREF", "5VA", "3V3"):
     C("100n", rail)
     C("10u", rail)

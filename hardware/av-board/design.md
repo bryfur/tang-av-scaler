@@ -271,12 +271,21 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
   board's bottom: the AV board's bottom is 11 mm above the Console's top. Four M2.5 standoffs,
   11 mm, on the Console's four holes beside the headers (H7_*: x 100/158, y 30/79).
 - Layout: the five RCA jacks along the left edge, facing left (audio at the top). The ADV7842
-  sits right above J10's data end (pins 1-18 at x 105-125), pixel side down: its 75 R arrays in
-  a row under it, then J10's pins, about 6 mm of bus. The ADV7511 sits right under J9's data end
-  (x 142-153), data side up (about 9 mm of bus), TMDS side down; the HDMI connector on the right
-  edge, facing right, with the TMDS ESD arrays in line before it. The PCM1808 next to the audio
-  jacks; the regulators between J9 and the two chips. The ADV7842's rail planes (In3) leave it
-  to the right (VDD, DVDDIO) and upwards (AVDD, PVDD) to their filters on the underside.
+  sits right above J10's data end (pins 1-22 at x 105-130), pixel side down: its 75 R arrays in
+  a row under it, then J10's pins, about 6 mm of bus. The ADV7511 sits under J9's right half,
+  data side up, TMDS side down; its bus fans out along the band between it and J9, which is kept
+  clear. The HDMI connector is on the right edge, facing right, with the TMDS ESD arrays in line
+  before it. The PCM1808 is next to the audio jacks and J9's left end; the regulators sit
+  together under the ADV7511, right of the ADV7842's planes. Each small part sits by the pin it
+  serves; the video terminations and coupling caps at the ADV7842's analog edge [UG-214 App.
+  A], the ADV7511's audio series resistors at J9 [HWG 7.3]; bias resistors, the reference caps
+  and the regulators' feedback dividers are placed first, nearest their pins.
+- Rail planes (inner layer): each ADV7842 rail's balls are inside its plane, which widens past
+  the BGA to hold its filter and all its decoupling on the underside (68 of 69 caps fully over
+  their plane, the last a 10 uF bulk cap beside it): AVDD over the top right, PVDD and TVDD over
+  the top left (TVDD also under the jack strip), VDD and DVDDIO to the right, DVDDIO (25 caps)
+  taking the larger lower part. CVDD has no plane: its filter is left of the BGA, four rows from
+  its balls.
 - Sipeed's retail case: not checked.
 
 ## Stack-up and rules

@@ -27,7 +27,7 @@ sys.path.insert(0, HERE)
 import board  # noqa: E402
 
 NAME = "av-board"
-OUT = os.path.join(HERE, NAME + ".kicad_pcb")
+OUT = os.environ.get("PCB", os.path.join(HERE, NAME + ".kicad_pcb"))      # PCB=x.kicad_pcb: a trial elsewhere
 SYSFP = "/usr/share/kicad/footprints"
 JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"
 # Freerouting: 1.9.0 by default. On this board 2.3-2.5 oscillate between 120 and 220 unrouted
@@ -50,19 +50,26 @@ TMDS_NETS = {"TMDS_D2_P", "TMDS_D2_N", "TMDS_D1_P", "TMDS_D1_N", "TMDS_D0_P", "T
 
 # ADV7842 rail planes (on PLANE_LAYER), in ball-grid coordinates (r = row A..T as 0..15, c = column 1..16
 # as 0..15; outside the array < 0 or > 15). Each rail's balls lie inside its plane; the planes do
-# not touch; each reaches out of the BGA on its own side to its filter (FL1-FL5 above).
+# not touch; each reaches out of the BGA on its own side to its filter (FL1-FL6 above). Outside the
+# BGA (its courtyard ends at about -1.6 and 16.6) each widens to hold its filter and every one of
+# its decoupling caps on the bottom, so a cap's pads go straight down into its plane: up to the
+# J9 bus band (c 28.5) above, to the supplies (r 30) on the right.
 ROWS = "ABCDEFGHJKLMNPRT"
 PLANES = {
-    # AVDD (F12-L12), PVDD (D15, D16) and TVDD (A5, B5, A15, B15) out of the analog side (up), far
-    # enough to cover their filters and plane caps
-    "AV_AVDD": [(4.55, 10.55), (4.55, 24.0), (11.45, 24.0), (11.45, 10.55)],
-    "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 24.0), (1.6, 24.0)],
-    "AV_TVDD": [(-14.0, 3.55), (1.45, 3.55), (1.45, 24.0), (-14.0, 24.0)],   # also left, under the jack strip
-    # VDD (J7, K6-K9, L6-L9) and DVDDIO (F5-M5) out to the right, side by side; the VDD_SDRAM
-    # balls M6-M10 (on DVDDIO) join M5 on F.Cu instead (CHAINS), so VDD can pass over them
-    "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (10.45, 10.45), (10.45, 9.45), (30.0, 9.45), (30.0, 5.55),
+    # AVDD (F12-L12), PVDD (D15, D16) and TVDD (A5, B5, A15, B15) out of the analog side (up):
+    # AVDD over the BGA's top right, PVDD into the column above D-E, TVDD left of it and under the
+    # jack strip
+    "AV_AVDD": [(4.55, 10.55), (11.45, 10.55), (11.45, 16.6), (18.0, 16.6), (18.0, 28.5), (4.55, 28.5)],
+    "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 28.5), (-3.5, 28.5), (-3.5, 16.8), (1.6, 16.8)],
+    "AV_TVDD": [(-14.0, 3.55), (1.45, 3.55), (1.45, 16.5), (-3.8, 16.5), (-3.8, 28.5), (-14.0, 28.5)],
+    # VDD (J7, K6-K9, L6-L9) and DVDDIO (F5-M5) out to the right, side by side; past the BGA VDD
+    # takes the upper part, DVDDIO (25 caps with VDD_SDRAM) the lower and larger one; the
+    # VDD_SDRAM balls M6-M10 (on DVDDIO) join M5 on F.Cu instead (CHAINS), so VDD can pass over them
+    "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (16.6, 10.45), (16.6, 15.5), (18.5, 15.5), (18.5, 18.0),
+               (30.0, 18.0), (30.0, 10.5), (19.5, 10.5), (19.5, 9.5), (16.6, 9.5), (16.6, 5.55),
                (10.45, 5.55), (10.45, 4.55)],
-    "AV_DVDDIO": [(4.55, -1.0), (30.0, -1.0), (30.0, 4.45), (4.55, 4.45)],
+    "AV_DVDDIO": [(4.55, -1.0), (16.6, -1.0), (16.6, -2.5), (33.5, -2.5), (33.5, 9.95), (20.0, 9.95),
+                  (20.0, 8.95), (17.1, 8.95), (17.1, 4.45), (4.55, 4.45)],
 }
 # Balls joined on F.Cu to a neighbour instead of getting their own via: (ball, ball it joins)
 CHAINS = [("M6", "M5"), ("M7", "M6"), ("M8", "M7"), ("M9", "M8"), ("M10", "M9"),     # VDD_SDRAM -> DVDDIO
@@ -101,26 +108,30 @@ HAND = {
     "J1": (85.2, 55.3, 90, "F"), "J2": (85.2, 68.3, 90, "F"), "J3": (85.2, 81.3, 90, "F"),
     # ADV7842 above J10's data end, pixel side down: its 75 R arrays in a row under it, then J10
     "U1": (113.0, 61.0, None, "F"),
-    "Y1": (108.0, 49.0, 0, "F"),          # beside XTALP/XTALN (B16, C16), the top-left corner
+    "Y1": (105.0, 49.0, 0, "F"),          # beside XTALP/XTALN (B16, C16), the top-left corner,
+                                          # leaving E15/E16 (REFP/REFN) their caps
     "U3": (95.0, 37.5, 0, "F"),          # PCM1808 beside the audio jacks
     # ADV7511 below J9's data end, data side up, TMDS side down towards the HDMI connector; the
     # band between it and J9 is its bus's (see board.J9_NET)
     "U2": (148.0, 47.0, None, "F"),
-    # the supplies under it, right of the ADV7842's rail filters, clear of both buses: 1V8A next
-    # to the filters (FL1, FL3, FL5 at x 126), 1V8B under the ADV7511, 3V3 and the 2V5 buck
+    # the supplies under it, past the ADV7842's VDD and DVDDIO planes (to x 135.5), clear of both
+    # buses and of the TMDS lines: 1V8B under the ADV7511, 1V8A below it, 3V3 and the 2V5 buck
     # beside them; +5 V comes from J10 pin 11 along the edge below J10
-    "U6": (132.5, 61.0, 0, "F"), "U7": (140.0, 61.5, 0, "F"),
-    "U5": (147.0, 63.0, 0, "F"), "U4": (147.0, 70.5, 0, "F"),
+    "U7": (142.5, 63.0, 0, "F"), "U6": (142.5, 71.0, 0, "F"),
+    "U5": (149.0, 65.0, 0, "F"), "U4": (148.5, 74.0, 0, "F"),
     "J6": (163.6, 62.0, 90, "F"),
     # TMDS ESD, in line before the HDMI pads (pins 1-12 at x 160.2, y 57.5-63)
     "U9": (156.3, 58.75, None, "F"), "U10": (156.3, 61.75, None, "F"),
     # the scaler's buttons, bottom right (near J10 pins 31/32)
     "SW1": (164.0, 76.0, 0, "F"), "SW2": (164.0, 86.0, 0, "F"),
-    # ADV7842 rail filters on the bottom, at the exits of their In3 planes (see PLANES): VDD and
-    # DVDDIO leave to the right, AVDD, PVDD and TVDD upwards; CVDD is a routed rail
-    "FL3": (126.0, 56.5, 0, "B"), "FL1": (126.0, 61.0, None, "B"), "FL5": (126.0, 66.5, None, "B"),
+    # ADV7842 rail filters on the bottom, at the exits of their rail planes (see PLANES): VDD and
+    # DVDDIO leave to the right, AVDD, PVDD and TVDD upwards. CVDD is a routed rail with no plane:
+    # its filter sits left of the BGA, four rows from its balls (C12-E12, one via at E11), where
+    # TVDD's plane has room to spare
+    "FL1": (128.0, 57.0, None, "B"), "FL5": (126.0, 66.5, None, "B"),
+    "FL3": (100.0, 58.0, 90, "B"),
     "FL4": (108.5, 48.0, None, "B"), "FL2": (113.5, 48.2, None, "B"),
-    "FL6": (105.4, 49.0, None, "B"),
+    "FL6": (100.5, 49.0, None, "B"),
 }
 
 
@@ -220,6 +231,10 @@ FIT.update({r: fit_fl(r) for r in FL_PLANE})
 
 # Groups for the small parts: (side, anchor) by block / net
 DECOUPLE_U1 = {"AV_TVDD", "AV_AVDD", "AV_CVDD", "AV_VDD", "AV_DVDDIO", "AV_PVDD"}
+# bias resistors, the ADC references' caps and the regulators' feedback dividers, placed before
+# the decoupling takes their room: short traces [UG-214 Fig. 176, 177; HWG 7.6; TI TPS7A70,
+# TLV62569 layout]
+BIAS_NETS = {"RTERM", "R_EXT", "REFP", "REFN", "FB_3V3", "FB_2V5", "FB_1V8A", "FB_1V8B"}
 
 
 def load(fp_id):
@@ -497,8 +512,9 @@ def main():
         # decoupling for U1: spread over its rail's balls, bottom side
         nets_ = [n for n in p.pins.values() if n != "GND"]
         for n in nets_:
-            if n in DECOUPLE_U1 and p.ref.startswith("C") and p.value in ("220p", "33u"):
-                # plane caps and bulk: anywhere on the plane; by the rail's filter
+            if n in DECOUPLE_U1 and p.ref.startswith("C") and p.value in ("220p", "33u", "10u"):
+                # plane caps and bulk (33 uF + 10 uF after each filter): anywhere on the plane; by
+                # the rail's filter
                 fl = [(x, y) for x, y, r in ic_pads.get(n, []) if r.startswith("FL")]
                 if fl:
                     return fl[0], "B"
@@ -546,10 +562,12 @@ def main():
     order = [p for p in board.PARTS if p.ref not in HAND]
 
     def rank(p):
-        """The order the small parts get their places in: the ADV7842's per-ball decoupling first
-        (nearest the balls), then whatever serves an IC pin, then plane caps and bulk, then the rest."""
+        """The order the small parts get their places in: inductors, filters, bias and reference
+        parts first, then the ADV7842's per-ball decoupling (nearest the balls), then whatever
+        serves an IC pin (in board.py order: the analog inputs before the SDRAM pull-downs), then
+        plane caps and bulk, then the rest."""
         nets_ = set(p.pins.values())
-        if p.ref.startswith(("RN", "FL", "L", "Y")):
+        if p.ref.startswith(("FL", "L", "Y")) or nets_ & BIAS_NETS:
             return 0
         if p.ref.startswith("C") and nets_ & DECOUPLE_U1 and p.value in ("10n", "100n"):
             return 1
