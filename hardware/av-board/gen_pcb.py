@@ -63,15 +63,15 @@ CHAINS = [("M6", "M5"), ("M7", "M6"), ("M8", "M7"), ("M9", "M8"), ("M10", "M9"),
           ("E12", "E11"), ("D12", "E12"), ("C12", "D12"), ("C13", "C12"), ("C14", "C13")]
 
 # Board: x 60-190, y 20.6-90 (the Console's y extent), a window over the SOM
-# The Console's outline: the board covers it, the SOM (nothing on it: about 7 mm tall) included,
-# with the AV board's underside 11 mm up.
-X0, X1, Y0, Y1 = 89.2, 168.8, 20.6, 90.0
+# The Console's outline, the SOM (nothing on it: about 7 mm tall) included, with the AV board's
+# underside 11 mm up; plus 15 mm past the Console's left edge, where the RCA jacks sit, leaving
+# room between them and the ADV7842 for the analog front end.
+X0, X1, Y0, Y1 = 74.2, 168.8, 20.6, 90.0
 WIN = (-10.0, -10.0, -9.0, -9.0)        # no window (outside the board: the checks never hit it)
 WIN_POLY = []
 NOTCHES = []
-# M2.5 standoffs on the Console's two right-hand H7_* holes; the left two, (100, 30) and (100, 79),
-# are under the RCA jacks
-HOLES = [(158.0, 30.0), (158.0, 79.0)]
+# M2.5 standoffs on the Console's four H7_* holes beside the headers
+HOLES = [(100.0, 30.0), (158.0, 30.0), (100.0, 79.0), (158.0, 79.0)]
 BUTTONS = []
 
 
@@ -89,12 +89,12 @@ HAND = {
     "J10": (129.0, 79.0, 0, "B"),
     # RCA jacks on the left edge, facing left: audio at the top, video below (13 mm apart: the
     # shell lugs are 10 mm apart with 2.6 mm holes)
-    "J4": (100.2, 27.8, 90, "F"), "J5": (100.2, 40.8, 90, "F"),
-    "J1": (100.2, 53.8, 90, "F"), "J2": (100.2, 66.8, 90, "F"), "J3": (100.2, 79.8, 90, "F"),
+    "J4": (85.2, 27.8, 90, "F"), "J5": (85.2, 40.8, 90, "F"),
+    "J1": (85.2, 53.8, 90, "F"), "J2": (85.2, 66.8, 90, "F"), "J3": (85.2, 79.8, 90, "F"),
     # ADV7842 above J10's data end, pixel side down: its 75 R arrays in a row under it, then J10
     "U1": (113.0, 61.0, None, "F"),
     "Y1": (108.0, 49.0, 0, "F"),          # beside XTALP/XTALN (B16, C16), the top-left corner
-    "U3": (108.0, 37.5, 0, "F"),
+    "U3": (95.0, 37.5, 0, "F"),          # PCM1808 beside the audio jacks
     "U4": (127.0, 37.0, 0, "F"), "U5": (135.0, 37.0, 0, "F"), "U6": (126.0, 44.0, 0, "F"),
     # ADV7511 below J9's data end, data side up, TMDS side down towards the HDMI connector
     "U2": (148.0, 47.0, None, "F"),

@@ -248,15 +248,16 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
   its top is about 7 mm above the Console (3.0 mm DF40HC connectors, the SOM board, the PG484
   package), under the AV board's underside at 11 mm. Only flat parts (0402-0805 passives,
   tantalums, filters: under 2 mm) sit on the AV board's underside.
-- The AV board is the Console's outline, x 89.2-168.8, y 20.6-90.0 (79.6 x 69.4 mm), over the
-  SOM. It covers the Console's buttons S1 (98.9, 38.0), S2 (98.9, 71.0) (7 mm tall) and SW2
+- The AV board is the Console's outline plus 15 mm past its left edge: x 74.2-168.8, y
+  20.6-90.0 (94.6 x 69.4 mm), over the SOM. The extra strip holds the RCA jacks, so the analog
+  front end, crystal and PCM1808 have room between them and the ADV7842 (the Console's USB-C,
+  under that edge, is on its bottom side: unaffected). It covers the Console's buttons S1 (98.9, 38.0), S2 (98.9, 71.0) (7 mm tall) and SW2
   (160.5, 54.5), the LCD FPC J4, the PMOD sockets J6/J7 and the fan socket; all fit under it.
   The AV board has two buttons of its own (SW1, SW2 at its bottom right, on J10 pins 31/32) for
   the scaler's menu. The Console's HDMI, USB and USB-C are on its bottom side and stay usable.
 - Stack: the Console's SMD male headers (2.5 mm plastic) into 8.5 mm female sockets on the AV
-  board's bottom: the AV board's bottom is 11 mm above the Console's top. Two M2.5 standoffs,
-  11 mm, on the Console's right-hand holes beside the headers (H7_*: (158, 30), (158, 79)); the
-  left two, (100, 30) and (100, 79), are under the RCA jacks.
+  board's bottom: the AV board's bottom is 11 mm above the Console's top. Four M2.5 standoffs,
+  11 mm, on the Console's four holes beside the headers (H7_*: x 100/158, y 30/79).
 - Layout: the five RCA jacks along the left edge, facing left (audio at the top). The ADV7842
   sits right above J10's data end (pins 1-18 at x 105-125), pixel side down: its 75 R arrays in
   a row under it, then J10's pins, about 6 mm of bus. The ADV7511 sits right under J9's data end
