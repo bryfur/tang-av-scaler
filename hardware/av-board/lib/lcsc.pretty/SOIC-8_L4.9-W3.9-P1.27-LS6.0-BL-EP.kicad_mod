@@ -1,0 +1,299 @@
+(footprint "SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP"
+	(version 20241229)
+	(generator "pcbnew")
+	(generator_version "9.0")
+	(layer "F.Cu")
+	(descr "Single Output Very Low Input LDO, 2 A, Adjustable 0.9 to 5 V Output, 1.5 to 6.5 V Input, 8-pin SOPowerPAD (DDA), -40 to 125 degC, Green (RoHS  no SbBr)")
+	(property "Reference" "REF**"
+		(at 0 -6.721 0)
+		(layer "F.SilkS")
+		(uuid "2198631a-d0ad-4cd2-aa3f-748d10692c6c")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP"
+		(at 0 6.721 0)
+		(layer "F.Fab")
+		(uuid "571d864f-7991-41b6-a863-3a56c09981d4")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "46d24d78-e49b-4786-a71c-b4114b921859")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" ""
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "e4b69f4b-0e27-41f6-8bcf-ac7c55d693d7")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "LCSC Part" "C60719"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "996a30bf-c5a9-4a64-9995-6ad2d801bff9")
+		(effects
+			(font
+				(size 1.27 1.27)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_line
+		(start -2.53 -1.52)
+		(end 2.53 -1.52)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "35a853da-9a80-46af-8df7-ff782f4f4fa3")
+	)
+	(fp_line
+		(start -2.53 1.52)
+		(end -2.53 -1.52)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "d158c02b-e364-4815-a4e0-623ba7441969")
+	)
+	(fp_line
+		(start 2.53 -1.52)
+		(end 2.53 1.52)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "d6f46af9-b051-4035-b0bc-ca7a783aac46")
+	)
+	(fp_line
+		(start 2.53 1.52)
+		(end -2.53 1.52)
+		(stroke
+			(width 0.15)
+			(type solid)
+		)
+		(layer "F.SilkS")
+		(uuid "45d26ceb-0ea0-4f38-82be-56a1bf388bd8")
+	)
+	(fp_circle
+		(center -2.66 2.72)
+		(end -2.51 2.72)
+		(stroke
+			(width 0.3)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "a96172e3-6441-4aa2-9403-6812b0cd08e9")
+	)
+	(fp_circle
+		(center -2.45 3)
+		(end -2.42 3)
+		(stroke
+			(width 0.06)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "08a26f33-c7aa-496b-9ee1-e7dda484c475")
+	)
+	(fp_circle
+		(center -2.03 1.02)
+		(end -1.88 1.02)
+		(stroke
+			(width 0.3)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "a45b213d-17c0-41de-a587-a82cfdadf4ef")
+	)
+	(fp_circle
+		(center -1.9 3.4)
+		(end -1.75 3.4)
+		(stroke
+			(width 0.3)
+			(type solid)
+		)
+		(fill no)
+		(layer "Cmts.User")
+		(uuid "da44de3c-2c5e-4b71-9546-68c41b22aa0b")
+	)
+	(fp_line
+		(start -2.45 -1.95)
+		(end 2.45 -1.95)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "6f9db3b2-14c9-48bd-855b-0e31236d680f")
+	)
+	(fp_line
+		(start -2.45 1.95)
+		(end -2.45 -1.95)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "cb43add0-5dd1-4b4b-9bc8-cd6672d6727e")
+	)
+	(fp_line
+		(start 2.45 -1.95)
+		(end 2.45 1.95)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "1bc0de7b-81d1-466d-b73e-a391acebb99a")
+	)
+	(fp_line
+		(start 2.45 1.95)
+		(end -2.45 1.95)
+		(stroke
+			(width 0.05)
+			(type solid)
+		)
+		(layer "F.CrtYd")
+		(uuid "0d603bbb-8a2a-4c0c-970a-a93cb20de39d")
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 0 0)
+		(layer "F.Fab")
+		(uuid "93b6970d-de15-4bcf-879d-4173981f5a81")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "" thru_hole circle
+		(at -0.5 -0.5)
+		(size 0.61 0.61)
+		(drill 0.3)
+		(layers "*.Cu" "*.Paste" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "39461c62-979c-424d-a88e-98dced6844fe")
+	)
+	(pad "" thru_hole circle
+		(at -0.5 0.5)
+		(size 0.61 0.61)
+		(drill 0.3)
+		(layers "*.Cu" "*.Paste" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "b205c976-f1b1-4cb5-9ee1-203d4093e87f")
+	)
+	(pad "" thru_hole circle
+		(at 0.5 -0.5)
+		(size 0.61 0.61)
+		(drill 0.3)
+		(layers "*.Cu" "*.Paste" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "0cb2f9dd-874a-4efb-b2d8-ccadc054242a")
+	)
+	(pad "" thru_hole circle
+		(at 0.5 0.5)
+		(size 0.61 0.61)
+		(drill 0.3)
+		(layers "*.Cu" "*.Paste" "*.Mask")
+		(remove_unused_layers no)
+		(uuid "074d7d17-1c51-450b-915b-aa88fe73d5f1")
+	)
+	(pad "1" smd oval
+		(at -1.9 2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "52aba5fc-510c-49d3-8762-3e3168480be1")
+	)
+	(pad "2" smd oval
+		(at -0.63 2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "4cfaab8d-8df3-479a-b61a-1d9ab729c537")
+	)
+	(pad "3" smd oval
+		(at 0.63 2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "90321475-5307-4588-9e02-0f62ce9d87e5")
+	)
+	(pad "4" smd oval
+		(at 1.9 2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "5a608763-7e68-403c-9752-142be95ab76d")
+	)
+	(pad "5" smd oval
+		(at 1.9 -2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "f159fddf-7bd6-4509-be8b-8cc3f2bbb510")
+	)
+	(pad "6" smd oval
+		(at 0.63 -2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "cfd2db1e-03ee-44a4-813a-d94c6266e4ec")
+	)
+	(pad "7" smd oval
+		(at -0.63 -2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "b80b3127-273a-4e5c-b43f-025eb96a074c")
+	)
+	(pad "8" smd oval
+		(at -1.9 -2.72)
+		(size 0.602 1.941)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "85002cbb-5ff1-4981-895d-5693b84f9536")
+	)
+	(pad "9" smd rect
+		(at 0 0)
+		(size 3.098 2.41)
+		(layers "F.Cu" "F.Mask" "F.Paste")
+		(uuid "f0a2c6c2-514f-4df2-9541-70618722a4b6")
+	)
+	(embedded_fonts no)
+	(model "lib/lcsc.3dshapes/SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP.wrl"
+		(offset
+			(xyz 0 0 0)
+		)
+		(scale
+			(xyz 1 1 1)
+		)
+		(rotate
+			(xyz 0 0 0)
+		)
+	)
+)

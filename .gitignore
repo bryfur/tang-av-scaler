@@ -10,3 +10,6 @@ fp-info-cache
 route.log
 drc.rpt
 __pycache__/
+
+# 3D models from LCSC (60 MB): fetched by hardware/av-board/fetch_lib.sh
+hardware/*/lib/*.3dshapes/
