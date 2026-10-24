@@ -7,6 +7,25 @@ between the headers. Status: design in progress.
 - [design.md](design.md): the electrical design, connection by connection, with its sources
 - [reference-notes.md](reference-notes.md): what ADI's and TI's reference designs say
 
+## Files and how they are made
+
+Everything is generated from `board.py` (parts, values, LCSC numbers, nets); edit that, not the
+KiCad files. On a machine with KiCad 9 (here: the build host):
+
+| Step | Command | Makes |
+|---|---|---|
+| check the design | `python3 board.py` | errors: one-pin nets, ADV7842/ADV7511 pins left open that should not be |
+| schematic | `python3 gen_sch.py` | `av-board.kicad_sch`, project and library tables |
+| ERC | `kicad-cli sch erc av-board.kicad_sch` | (clean) |
+| netlist check | `kicad-cli sch export netlist -o /tmp/av.net av-board.kicad_sch && python3 check_netlist.py /tmp/av.net` | schematic = board.py, pin by pin |
+| PCB | `python3 gen_pcb.py --route` | `av-board.kicad_pcb`: placed, fanned out, routed by Freerouting, ground poured |
+| DRC | `kicad-cli pcb drc av-board.kicad_pcb` | |
+| fab files | `python3 gen_fab.py` | `fab/`: Gerbers + drill zip, JLCPCB BOM and CPL |
+| parts library | `./fetch_lib.sh` | `lib/`: LCSC symbols/footprints (committed) and 3D models (not) |
+
+`sexp.py` reads and writes KiCad's s-expression files; `fix_lib.py` makes the LCSC symbols'
+pins passive (their EasyEDA pin types are arbitrary).
+
 ## The host's headers (Sipeed's schematic Tang_138K_Console_V32001C, sheet FPGA_EXT_CONN)
 
 J9 ("SDRAM0") and J10 ("SDRAM1"): 2x20, 2.54 mm, SMD male headers, parallel, 49 mm apart (J9 along
