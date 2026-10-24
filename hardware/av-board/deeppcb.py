@@ -13,8 +13,9 @@ gen_pcb.py lays down) and does no placement. DeepPCB bills per minute of routing
 0.5 credits, a board reported 1.0); the --minutes cap bounds the cost. API: https://api.deeppcb.ai/v1/scalar/deeppcb (DeepPCB Public API v1).
 
 Before routing, the board is resubmitted in DeepPCB's own JSON with what a DSN cannot say: the
-board-edge clearance (DEEPPCB_EDGE_MM, 0.3) and the differential pairs (nets named X_P/X_N);
-DEEPPCB_TUNE=0 routes the DSN as it is.
+board-edge clearance (DEEPPCB_EDGE_MM, 0.25) and the differential pairs (nets named X_P/X_N);
+DEEPPCB_TUNE=0 routes the DSN as it is. Then DeepPCB's own fanout runs on the components in
+DEEPPCB_FANOUT (U1, the BGA). These are the steps DeepPCB's assistant recommends for this board.
 
 gen_pcb.py takes the session with SES=out.ses python3 gen_pcb.py --route.
 """
@@ -122,9 +123,15 @@ def run(dsn, out, minutes):
     if os.environ.get("DEEPPCB_TUNE", "1") == "1":
         # resubmit as DeepPCB JSON with the edge clearance and the differential pairs
         board(board_id)
-        tuned = tune(board_id, os.path.splitext(out)[0] + ".deeppcb.json", None, float(os.environ.get("DEEPPCB_EDGE_MM", "0.3")))
+        tuned = tune(board_id, os.path.splitext(out)[0] + ".deeppcb.json", None, float(os.environ.get("DEEPPCB_EDGE_MM", "0.25")))
         board_id = submit_json(tuned)
         print("tuned board", board_id)
+    for comp in [c for c in os.environ.get("DEEPPCB_FANOUT", "U1").split(",") if c]:
+        # DeepPCB's own escape of a component's pins (the BGA), into the board's draft revision
+        board(board_id)
+        r = call("POST", "/boards/%s/fanout" % board_id, json.dumps({"componentId": comp, "maxRetry": 10}).encode(),
+                 "application/json")
+        print("fanout", comp, json.dumps(r)[:400])
     follow(board_id, out, minutes)
 
 
