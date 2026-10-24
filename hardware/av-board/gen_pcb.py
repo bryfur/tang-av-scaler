@@ -45,25 +45,31 @@ TMDS_NETS = {"TMDS_D2P", "TMDS_D2N", "TMDS_D1P", "TMDS_D1N", "TMDS_D0P", "TMDS_D
 # not touch; each reaches out of the BGA on its own side to its filter (FL1-FL5 above).
 ROWS = "ABCDEFGHJKLMNPRT"
 PLANES = {
+    # AVDD (F12-L12) and PVDD (D15, D16) out of the analog side (up)
     "AV_AVDD": [(4.55, 10.55), (4.55, 19.5), (11.45, 19.5), (11.45, 10.55)],
-    "AV_VDD": [(10.45, 4.55), (7.55, 4.55), (7.55, 5.55), (-9.0, 5.55), (-9.0, 9.45), (7.55, 9.45),
-               (7.55, 10.45), (10.45, 10.45)],
-    "AV_CVDD": [(-9.0, 9.55), (4.45, 9.55), (4.45, 13.45), (-9.0, 13.45)],
-    # PVDD (D15, D16): a small plane out to the left, to its filter
     "AV_PVDD": [(1.6, 13.55), (4.45, 13.55), (4.45, 18.5), (1.6, 18.5)],
-    "AV_DVDDIO": [(4.55, -1.0), (21.0, -1.0), (21.0, 4.45), (12.45, 4.45), (12.45, 10.45), (10.55, 10.45),
-                  (10.55, 4.45), (4.55, 4.45)],
+    # VDD (J7, K6-K9, L6-L9) and DVDDIO (F5-M5) out to the right, side by side; the VDD_SDRAM
+    # balls M6-M10 (on DVDDIO) join M5 on F.Cu instead (CHAINS), so VDD can pass over them
+    "AV_VDD": [(7.55, 4.55), (7.55, 10.45), (10.45, 10.45), (10.45, 9.45), (21.0, 9.45), (21.0, 5.55),
+               (10.45, 5.55), (10.45, 4.55)],
+    "AV_DVDDIO": [(4.55, -1.0), (21.0, -1.0), (21.0, 4.45), (4.55, 4.45)],
 }
+# Balls joined on F.Cu to a neighbour instead of getting their own via: (ball, ball it joins)
+CHAINS = [("M6", "M5"), ("M7", "M6"), ("M8", "M7"), ("M9", "M8"), ("M10", "M9"),     # VDD_SDRAM -> DVDDIO
+          # CVDD (comparators, HDMI only: no current here): one via at E11, its filter routed
+          ("E12", "E11"), ("D12", "E12"), ("C12", "D12"), ("C13", "C12"), ("C14", "C13")]
 
 # Board: x 60-190, y 20.6-90 (the Console's y extent), a window over the SOM
-X0, X1, Y0, Y1 = 60.0, 190.0, 20.6, 90.0
-WIN = (102.0, 35.0, 151.0, 74.0)
-WIN_POLY = [(WIN[0], WIN[1]), (WIN[2], WIN[1]), (WIN[2], WIN[3]), (WIN[0], WIN[3])]
+# The Console's outline: the board covers it, the SOM (nothing on it: about 7 mm tall) included,
+# with the AV board's underside 11 mm up.
+X0, X1, Y0, Y1 = 89.2, 168.8, 20.6, 90.0
+WIN = (-10.0, -10.0, -9.0, -9.0)        # no window (outside the board: the checks never hit it)
+WIN_POLY = []
 NOTCHES = []
-# M2.5 standoffs on two of the Console's four H7_* holes, diagonally: the other two, at J10's pin 1
-# end (100, 79) and J9's (158, 30), sit where the video buses enter the headers
-HOLES = [(100.0, 30.0), (158.0, 79.0)]
-BUTTONS = [(160.5, 54.5)]                                               # SW2: a 7 mm access hole
+# M2.5 standoffs on the Console's two right-hand H7_* holes; the left two, (100, 30) and (100, 79),
+# are under the RCA jacks
+HOLES = [(158.0, 30.0), (158.0, 79.0)]
+BUTTONS = []
 
 
 def J9_PIN(n):
@@ -78,30 +84,28 @@ def J10_PIN(n):
 HAND = {
     "J9": (129.0, 30.0, 180, "B"),
     "J10": (129.0, 79.0, 0, "B"),
-    # input wing: RCA jacks facing left, audio at the top, video at the bottom next to the ADV7842
-    # (13 mm apart: the shell lugs are 10 mm apart with 2.6 mm holes)
-    "J4": (71.0, 28.0, 90, "F"), "J5": (71.0, 41.0, 90, "F"),
-    "J1": (71.0, 56.5, 90, "F"), "J2": (71.0, 69.5, 90, "F"), "J3": (71.0, 82.5, 90, "F"),
-    # at J10's height: its pixel balls (right edge, y 71-82) face J10's pins (y 77.7/80.3) across
-    # the series resistors, so the bus runs straight over
-    "U1": (87.5, 75.5, None, "F"),          # rotation chosen below: analog side left, pixel side right
-    "U3": (86.0, 33.0, 0, "F"),
-    "Y1": (78.5, 87.0, 0, "F"),
-    "U5": (95.0, 26.0, 0, "F"), "U4": (84.0, 47.0, 0, "F"), "U6": (95.0, 47.0, 0, "F"),
-    # output wing: ADV7511 data side facing J9, TMDS side facing the HDMI connector
-    "U2": (167.5, 35.0, 0, "F"),        # its data pins level with J9's
-    # the scaler's buttons, bottom edge of the output wing (near J10 pins 31/32)
-    "SW1": (172.0, 85.0, 0, "F"), "SW2": (181.0, 85.0, 0, "F"),
-    "J6": (184.8, 37.0, 90, "F"),
-    "U7": (170.0, 62.0, 0, "F"),
-    # ADV7842 rail filters on the bottom, at the exits of their In2 planes (see PLANES)
-    "FL1": (89.6, 87.7, None, "B"), "FL3": (81.0, 87.7, None, "B"),  # VDD, CVDD: below the BGA
-    "FL2": (76.0, 75.0, None, "B"),                                  # AVDD: left of it
-    "FL5": (93.5, 62.0, None, "B"),                                  # DVDDIO: above it
-    "FL4": (78.0, 82.2, None, "B"),                                  # PVDD: left, below AVDD's
-    "FL6": (89.0, 62.0, 90, "B"),                                    # TVDD: a routed rail
-    # TMDS ESD, in line between U2's TMDS pins (x 176.6, y 37.5-43) and the HDMI pads (x 183.1)
-    "U9": (178.8, 33.75, None, "F"), "U10": (178.8, 36.75, None, "F"),
+    # RCA jacks on the left edge, facing left: audio at the top, video below (13 mm apart: the
+    # shell lugs are 10 mm apart with 2.6 mm holes)
+    "J4": (100.2, 27.8, 90, "F"), "J5": (100.2, 40.8, 90, "F"),
+    "J1": (100.2, 53.8, 90, "F"), "J2": (100.2, 66.8, 90, "F"), "J3": (100.2, 79.8, 90, "F"),
+    # ADV7842 above J10's data end, pixel side down: its 75 R arrays in a row under it, then J10
+    "U1": (113.0, 61.0, None, "F"),
+    "Y1": (108.0, 49.0, 0, "F"),          # beside XTALP/XTALN (B16, C16), the top-left corner
+    "U3": (108.0, 37.5, 0, "F"),
+    "U4": (127.0, 37.0, 0, "F"), "U5": (135.0, 37.0, 0, "F"), "U6": (126.0, 44.0, 0, "F"),
+    # ADV7511 below J9's data end, data side up, TMDS side down towards the HDMI connector
+    "U2": (148.0, 47.0, None, "F"),
+    "U7": (134.0, 53.0, 0, "F"),
+    "J6": (163.6, 62.0, 90, "F"),
+    # TMDS ESD, in line before the HDMI pads (pins 1-12 at x 160.2, y 57.5-63)
+    "U9": (156.3, 58.75, None, "F"), "U10": (156.3, 61.75, None, "F"),
+    # the scaler's buttons, bottom right (near J10 pins 31/32)
+    "SW1": (164.0, 76.0, 0, "F"), "SW2": (164.0, 86.0, 0, "F"),
+    # ADV7842 rail filters on the bottom, at the exits of their In3 planes (see PLANES): VDD and
+    # DVDDIO leave to the right, AVDD and PVDD upwards; CVDD and TVDD are routed rails
+    "FL3": (126.0, 56.5, 0, "B"), "FL1": (126.0, 61.0, None, "B"), "FL5": (126.0, 66.5, None, "B"),
+    "FL4": (108.5, 48.0, None, "B"), "FL2": (113.5, 48.2, None, "B"),
+    "FL6": (126.0, 52.5, 0, "B"),
 }
 
 
@@ -119,43 +123,52 @@ def inverse_grid(fp):
 
 
 def place_rn(fps, u1, occ):
-    """The pixel port's 75 R arrays in a column beside the ADV7842's pixel balls, each level with
-    the four balls it serves, its ADV7842 side (pads 1-4) towards the chip."""
-    cx = ToMM(u1.GetPosition().x)
+    """The pixel port's 75 R arrays in a row along the ADV7842's pixel side, each beside the four
+    balls it serves, its ADV7842 side (pads 1-4) towards the chip, pad 1 at its first ball's end."""
+    g = grid(u1)
+    cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
+    ox, oy = g(7.5, -1)[0] - g(7.5, 0)[0], g(7.5, -1)[1] - g(7.5, 0)[1]     # out of the pixel side
+    ax, ay = -oy, ox                                                        # along it
+    balls = {pad.GetNetname(): (ToMM(pad.GetPosition().x), ToMM(pad.GetPosition().y)) for pad in u1.Pads()}
     want = []
     for p in board.PARTS:
-        if not (p.ref.startswith("RN") and p.value == "75"):
-            continue
-        ys = []
-        for pad in u1.Pads():
-            if pad.GetNetname() in [p.pins[str(k)] for k in (1, 2, 3, 4)]:
-                ys.append(ToMM(pad.GetPosition().y))
-        want.append((sum(ys) / len(ys), p.ref))
-    # spread to at least 2.3 mm apart, keeping the order and the mean
+        if p.ref.startswith("RN") and p.value == "75":
+            pts = [balls[p.pins[str(k)]] for k in (1, 2, 3, 4)]
+            t = sum((x - cx) * ax + (y - cy) * ay for x, y in pts) / 4
+            first = (pts[0][0] - cx) * ax + (pts[0][1] - cy) * ay
+            last = (pts[3][0] - cx) * ax + (pts[3][1] - cy) * ay
+            want.append((t, p.ref, first < last))
     want.sort()
-    ys = [w[0] for w in want]
-    for _ in range(50):
-        for k in range(1, len(ys)):
-            if ys[k] - ys[k - 1] < 2.3:
-                d = (2.3 - (ys[k] - ys[k - 1])) / 2
-                ys[k - 1] -= d
-                ys[k] += d
-    for (_, ref), y in zip(want, ys):
+    ts = [w[0] for w in want]
+    for _ in range(50):                 # at least 2.3 mm apart, in order
+        for k in range(1, len(ts)):
+            if ts[k] - ts[k - 1] < 2.3:
+                d = (2.3 - (ts[k] - ts[k - 1])) / 2
+                ts[k - 1] -= d
+                ts[k] += d
+    for (_, ref, ascending), t in zip(want, ts):
         fp = fps[ref]
-        fp.SetPosition(VECTOR2I(FromMM(cx + 8.5 + 1.6), FromMM(y)))
+        fp.SetPosition(VECTOR2I(FromMM(cx + ox * 10.1 + ax * t), FromMM(cy + oy * 10.1 + ay * t)))
         for a in (0, 90, 180, 270):
             fp.SetOrientationDegrees(a)
-            # pads 1-4 face the chip; pad 1 (the lowest ball row, row B at the bottom) at the bottom
-            if pad_pos(fp, "1")[0] < pad_pos(fp, "8")[0] and pad_pos(fp, "1")[1] - pad_pos(fp, "4")[1] > 1:
+            p1, p4, p8 = pad_pos(fp, "1"), pad_pos(fp, "4"), pad_pos(fp, "8")
+            inward = (p1[0] - p8[0]) * ox + (p1[1] - p8[1]) * oy < 0
+            order = ((p1[0] - p4[0]) * ax + (p1[1] - p4[1]) * ay < 0) == ascending
+            if inward and order:
                 break
         occ.take("F", courtyard(fp))
         HAND[ref] = None
 
 
 def fit_u1(fp, x, y):
-    """Analog side (balls x13-16) to the left, pixel side (x1-5) to the right."""
+    """Pixel side (balls x1-5) down, towards J10 (row A then sits at the left)."""
     a1, a16 = pad_pos(fp, "A1"), pad_pos(fp, "A16")
-    return a1[0] > x and a16[0] < x and a1[1] > y
+    return a1[1] > y and a16[1] < y
+
+
+def fit_u2(fp, x, y):
+    """Data side (D8-D15, pins 81-88) up, towards J9; TMDS side down."""
+    return pad_pos(fp, "84")[1] < y - 5 and pad_pos(fp, "36")[1] > y + 5
 
 
 def fit_esd(fp, x, y):
@@ -164,11 +177,11 @@ def fit_esd(fp, x, y):
     return p1[0] < p10[0] and p1[1] < p5[1]
 
 
-FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL3": "AV_CVDD", "FL5": "AV_DVDDIO", "FL4": "AV_PVDD"}
+FL_PLANE = {"FL1": "AV_VDD", "FL2": "AV_AVDD", "FL5": "AV_DVDDIO", "FL4": "AV_PVDD"}
 _u1_grid = []
 
 
-FL_AXIS = {"FL1": "x", "FL3": "x", "FL2": "y", "FL5": "y", "FL4": "y"}
+FL_AXIS = {"FL1": "x", "FL5": "x", "FL2": "y", "FL4": "y"}
 
 
 def fit_fl(ref):
@@ -187,7 +200,7 @@ def fit_fl(ref):
     return f
 
 
-FIT = {"U1": fit_u1, "U9": fit_esd, "U10": fit_esd}
+FIT = {"U1": fit_u1, "U2": fit_u2, "U9": fit_esd, "U10": fit_esd}
 FIT.update({r: fit_fl(r) for r in FL_PLANE})
 
 # Groups for the small parts: (side, anchor) by block / net
@@ -369,13 +382,11 @@ def main():
         fps[p.ref] = fp
 
     occ = Occ()
-    # Bus corridors stay free of small parts: from the 75 R arrays (x 98) to J10's pins, and the
-    # strips above and below J10 the bus runs along; likewise from J9's data end to the ADV7511.
+    # Bus corridors stay free of small parts: from the 75 R arrays to J10's pins, and from J9's
+    # data end to the ADV7511.
     for side in ("F", "B"):
-        occ.take(side, (98.6, 70.0, 104.0, 89.5))           # arrays -> J10's pin 1 end
-        occ.take(side, (103.0, 74.5, 132.0, 77.0))          # above J10's even row
-        occ.take(side, (103.0, 81.0, 132.0, 89.5))          # below J10's odd row
-        occ.take(side, (141.0, 26.0, 160.5, 34.5))          # J9's data end -> ADV7511
+        occ.take(side, (103.5, 70.0, 127.0, 77.0))          # the 75 R arrays -> J10's data pins
+        occ.take(side, (141.0, 32.5, 155.5, 39.0))          # J9's data end -> ADV7511
 
     # --- hand-placed parts
     for ref, spec in list(HAND.items()):
@@ -430,6 +441,7 @@ def main():
             v = pad.GetPosition()
             ic_pads.setdefault(pad.GetNetname(), []).append((ToMM(v.x), ToMM(v.y), ref))
     rr = {}
+    net_pins = board.nets()
 
     def anchor_for(p):
         # decoupling for U1: spread over its rail's balls, bottom side
@@ -446,7 +458,19 @@ def main():
                     k = rr.get(n, 0)
                     rr[n] = k + 1
                     return balls[k % len(balls)], "B"
-        # otherwise the nearest IC pad among its nets (prefer the U pins)
+        # otherwise the IC or connector it was written down with: the nearest one before it in
+        # board.py that shares a net with it (a regulator's caps and divider follow the regulator)
+        k = board.PARTS.index(p)
+        for q in reversed(board.PARTS[:k]):
+            if q.ref.startswith(("U", "J")) and q.ref in fps:
+                shared = [n for n in nets_ if n in set(q.pins.values())]
+                if shared:
+                    shared.sort(key=lambda n: len(net_pins.get(n, [])))
+                    pads = [(x, y) for x, y, r in ic_pads.get(shared[0], []) if r == q.ref]
+                    if pads:
+                        return pads[0], "F"
+        # else an IC pad on its most specific net (fewest pins)
+        nets_ = sorted(nets_, key=lambda n: len(net_pins.get(n, [])))
         for pref in ("U", "Y", "J"):
             for n in nets_:
                 cands = [(x, y) for x, y, r in ic_pads.get(n, []) if r.startswith(pref)]
@@ -455,17 +479,30 @@ def main():
         return ((X0 + X1) / 2, Y1 - 5), "F"
 
     order = [p for p in board.PARTS if p.ref not in HAND]
-    order.sort(key=lambda p: (0 if p.ref.startswith(("RN", "FL", "L", "Y")) else 1))
+
+    def rank(p):
+        """The order the small parts get their places in: the ADV7842's per-ball decoupling first
+        (nearest the balls), then whatever serves an IC pin, then plane caps and bulk, then the rest."""
+        nets_ = set(p.pins.values())
+        if p.ref.startswith(("RN", "FL", "L", "Y")):
+            return 0
+        if p.ref.startswith("C") and nets_ & DECOUPLE_U1 and p.value in ("10n", "100n"):
+            return 1
+        if p.ref.startswith("C") and nets_ & DECOUPLE_U1:
+            return 3
+        if any(r.startswith("U") for n in nets_ - {"GND"} for _, _, r in ic_pads.get(n, [])):
+            return 2
+        return 4
+    order.sort(key=rank)
     for p in order:
         (ax, ay), side = anchor_for(p)
         place_near(occ, fps[p.ref], side, (ax, ay))
 
-    # orientation checks: the jacks open to the left edge, U2's data side faces J9
+    # orientation checks: the jacks open to the left edge, U2's data side faces J9 (above it)
     for ref in ("J1", "J2", "J3", "J4", "J5"):
         bx = courtyard(fps[ref], 0)
         assert bx[0] < X0 + 1.5, (ref, bx)
-    u2x = ToMM(fps["U2"].GetPosition().x)
-    assert pad_pos(fps["U2"], "84")[0] < u2x - 7 and pad_pos(fps["U2"], "36")[0] > u2x + 7, "U2 rotation"
+    assert fit_u2(fps["U2"], ToMM(fps["U2"].GetPosition().x), ToMM(fps["U2"].GetPosition().y)), "U2 rotation"
     hx = ToMM(fps["J6"].GetPosition().x)
     assert courtyard(fps["J6"], 0)[2] > X1 - 1.5, "HDMI not at the right edge"
 
@@ -573,9 +610,15 @@ def fanout_u1(b, fp):
         r, c = ROWS.index(name[0]), int(name[1:]) - 1
         balls[(r, c)] = pad
     pending_gnd = []
+    by_name = {p.GetNumber(): p for p in fp.Pads()}
+    chained = {}
+    for a_, z_ in CHAINS:
+        chained[a_] = z_
+        track(b, g(ROWS.index(a_[0]), int(a_[1:]) - 1), g(ROWS.index(z_[0]), int(z_[1:]) - 1), 0.15, pcbnew.F_Cu,
+              by_name[a_].GetNet())
     for (r, c), pad in sorted(balls.items(), key=lambda kv: -max(abs(kv[0][0] - 7.5), abs(kv[0][1] - 7.5))):
         net = pad.GetNetname()
-        if not net:
+        if not net or pad.GetNumber() in chained:
             continue
         # (+5V: the two HDMI 5 V detect balls, beside unused HDMI balls: they escape on F.Cu)
         power = net == "GND" or (net in POWER_NETS and net != "+5V")
@@ -592,8 +635,8 @@ def fanout_u1(b, fp):
             cands.sort(key=lambda p: -((p[0] - 7.5) ** 2 + (p[1] - 7.5) ** 2))
         cands = [p for p in cands if p not in used]
         if not cands:
-            if net == "GND":
-                pending_gnd.append((r, c, pad))
+            if power:
+                pending_gnd.append((r, c, pad))     # joins a neighbour on the same net (below)
                 continue
             raise SystemExit("U1 ball %s (%s): no free via site (taken by %s)" % (
                 pad.GetNumber(), net, [owner.get(p) for p in [(r + dr, c + dc) for dr in (-0.5, 0.5) for dc in (-0.5, 0.5)]]))
@@ -608,12 +651,12 @@ def fanout_u1(b, fp):
     for r, c, pad in pending_gnd:
         for dr, dc in ((0, 1), (0, -1), (1, 0), (-1, 0)):
             q = balls.get((r + dr, c + dc))
-            if q is not None and q.GetNetname() == "GND":
+            if q is not None and q.GetNetname() == pad.GetNetname():
                 track(b, g(r, c), g(r + dr, c + dc), 0.2, pcbnew.F_Cu, pad.GetNet())
                 break
         else:
-            raise SystemExit("U1 ground ball %s: no via and no ground neighbour" % pad.GetNumber())
-    print("U1 fanout: %d vias, %d ground balls joined to a neighbour" % (len(used), len(pending_gnd)))
+            raise SystemExit("U1 ball %s: no via site and no neighbour on its net" % pad.GetNumber())
+    print("U1 fanout: %d vias, %d power balls joined to a neighbour" % (len(used), len(pending_gnd)))
 
 
 def fanout_planes(b, u1):
@@ -661,7 +704,7 @@ def fanout_planes(b, u1):
         return True
 
     def path_clear(px, py, x, y, net, skip):
-        for t in [i / 10 for i in range(3, 10)]:
+        for t in [i / 20 for i in range(1, 20)]:
             if not clear(px + (x - px) * t, py + (y - py) * t, net, skip, 0.125 + gap, False):
                 return False
         return clear(x, y, net, skip, VIA_D / 2 + gap, True)
@@ -753,7 +796,8 @@ def planes(b, fp):
     for x0, y0, x1, y1 in ((X0, Y0, X1, Y0 + m), (X0, Y1 - m, X1, Y1), (X0, Y0, X0 + m, Y1), (X1 - m, Y0, X1, Y1)):
         keepout(b, x0, y0, x1, y1)
     wx0, wy0, wx1, wy1 = WIN
-    keepout(b, wx0 - m, wy0 - m, wx1 + m, wy1 + m)
+    if wx0 > X0:
+        keepout(b, wx0 - m, wy0 - m, wx1 + m, wy1 + m)
     for bx, by in BUTTONS:
         keepout(b, bx - 3.5 - m, by - 3.5 - m, bx + 3.5 + m, by + 3.5 + m)
     g = grid(fp)

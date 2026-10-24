@@ -1,8 +1,8 @@
 # The AV board
 
 One board on the Tang Console 138K's two 2x20 headers: component video and stereo audio in
-(ADV7842, PCM1808) on J10, HDMI out (ADV7511) on J9. A frame around the 138K SOM, which sits
-between the headers. Status: design in progress.
+(ADV7842, PCM1808) on J10, HDMI out (ADV7511) on J9. The Console's size (79.6 x 69.4 mm), over
+the 138K SOM (nothing is mounted on the SOM). Status: design in progress.
 
 - [design.md](design.md): the electrical design, connection by connection, with its sources
 - [reference-notes.md](reference-notes.md): what ADI's and TI's reference designs say

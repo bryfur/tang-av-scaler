@@ -243,28 +243,28 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
   at x = 153.13 - 2.54 (n - 1) // 2 (pin 1 at the right end). J10: odd pins on y 80.27, even on
   77.73, pin n at x = 104.87 + 2.54 (n - 1) // 2 (pin 1 at the left end). (ibom pad centres sit
   1.055 mm further out: SMD pads.)
-- SOM: 45 x 35 mm on the four holes H1-H4 at x 106/147, y 39/70, so x 104-149, y 37-72. Its
-  fan and heat sink sit on it. The AV board has a window over it (x 102-151, y 35-74): the SOM's
-  height does not matter.
-- What the AV board's area covers on the Console's top side: buttons S1 (98.9, 38.0) and S2
-  (98.9, 71.0), 7 mm tall, and SW2 (160.5, 54.5), 6 mm; the LCD FPC J4 at the left edge; PMOD
-  sockets J6/J7 and the 2 mm fan socket J5 at the right edge. They all fit under the board (11
-  mm above the Console). SW2 gets a 7 mm hole; S1 and S2 sit right where the input bus runs
-  from J10 to the ADV7842, so they are covered, and the AV board has two buttons of its own
-  (SW1, SW2 at its bottom right edge, on J10 pins 31/32) for the scaler's menu. The Console's
-  HDMI, USB and USB-C are on its bottom side and stay usable.
+- SOM: 45 x 35 mm on the four holes H1-H4 at x 106/147, y 39/70, so x 104-149, y 37-72. Nothing
+  sits on it (no fan, no heat sink; the Console has a fan connector, J24, switched by FAN_EN):
+  its top is about 7 mm above the Console (3.0 mm DF40HC connectors, the SOM board, the PG484
+  package), under the AV board's underside at 11 mm. Only flat parts (0402-0805 passives,
+  tantalums, filters: under 2 mm) sit on the AV board's underside.
+- The AV board is the Console's outline, x 89.2-168.8, y 20.6-90.0 (79.6 x 69.4 mm), over the
+  SOM. It covers the Console's buttons S1 (98.9, 38.0), S2 (98.9, 71.0) (7 mm tall) and SW2
+  (160.5, 54.5), the LCD FPC J4, the PMOD sockets J6/J7 and the fan socket; all fit under it.
+  The AV board has two buttons of its own (SW1, SW2 at its bottom right, on J10 pins 31/32) for
+  the scaler's menu. The Console's HDMI, USB and USB-C are on its bottom side and stay usable.
 - Stack: the Console's SMD male headers (2.5 mm plastic) into 8.5 mm female sockets on the AV
-  board's bottom: the AV board's bottom is 11 mm above the Console's top. Two M2.5
-  standoffs, 11 mm, diagonally on two of the Console's four holes beside the headers (H7_*:
-  (100, 30) and (158, 79)); the other two, (100, 79) and (158, 30), sit where the video buses
-  enter J10 and J9.
-- Wings: the input side (ADV7842, PCM1808, five RCA jacks facing left) sits left of the SOM,
-  over the end of J10 where its data pins are (pins 1-18 at x 105-115). The ADV7842 sits at
-  J10's height, so its pixel balls (its right edge, y 71-82), the series resistors beside
-  them and J10's pins line up and the bus runs straight across; the output side
-  (ADV7511, HDMI facing right) right of the SOM, over the end of J9 where its data pins are
-  (x 142-153). Both wings reach past the Console's edges: board x 60-190, y 20.6-90.0
-  (130 x 69.4 mm). It does not fit Sipeed's retail case.
+  board's bottom: the AV board's bottom is 11 mm above the Console's top. Two M2.5 standoffs,
+  11 mm, on the Console's right-hand holes beside the headers (H7_*: (158, 30), (158, 79)); the
+  left two, (100, 30) and (100, 79), are under the RCA jacks.
+- Layout: the five RCA jacks along the left edge, facing left (audio at the top). The ADV7842
+  sits right above J10's data end (pins 1-18 at x 105-125), pixel side down: its 75 R arrays in
+  a row under it, then J10's pins, about 6 mm of bus. The ADV7511 sits right under J9's data end
+  (x 142-153), data side up (about 9 mm of bus), TMDS side down; the HDMI connector on the right
+  edge, facing right, with the TMDS ESD arrays in line before it. The PCM1808 next to the audio
+  jacks; the regulators between J9 and the two chips. The ADV7842's rail planes (In3) leave it
+  to the right (VDD, DVDDIO) and upwards (AVDD, PVDD) to their filters on the underside.
+- Sipeed's retail case: not checked.
 
 ## Stack-up and rules
 

@@ -13,7 +13,7 @@ PS2 component (YPbPr) + stereo audio
 
 | Directory | What |
 |---|---|
-| `hardware/av-board/` | The AV board: one board spanning the Console's two 2x20 headers (J9, J10), a frame around the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. |
+| `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. |
 
 Status: the board's design is in progress; nothing has been built.
 
