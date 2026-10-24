@@ -25,6 +25,7 @@ In `refs/` (not in git). Every circuit on the board follows these.
 |---|---|---|
 | ADV7842_datasheet_adi.pdf | ADV7842 data sheet, Rev B: supplies, currents, crystal (28.63636 MHz), 256-ball map | analog.com data-sheets/ADV7842.pdf |
 | UG-214_ADV7842_hardware.pdf | ADV7842 Hardware User Guide: analog input configuration (6.2.1), reset, pixel port, PCB layout recommendations, recommended decoupling (Fig. 168, 179), 75 R input termination (Appendix B) | analog.com user-guides/UG-214.pdf (via docs.ampnuts.ru mirror) |
+| HDMI_RX_PowerSupplies_RevA_050411.pdf | ADI "PCB Layout and Power Supply Design Recommendations for HDMI RX Products", Rev A (April 2011): a ferrite per supply rail (Murata NFE61PT472C1H9), 10 nF + 100 nF per pin, 10 uF bulk on AVDD/CVDD/PVDD, LDOs not switchers, 3.3 V before 1.8 V; Fig. 2 the reference LDO supply (10 uH + 10 uF after the 1.8 V LDO, 100 nF + 1 uF on AVDD/CVDD/PVDD, 100 nF on DVDD/DVDDIO/TVDD, 1.8 V enable from 3.3 V via 100 k / 470 nF) | ADI EngineerZone, ADV7842 design support files (downloaded by hand) |
 | UG-206_ADV7842_software.pdf | ADV7842 software (register) guide | analog.com user-guides/UG-206.pdf |
 | UG-235_eval_ADV7842_7511.pdf | EVAL-ADV7842-7511 user guide (placement drawing, jumpers; no schematic) | farnell.com mirror of UG-235 |
 | ADV7511_hardware_users_guide_RevD.pdf | ADV7511 Hardware User's Guide, Rev D: 100-lead LQFP pinout, input/output connections, HPD, DDC, PLL circuit, power domains and filtering, example schematic (Fig. 27) | analog.com user-guides/ADV7511_Hardware_Users_Guide.pdf |
@@ -39,7 +40,9 @@ In `refs/` (not in git). Every circuit on the board follows these.
 | console138k_C.pdf | Sipeed Tang_138K_Console_V32001C schematic | dl.sipeed.com TANG/Console/02_Schematic |
 | ibom_C.html | Sipeed's interactive BOM for board 32001C (part positions) | dl.sipeed.com TANG/Console/03_Designator_drawing |
 
-Missing: the EVAL-ADV7842-7511 schematic itself (ADI's design support files), for cross-checking.
+Still wanted, for cross-checking: the EVAL-ADV7842-7511 / ADV7844 evaluation board schematics and
+the ADV7511 evaluation schematic (ADI's design support files).
 
-Fetching: analog.com serves its PDFs to `wget` (HTTP/1.1); curl over HTTP/2 stalls. Sipeed's file
-server lists folders with a POST to `https://dl.sipeed.com/fileList/<path>`.
+Fetching: analog.com serves its PDFs to `wget` (HTTP/1.1); curl over HTTP/2 stalls. EngineerZone
+(ez.analog.com) refuses automated clients ("Access Denied"): its files are downloaded by hand.
+Sipeed's file server lists folders with a POST to `https://dl.sipeed.com/fileList/<path>`.
