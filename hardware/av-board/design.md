@@ -230,3 +230,29 @@ as inputs, never high.**
   to GND. The board ties it to GND.
 - J10 pin 2 (FPGA P19) is also the FPGA's SSPI_CLK configuration pin; it carries Y1, an input to
   the FPGA, which is harmless while the FPGA configures from flash.
+
+## Mechanics
+
+Coordinates are Sipeed's Console PCB coordinates in mm, top view, from the 32001C ibom and the
+SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_drawing).
+
+- Console board: x 89.2-168.8, y 20.6-90.0. J9: pins on y 28.73 (odd) and 31.27 (even), pin n
+  at x = 153.13 - 2.54 (n - 1) // 2 (pin 1 at the right end). J10: odd pins on y 80.27, even on
+  77.73, pin n at x = 104.87 + 2.54 (n - 1) // 2 (pin 1 at the left end). (ibom pad centres sit
+  1.055 mm further out: SMD pads.)
+- SOM: 45 x 35 mm on the four holes H1-H4 at x 106/147, y 39/70, so x 104-149, y 37-72. Its
+  fan and heat sink sit on it. The AV board has a window over it (x 102-151, y 35-74): the SOM's
+  height does not matter.
+- What the AV board's area would cover on the Console's top side: buttons S1 (98.9, 38.0) and
+  S2 (98.9, 71.0), 7 mm tall, and SW2 (160.5, 54.5), 6 mm; the LCD FPC J4 at the left edge;
+  PMOD sockets J6/J7 and the 2 mm fan socket J5 at the right edge. They all fit under the
+  board (11 mm above the Console), and the board has 7 mm holes over the three buttons. The
+  Console's HDMI, USB and USB-C are on its bottom side and stay usable.
+- Stack: the Console's SMD male headers (2.5 mm plastic) into 8.5 mm female sockets on the AV
+  board's bottom: the AV board's bottom is 11 mm above the Console's top. Four M2.5 standoffs,
+  11 mm, on the Console's four holes beside the headers (H7_*: x 100/158, y 30/79).
+- Wings: the input side (ADV7842, PCM1808, five RCA jacks facing left) sits left of the SOM,
+  over the end of J10 where its data pins are (pins 1-18 at x 105-115); the output side
+  (ADV7511, HDMI facing right) right of the SOM, over the end of J9 where its data pins are
+  (x 142-153). Both wings reach past the Console's edges: board x 60-190, y 20.6-90.0
+  (130 x 69.4 mm). It does not fit Sipeed's retail case.
