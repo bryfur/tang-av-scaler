@@ -316,31 +316,15 @@
     "netclass_patterns": [
       {
         "netclass": "POWER",
+        "pattern": "TX_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_CVDD"
+      },
+      {
+        "netclass": "POWER",
         "pattern": "5VA"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_AVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "1V8A"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "3V3"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_DVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "2V5"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_VDD"
       },
       {
         "netclass": "POWER",
@@ -348,15 +332,39 @@
       },
       {
         "netclass": "POWER",
+        "pattern": "+5V"
+      },
+      {
+        "netclass": "POWER",
         "pattern": "HDMI_5V"
       },
       {
         "netclass": "POWER",
-        "pattern": "TX_AVDD"
+        "pattern": "TX_PLVDD"
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_CVDD"
+        "pattern": "2V5"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "3V3"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_TVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_DVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_VDD"
       },
       {
         "netclass": "POWER",
@@ -368,15 +376,7 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_TVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "+5V"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_PLVDD"
+        "pattern": "1V8A"
       },
       {
         "netclass": "POWER",
@@ -384,19 +384,11 @@
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_CK_P"
+        "pattern": "TMDS_D2_P"
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_CK_N"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D0_P"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D0_N"
+        "pattern": "TMDS_D1_N"
       },
       {
         "netclass": "TMDS",
@@ -408,15 +400,23 @@
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_D2_P"
+        "pattern": "TMDS_D0_P"
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_D1_N"
+        "pattern": "TMDS_CK_N"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_CK_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D0_N"
       },
       {
         "netclass": "CLOCK",
-        "pattern": "IN_LLC"
+        "pattern": "AV_LLC"
       },
       {
         "netclass": "CLOCK",
@@ -424,7 +424,7 @@
       },
       {
         "netclass": "CLOCK",
-        "pattern": "AV_LLC"
+        "pattern": "IN_LLC"
       }
     ]
   },

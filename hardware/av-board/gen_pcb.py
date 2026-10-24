@@ -132,7 +132,7 @@ HAND = {
     # its filter sits left of the BGA, four rows from its balls (C12-E12, one via at E11), where
     # TVDD's plane has room to spare
     "FL1": (128.0, 57.0, None, "B"), "FL5": (126.0, 66.5, None, "B"),
-    "FL3": (100.0, 58.0, 90, "B"),
+    "FL3": (97.5, 49.0, 90, "B"),         # beside FL6, a short 1V8A branch from FL4
     "FL4": (108.5, 48.0, None, "B"), "FL2": (113.5, 48.2, None, "B"),
     "FL6": (100.5, 49.0, None, "B"),
 }
@@ -151,10 +151,11 @@ def inverse_grid(fp):
     return f
 
 
-def place_arrays(fps, u1, occ, value, edge):
+def place_arrays(fps, u1, occ, value, edge, offset=10.1):
     """A group of 4-resistor arrays (by value) in a row along one side of the ADV7842, each beside
     the four balls it serves, its ADV7842 side (pads 1-4) towards the chip, pad 1 at its first
-    ball's end. edge: two ball-grid points, (outside, inside) the side, that give its direction."""
+    ball's end. edge: two ball-grid points, (outside, inside) the side, that give its direction;
+    offset: the arrays' distance from the chip's centre, mm."""
     g = grid(u1)
     cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
     (r0, c0), (r1, c1) = edge
@@ -179,7 +180,7 @@ def place_arrays(fps, u1, occ, value, edge):
                 ts[k] += d
     for (_, ref, ascending), t in zip(want, ts):
         fp = fps[ref]
-        fp.SetPosition(VECTOR2I(FromMM(cx + ox * 10.1 + ax * t), FromMM(cy + oy * 10.1 + ay * t)))
+        fp.SetPosition(VECTOR2I(FromMM(cx + ox * offset + ax * t), FromMM(cy + oy * offset + ay * t)))
         for a in (0, 90, 180, 270):
             fp.SetOrientationDegrees(a)
             p1, p4, p8 = pad_pos(fp, "1"), pad_pos(fp, "4"), pad_pos(fp, "8")
@@ -235,6 +236,9 @@ FIT = {"U1": fit_u1, "U2": fit_u2, "U9": fit_esd, "U10": fit_esd}
 FIT.update({r: fit_fl(r) for r in FL_PLANE})
 
 U1_RING = 1.0       # mm round the ADV7842's courtyard kept free of small parts (its escape ring)
+# outer-ring balls that take an escape via anyway (like the pull-down balls, PD_*): SYNC_Y (J15)
+# leaves the chip's top edge under the analog inputs' terminations, which F.Cu cannot get past
+RING_VIA_NETS = {"SYNC_Y"}
 # room kept free of small parts for routing, both sides: the J10 bus's fan-out, from under the 75 R
 # arrays to J10's pins 1-26
 RESERVED = [(103.8, 72.4, 136.6, 76.9)]
@@ -481,10 +485,8 @@ def main():
             fp.SetOrientationDegrees(ang)
         if ref == "U1":
             _u1_grid[:] = [inverse_grid(fp)]
-            # the pixel port's 75 R arrays along its pixel side (down, towards J10); the unused
-            # SDRAM port's 4.7 k pull-down arrays along its T-row side (right)
+            # the pixel port's 75 R arrays along its pixel side (down, towards J10)
             place_arrays(fps, fp, occ, "75", ((7.5, -1), (7.5, 0)))
-            place_arrays(fps, fp, occ, "4.7k", ((16, 7.5), (15, 7.5)))
         # the ADV7842 keeps a 1 mm ring clear of small parts on both sides: its outer two rings of
         # balls escape on the outer layers through there (the 75 R arrays are placed already)
         keep = U1_RING if ref == "U1" else 0.3
@@ -548,8 +550,8 @@ def main():
         # termination's 51 R by its coupling cap), else at the connector pin. Its supply net does
         # not count: a pull-up to 3V3 belongs at its pin, not at the 3V3 regulator.
         sig = sorted((n for n in nets_ if n not in POWER_NETS), key=lambda n: len(net_pins.get(n, [])))
-        # the unused SDRAM port's pull-downs carry no signal: they go to the ADV7842's right side,
-        # level with their balls, clear of the analog inputs above its top right corner
+        # the unused SDRAM port's pull-downs (one 0402 each, no signal) go to the ADV7842's right
+        # side, level with their balls, clear of the analog inputs above its top right corner
         if any(n.startswith("PD_SDRAM") for n in sig):
             bx, by = [(x, y) for x, y, r in ic_pads[[n for n in sig if n.startswith("PD_SDRAM")][0]] if r == "U1"][0]
             right = courtyard(fps["U1"], 0)[2] + U1_RING + 1.0
@@ -612,14 +614,18 @@ def main():
             raise SystemExit("nothing placed that %s hangs on" % order[0].ref)
         order.remove(p)
         (ax, ay), side = a
-        # a rail's decoupling goes where its whole footprint is over the rail's plane: a via straight
-        # down then connects it, with nothing for the router to do
+        # a rail's decoupling goes where its rail pad is over the rail's plane (0.3 mm in): a via
+        # beside it then goes straight down (fanout_planes), with nothing for the router to do
         plane = [n for n in p.pins.values() if n in PLANES]
         where = None
         if plane and p.ref.startswith("C"):
             poly, to_grid = PLANES[plane[0]], _u1_grid[0]
-            where = (lambda box, poly=poly, to_grid=to_grid: all(
-                inside(poly, *to_grid(x, y)) for x in (box[0], box[2]) for y in (box[1], box[3])))
+            rail_pad = [q for q in fps[p.ref].Pads() if q.GetNetname() == plane[0]][0]
+
+            def where(box, poly=poly, to_grid=to_grid, pad=rail_pad, m=0.3):
+                r = pad.GetBoundingBox()            # (at the spot being tried)
+                x0, y0, x1, y1 = ToMM(r.GetLeft()) - m, ToMM(r.GetTop()) - m, ToMM(r.GetRight()) + m, ToMM(r.GetBottom()) + m
+                return all(inside(poly, *to_grid(x, y)) for x in (x0, x1) for y in (y0, y1))
         place_near(occ, fps[p.ref], side, (ax, ay), where=where)
         add_pads(fps[p.ref])
 
@@ -765,7 +771,7 @@ def fanout_u1(b, fp):
         # a ball with only a pull-down on it (PD_*: unused inputs, no signal) takes a via even in the
         # outer two rings, so it drops to the inner layers and leaves the outer layers' escape
         # channels to the signals (the SDRAM pull-downs in the corner under the analog inputs)
-        if not power and ring <= 1 and not net.startswith("PD_"):
+        if not power and ring <= 1 and not net.startswith("PD_") and net not in RING_VIA_NETS:
             continue
         cands = [(r + dr, c + dc) for dr in (-0.5, 0.5) for dc in (-0.5, 0.5)]
         if net in PLANES:
@@ -871,16 +877,22 @@ def fanout_planes(b, u1):
             r = pad.GetBoundingBox()
             hw, hh = ToMM(r.GetWidth()) / 2, ToMM(r.GetHeight()) / 2
             spot = None
-            for d in (0.0, 0.3, 0.6, 1.0, 1.5):
-                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)):
+            for d in (0.0, 0.3, 0.6, 1.0, 1.5, 2.0, 2.5):
+                for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1),
+                               (1, 0.5), (-1, 0.5), (1, -0.5), (-1, -0.5), (0.5, 1), (-0.5, 1), (0.5, -1), (-0.5, -1)):
                     x = px + dx * (hw + VIA_D / 2 + gap + d)
                     y = py + dy * (hh + VIA_D / 2 + gap + d)
-                    if path_clear(px, py, x, y, net, k_self[0] if k_self else -1):
+                    # (a rail pad's via must land on its plane too, or it connects nothing)
+                    on_plane = net not in PLANES or all(inside(PLANES[net], *to_grid(x + ex, y + ey))
+                                                        for ex in (-0.35, 0.35) for ey in (-0.35, 0.35))
+                    if on_plane and path_clear(px, py, x, y, net, k_self[0] if k_self else -1):
                         spot = (x, y)
                         break
                 if spot:
                     break
             if not spot:
+                if net != "GND":            # (a ground pad has the outer pours as well)
+                    print("note: no plane via for %s pad %s (%s)" % (fp.GetReference(), pad.GetNumber(), net))
                 continue
             x, y = spot
             track(b, (px, py), (x, y), 0.25, pcbnew.F_Cu if onf else pcbnew.B_Cu, pad.GetNet())

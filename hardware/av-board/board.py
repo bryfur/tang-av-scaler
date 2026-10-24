@@ -326,20 +326,11 @@ for name in ("DDCB_SCL", "DDCA_SCL", "VGA_SCL", "TTX_SCL"):
     R("10k", "PD_" + name, "GND")
 for name in ("RXA_5V", "RXB_5V"):
     u1[ball(name)] = "+5V"
-# The unused SDRAM port's data pins (DQ0-15, LDQS, UDQS), 4.7 k each to GND [App. C]: any pin may
-# take any resistor, so they go in the order the balls sit along the chip's T-row edge (column, then
-# row: rows N-T, columns 11-16), each array serving four neighbouring balls; the two at the ends of
-# the run take single resistors
-dq = sorted(["SDRAM_DQ%d" % i for i in range(16)] + ["SDRAM_LDQS", "SDRAM_UDQS"],
-            key=lambda name: (int(ball(name)[1:]), ball(name)[0]))
-for k in range(1, 17, 4):
-    pins = {}
-    for j, name in enumerate(dq[k:k + 4]):
-        u1[ball(name)] = "PD_" + name
-        pins[str(1 + j)] = "PD_" + name
-        pins[str(8 - j)] = "GND"
-    part(nxt("RN"), "4.7k", "lcsc:4D02WGJ0472TCE", "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL", "C29586", pins)
-for name in (dq[0], dq[17]):
+# The unused SDRAM port's data pins (DQ0-15, LDQS, UDQS), 4.7 k each to GND [App. C]: one 0402
+# each, by its ball on the chip's right side (gen_pcb.py). Four-resistor arrays made every router
+# fail there: four lines from neighbouring balls have to meet one 0.5 mm-pitch array in order,
+# in the board's tightest corner; single resistors route.
+for name in ["SDRAM_DQ%d" % i for i in range(16)] + ["SDRAM_LDQS", "SDRAM_UDQS"]:
     u1[ball(name)] = "PD_" + name
     R("4.7k", "PD_" + name, "GND")
 

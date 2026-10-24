@@ -309,7 +309,15 @@ SOM drawing (`refs/console/`, dl.sipeed.com TANG/Mega_138K_60K/04_Mechanical_dra
   and the regulators' feedback dividers are placed first, nearest their pins.
 - Routing room: a 1 mm ring round the ADV7842 is kept free of small parts on both sides (its outer two
   rings of balls escape through it), and so is the J10 bus's fan-out between the 75 R arrays and
-  J10's pins. The two RXA/RXB_5V balls get escape vias like the signal balls.
+  J10's pins. The two RXA/RXB_5V balls get escape vias like the signal balls, and so do the
+  outer-ring balls with only a pull-down on them and SYNC_Y (J15), so they leave under the chip
+  instead of through the crowded F.Cu at its edges.
+- The unused SDRAM port's 18 pull-downs (4.7 k each, App. C) are single 0402s by the chip's right
+  side, each level with its ball: with 4-resistor arrays (four lines meeting a 0.5 mm-pitch array
+  in order, in the board's tightest corner) neither router finished them, with singles both do.
+- Every rail cap's rail pad is over its plane (0.3 mm in), and its via beside it lands on the
+  plane; where the top side above leaves no room for that via (the analog inputs above the
+  chip, the parts beside it) the pad is joined by a short routed track instead.
 - Rail planes (inner layer): each ADV7842 rail's balls are inside its plane, which widens past
   the BGA to hold its filter and all its decoupling on the underside (68 of 69 caps fully over
   their plane, the last a 10 uF bulk cap beside it): AVDD over the top right, PVDD and TVDD over
