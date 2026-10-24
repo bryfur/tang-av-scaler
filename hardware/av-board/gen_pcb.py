@@ -95,9 +95,10 @@ HAND = {
     "J9": (129.0, 30.0, 180, "B"),
     "J10": (129.0, 79.0, 0, "B"),
     # RCA jacks on the left edge, facing left: audio at the top, video below (13 mm apart: the
-    # shell lugs are 10 mm apart with 2.6 mm holes)
-    "J4": (85.2, 27.8, 90, "F"), "J5": (85.2, 40.8, 90, "F"),
-    "J1": (85.2, 53.8, 90, "F"), "J2": (85.2, 66.8, 90, "F"), "J3": (85.2, 79.8, 90, "F"),
+    # shell lugs are 10 mm apart with 2.6 mm holes), centred on the board's height: 1.9 mm from
+    # the outer lugs' pads to the top and bottom edges
+    "J4": (85.2, 29.3, 90, "F"), "J5": (85.2, 42.3, 90, "F"),
+    "J1": (85.2, 55.3, 90, "F"), "J2": (85.2, 68.3, 90, "F"), "J3": (85.2, 81.3, 90, "F"),
     # ADV7842 above J10's data end, pixel side down: its 75 R arrays in a row under it, then J10
     "U1": (113.0, 61.0, None, "F"),
     "Y1": (108.0, 49.0, 0, "F"),          # beside XTALP/XTALN (B16, C16), the top-left corner
