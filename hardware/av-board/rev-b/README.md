@@ -11,14 +11,21 @@ jacks' outlines over the board edge as on rev A), fab files made; not ordered.
 
 ## Ordering at JLCPCB
 
-`fab/av-board-b-gerbers.zip` for the board, `fab/av-board-b-bom.csv` and `fab/av-board-b-cpl.csv`
-for assembly. Settings the files do not carry:
+`fab/av-board-b-gerbers.zip` for the board; for assembly, one of:
+
+| BOM + CPL | Assembled by JLCPCB | By hand |
+|---|---|---|
+| `fab/av-board-b-bom.csv`, `fab/av-board-b-cpl.csv` | everything (163 parts) | nothing |
+| `fab/av-board-b-hand-jacks-bom.csv`, `fab/av-board-b-hand-jacks-cpl.csv` | everything but the RCA jacks (158 parts) | J1-J5: CUI RCJ-014 (yellow) for Y, Pb and L, RCJ-012 (red) for Pr and R, LCSC C4991844 / C4991691, or any RCJ-01x |
+
+Settings the files do not carry:
 
 - 4 layers, 1.6 mm, stack-up **JLC04161H-7628** (the TMDS geometry assumes its 7628 prepreg
   under the outer layers); impedance control on: the TMDS pairs are 0.2 mm with 0.15 mm gap on
   the outer layers, about 100 R differential. Confirm in JLCPCB's impedance calculator.
 - Via 0.3 mm drill / 0.5 mm pad, minimum track and space 0.127 mm.
-- Assembly: 158 parts on the top, 14 on the bottom (12 decoupling caps under the ADV7181D's
-  supply vias, and the J9/J10 sockets). Through-hole: the five RCA jacks, the two sockets, HDMI.
+- Assembly: **top side only**: every SMT part is on the top. Underneath are only the J9/J10
+  sockets (through-hole, soldered from the top). Through-hole parts: the two sockets, HDMI's
+  shell, and the RCA jacks unless they are left for hand soldering.
 - Check every part's rotation in JLCPCB's placement preview, mainly U1 (the ADV7181D: pin 1 at
-  the dot, AIN10 at its top left), U2, U3 and the regulators.
+  the dot, AIN10 at its top left), U2, U3, the regulators and the three resistor arrays RN1-RN3.

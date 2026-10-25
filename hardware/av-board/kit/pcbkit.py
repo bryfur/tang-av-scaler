@@ -974,6 +974,8 @@ class Layout:
         if (os.environ.get("SES") or os.environ.get("ROUTER") == "deeppcb") and os.environ.get("FINISH", "1") == "1":
             subprocess.run([sys.executable, me, "--finish"], check=True)
         subprocess.run([sys.executable, me, "--pour"], check=True)
+        subprocess.run([sys.executable, me, "--post"], check=True)
+        subprocess.run([sys.executable, me, "--complete"], check=True)
 
     def finish(self):
         """What another router left unconnected: Freerouting with all of its copper fixed (the fanout,
@@ -1010,10 +1012,133 @@ class Layout:
         pcbnew.ZONE_FILLER(b).Fill(b.Zones())
         pcbnew.SaveBoard(self.OUT, b)
         self.prune(self.OUT)
-        print("routed:", self.OUT)
+        print("poured:", self.OUT)
+
+    def post_route(self):
+        """A revision's own pass on the routed, poured board (route()'s last step)."""
+
+    def mazeroute(self, a, z, partner=None, layers="F.Cu,In2.Cu,B.Cu", width=None):
+        """One connection by kit/mazeroute.py (pad REF.PAD to pad), each step in a process of its own."""
+        env = dict(os.environ, MAZE_LAYERS=layers, MAZE_WIDTH=str(width or self.TRACK))
+        tmp = os.path.splitext(self.OUT)[0]
+        mz = os.path.join(KIT, "mazeroute.py")
+        subprocess.run([sys.executable, mz, "dump", self.OUT, a, z, tmp + "-m.json"] + ([partner] if partner else []),
+                       check=True, env=env, stdout=subprocess.DEVNULL)
+        r = subprocess.run([os.path.expanduser("~/tools/eda-venv/bin/python"), mz, "route", tmp + "-m.json", tmp + "-p.json"],
+                           env=env, capture_output=True, text=True)
+        print((r.stdout + r.stderr).strip().splitlines()[-1])
+        if r.returncode:
+            raise SystemExit("mazeroute: no path %s - %s" % (a, z))
+        subprocess.run([sys.executable, mz, "apply", self.OUT, tmp + "-p.json"], check=True, env=env, stdout=subprocess.DEVNULL)
+        for f in (tmp + "-m.json", tmp + "-p.json"):
+            os.remove(f)
+
+    def finish_unconnected(self, rounds=3):
+        """Whatever DRC still reports unconnected, by mazeroute.py: for each gap, the pads on its
+        two sides (a pad named, or the pads of the copper island a named track belongs to), the
+        nearest pair routed; once more over a wider window if the first try finds no path."""
+        import tempfile
+        for _ in range(rounds):
+            rpt = tempfile.mktemp(suffix=".json")
+            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rpt, self.OUT],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            gaps = json.load(open(rpt))["unconnected_items"]
+            os.unlink(rpt)
+            if not gaps:
+                return 0
+            b = pcbnew.LoadBoard(self.OUT)
+            pairs = []
+            for g in gaps:
+                net = g["items"][0]["description"].split("[")[1].split("]")[0]
+                isl = self.islands(b, net)
+                sides = []
+                for it in g["items"]:
+                    x, y = it["pos"]["x"], it["pos"]["y"]
+                    hit = [k for k, isl_ in enumerate(isl) if any(math.hypot(x - px, y - py) < 0.05 for px, py in isl_["pts"])]
+                    sides.append(isl[hit[0]]["pads"] if hit else [])
+                cands = [(math.hypot(a[1] - c[1], a[2] - c[2]), a[0], c[0]) for a in sides[0] for c in sides[1]]
+                if cands:
+                    pairs.append((net, min(cands)))
+            del b
+            for net, (_, a, z) in pairs:
+                w = 0.25 if net in self.POWER_NETS else self.TRACK
+                for margin in ("4", "8"):
+                    os.environ["MAZE_MARGIN"] = margin
+                    try:
+                        self.mazeroute(a, z, None, "F.Cu,In2.Cu,B.Cu", w)
+                        break
+                    except SystemExit as e:
+                        print(e)
+                os.environ.pop("MAZE_MARGIN", None)
+        rpt = tempfile.mktemp(suffix=".json")
+        subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rpt, self.OUT],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        left = len(json.load(open(rpt))["unconnected_items"])
+        os.unlink(rpt)
+        return left
+
+    @staticmethod
+    def islands(b, net):
+        """A net's copper in connected islands: [{"pads": [(REF.PAD, x, y)], "pts": [(x, y)]}], the
+        points being every pad centre, track end and via; pieces join where a track end or via lies
+        on a pad or on another piece's end (no zones: not for GND)."""
+        items = []
+        for fp in b.GetFootprints():
+            for p in fp.Pads():
+                if p.GetNetname() == net:
+                    r = p.GetBoundingBox()
+                    items.append(("pad", "%s.%s" % (fp.GetReference(), p.GetNumber()),
+                                  [(ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))],
+                                  (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom())),
+                                  p.GetLayerSet()))
+        for t in b.GetTracks():
+            if t.GetNetname() != net:
+                continue
+            if t.GetClass() == "PCB_VIA":
+                items.append(("via", None, [(ToMM(t.GetPosition().x), ToMM(t.GetPosition().y))], None, None))
+            else:
+                items.append(("track", b.GetLayerName(t.GetLayer()), [(ToMM(t.GetStart().x), ToMM(t.GetStart().y)),
+                                                                     (ToMM(t.GetEnd().x), ToMM(t.GetEnd().y))], None, None))
+        parent = list(range(len(items)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+        for i, a in enumerate(items):
+            for j in range(i + 1, len(items)):
+                c = items[j]
+                touch = False
+                for k1, k2 in ((a, c), (c, a)):
+                    if k1[0] == "pad" and k2[0] != "pad":
+                        x0, y0, x1, y1 = k1[3]
+                        touch = touch or any(x0 - 0.01 <= x <= x1 + 0.01 and y0 - 0.01 <= y <= y1 + 0.01 for x, y in k2[2])
+                if a[0] != "pad" and c[0] != "pad":
+                    touch = any(math.hypot(p[0] - q[0], p[1] - q[1]) < 0.01 for p in a[2] for q in c[2]) and \
+                        (a[0] == "via" or c[0] == "via" or a[1] == c[1])
+                if touch:
+                    parent[find(i)] = find(j)
+        groups = {}
+        for i, it in enumerate(items):
+            g = groups.setdefault(find(i), {"pads": [], "pts": []})
+            g["pts"] += it[2]
+            if it[0] == "pad":
+                g["pads"].append((it[1],) + it[2][0])
+        return list(groups.values())
 
     def cli(self, argv):
-        if "--finish" in argv:              # route()'s steps, each in a process of its own
+        if "--post" in argv:
+            self.post_route()
+        elif "--complete" in argv:          # the last connections, then the zones again
+            left = self.finish_unconnected()
+            self.prune(self.OUT)
+            b = pcbnew.LoadBoard(self.OUT)
+            b.BuildConnectivity()
+            pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+            pcbnew.SaveBoard(self.OUT, b)
+            print("routed: %s, %d connections left" % (self.OUT, left))
+        elif "--finish" in argv:            # route()'s steps, each in a process of its own
             self.finish()
         elif "--pour" in argv:
             self.pour()

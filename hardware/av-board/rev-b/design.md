@@ -53,7 +53,9 @@ to PVDD; placed at the pin.
 
 Pixel port [DS Table 11, CP 16-bit SDR 4:2:2]: Y on P19-P12, CbCr on P9-P2; P11/P10/P1/P0 unused
 (high-Z in this mode). Every output (the 16 data lines, LLC, HS, VS, FIELD/DE) has 33 R in series
-at the chip [DS Fig. 9], one 0402 each, in a row along the side the pin is on. The FPGA can take
+at the chip [DS Fig. 9]: where four used pins sit side by side (P19-P16, P15-P12, P6-P4 + LLC) a
+4 x 0402 array (LCSC C25501) at their own 0.5 mm pitch, in line with them; one 0402 on each of the
+eight others. The FPGA can take
 any bit on any pin, so J10's pins follow the order the lines leave the chip, seen from J10 below
 it: up its left side (control, Y7-Y4, DE, VS), along its bottom (INT, HS, Y3-Y0, C7-C5) and up its
 right (C4-C0); LLC keeps the clock-capable CLK pin (20) as on rev A.
@@ -132,39 +134,52 @@ first, the 1.8 V LDOs enabled about 30 ms later) holds.
   the pad on F.Cu.
 - The ADV7181D's escape: every supply pin and every tied-off pin (ALSB, PWRDWN, FB, HS_IN,
   VS_IN) has its own via just past its neighbours' tips, laid before routing, like rev A's BGA
-  fanout; the supply pins' decoupling sits on the bottom by those vias. Without them the router
-  boxed these pins in between their neighbours' escapes (the first routes left 11 and 3
-  connections, all at such pins). The 33 R rows are 7.6 mm from the chip's centre, outside the
-  vias.
-- Part count: 172 (rev A 230).
+  fanout. Without them the router boxed these pins in between their neighbours' escapes (the
+  first routes left 11, 3 and 4 connections, all at such pins). Each via sits in front of its
+  pin, or of a GND or unused neighbour, or past the corner, never in front of a pin with a line
+  of its own, and on the spot that leaves the series resistors most room. The arrays sit just
+  outside the vias (6.7 mm from the chip's centre); each single resistor stays between the lines
+  on either side of its pin (7.6 mm out), and the band between the chip and the resistors is
+  kept for the lines.
+- One-sided assembly: every SMT part is on the top (only the J9/J10 sockets, through-hole, sit
+  underneath), so JLCPCB assembles one side. The ADV7181D's decoupling therefore sits on the
+  top too, by its supply pins' escape vias, outside the lines' band: each pin's 100 nF placed
+  first, 2.7-4.3 mm from its pin (2.2-2.7 mm when they were underneath).
+- Part count: 163 (rev A 230).
 - Cost: the jacks are CUI RCJ-014 (yellow, $1.69) for Y, Pb and L and RCJ-012 (red) for Pr and R,
   where rev A had the black RCJ-011 ($3.82, 40 in stock): one footprint for the series, the
-  silkscreen names each input. The ADV7511's audio series resistors are 49.9 R (JLCPCB basic) for
+  silkscreen names each input. A second BOM/CPL (`hand-jacks`) leaves the five jacks to be soldered
+  by hand. The ADV7511's audio series resistors are 49.9 R (JLCPCB basic) for
   [HWG 7.3]'s 51 R, the crystal's caps 33 pF (above). The regulators' dividers keep TI's E96
   values: the TPS7A7001 wants R2 at 27-33 k [TI 8.1.3], and no basic pair gives 3.3 V or 1.8 V
   from there.
 
 ## Routing (2026-10-25)
 
-1. gen_pcb.py --route: Freerouting 1.9 (100 passes) over the locked fanout (the ADV7181D's
-   exposed-pad and escape vias, the plane vias of every ground and decoupling pad): every net
-   connected, DRC clean, in about 20 minutes.
-2. The TMDS pairs again, as on rev A: Freerouting took two of them through In2, which on this
-   stack has no ground close under it, and left D1 8.7 mm apart. Ripped up and laid with
+`gen_pcb.py --route` does all of it:
+
+1. Freerouting 1.9 (100 passes) over the locked fanout (the ADV7181D's exposed-pad and escape
+   vias, the plane vias of every ground and decoupling pad), about 20 minutes.
+2. The TMDS pairs again (post_route): Freerouting takes some through In2, which on this stack has
+   no ground close under it, and leaves their halves apart. Ripped up and laid with
    mazeroute.py at the class's 0.2 mm on F.Cu/B.Cu only, the N line of each pair along its P
-   line: ADV7511 to the ESD array (F/B, one via pair each), across the array's flow-through pads
-   and on to the connector (F.Cu).
+   line: ADV7511 to the ESD array (F/B), across the array's flow-through pads and on to the
+   connector (F.Cu).
+3. What is still unconnected (Freerouting leaves a few, a different few each run), by
+   mazeroute.py (pcbkit finish_unconnected): here four, 3V3, TX_DVDD, TX_AVDD and R_EXT at the
+   ADV7511.
 
-| Pair | P (U2 to ESD) | N | skew | vias |
+| Pair | P | N | skew | vias P/N |
 |---|---|---|---|---|
-| D2 | 6.8 mm | 9.8 mm | 3.0 mm | 2/2 |
-| D1 | 9.2 mm | 10.4 mm | 1.2 mm | 2/2 |
-| D0 | 11.5 mm | 16.6 mm | 5.1 mm (about 34 ps) | 2/2 |
-| CK | 17.7 mm | 19.9 mm | 2.2 mm | 2/2 |
+| D2 | 13.0 mm | 17.0 mm | 4.0 mm | 2/2 |
+| D1 | 14.3 mm | 17.1 mm | 2.8 mm | 2/2 |
+| D0 | 16.4 mm | 17.3 mm | 0.8 mm | 2/2 |
+| CK | 21.8 mm | 27.7 mm | 6.0 mm (about 40 ps) | 2/4 |
 
-The ESD-to-connector part is 4.3 mm on each line. 5 mm is about 0.05 UI at 1080p60's 1.485 Gb/s,
-inside HDMI's 0.15 UI intra-pair skew budget at the source.
+6 mm is about 0.06 UI at 1080p60's 1.485 Gb/s, inside HDMI's 0.15 UI intra-pair skew budget at
+the source. R_EXT's trace is 5.2 mm, nothing switching beside it.
 
 The first routes left 11, 3 and 4 connections, all at pins of the ADV7181D boxed in between
 their neighbours' escapes; the escape vias and the series rows described above came out of
-those runs, and the last route connected everything.
+those runs. DRC: no errors, no unconnected items (warnings: the jacks' and HDMI's silkscreen
+over the board edge and over copper, as on rev A).

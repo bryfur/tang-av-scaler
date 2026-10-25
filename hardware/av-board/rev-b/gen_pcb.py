@@ -99,8 +99,9 @@ class RevB(pcbkit.Layout):
         self.FIT = {"U1": fit_u1, "U2": fit_adv7511, "U9": fit_esd, "U10": fit_esd}
         self.rr = {}                # decoupling round robin over a rail's pins
         self.series = {[n for n in p.pins.values() if n.startswith("AV_")][0]: p.ref
-                       for p in board.PARTS if p.ref.startswith("R") and p.value == "33"}
+                       for p in board.PARTS if p.ref.startswith("R") and not p.ref.startswith("RN") and p.value == "33"}
         self.escape = {}
+        self.array_nets = {n for p in board.PARTS if p.ref.startswith("RN") for n in p.pins.values() if n.startswith("AV_")}
 
     # --- hooks
 
@@ -136,13 +137,49 @@ class RevB(pcbkit.Layout):
             while run[-1] + 1 < len(pins) and pins[run[-1] + 1][1] in self.series:
                 run.append(run[-1] + 1)
             k = run[-1] + 1
-            lo = pins[run[0] - 1][0] + 0.5 if run[0] > 0 else -1e9
-            hi = pins[run[-1] + 1][0] - 0.5 if run[-1] + 1 < len(pins) else 1e9
+            # (an array's pads reach 0.15 mm past its line and a single's 0.32: 0.8 mm off one)
+            def margin(i):
+                return 0.8 if pins[i][1] in self.array_nets else 0.5
+            lo = pins[run[0] - 1][0] + margin(run[0] - 1) if run[0] > 0 else -1e9
+            hi = pins[run[-1] + 1][0] - margin(run[-1] + 1) if run[-1] + 1 < len(pins) else 1e9
             n = len(run)
             room = min(hi, 1e8) - max(lo, -1e8)
             step = pitch if n < 2 or room >= pitch * (n - 1) else max(tight, room / (n - 1))
             out.append((run, lo, hi, step, room - tight * (n - 1)))
         return out
+
+    def place_arrays(self, fps, u1, occ, off=6.7):
+        """The 33 R arrays: each centred on its four pins, at their 0.5 mm pitch, pads 1-4 towards
+        the chip, pad 1 on its first pin's line: four straight lines. Its inner pads just outside
+        the escape vias beside it (off: the array's centre from the chip's)."""
+        cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
+        pins = {p.GetNetname(): (ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)) for p in u1.Pads()}
+        for p in board.PARTS:
+            if not (p.ref.startswith("RN") and p.value == "33"):
+                continue
+            pts = [pins[p.pins[str(k)]] for k in (1, 2, 3, 4)]
+            mx, my = sum(x for x, _ in pts) / 4, sum(y for _, y in pts) / 4
+            dx, dy = mx - cx, my - cy
+            ox, oy = (0, 1 if dy > 0 else -1) if abs(dy) > abs(dx) else (1 if dx > 0 else -1, 0)
+            fp = fps[p.ref]
+            x, y = (mx, cy + oy * off) if oy else (cx + ox * off, my)
+            fp.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
+            for a in (0, 90, 180, 270):
+                fp.SetOrientationDegrees(a)
+                p1, p8 = pad_pos(fp, "1"), pad_pos(fp, "8")
+                inward = (p1[0] - p8[0]) * ox + (p1[1] - p8[1]) * oy < 0
+                lined = abs((p1[0] - pts[0][0]) * oy) + abs((p1[1] - pts[0][1]) * ox) < 0.05
+                if inward and lined:
+                    break
+            else:
+                raise SystemExit("%s: no rotation lines up with its pins" % p.ref)
+            occ.take("F", courtyard(fp))
+            self.HAND[p.ref] = None
+            # its lines' band, chip to array, kept free
+            a_ = [(x_ if oy else y_) for x_, y_ in pts]
+            lo, hi, near_, far_ = min(a_) - 0.3, max(a_) + 0.3, 4.95, off - 0.7
+            occ.take("F", (lo, cy + near_, hi, cy + far_) if oy > 0 else (lo, cy - far_, hi, cy - near_) if oy else
+                     (cx + near_, lo, cx + far_, hi) if ox > 0 else (cx - far_, lo, cx - near_, hi))
 
     def place_series(self, fps, u1, occ, off=7.6):
         """The 33 R series resistors in a row along each side of the ADV7181D, each across the row,
@@ -151,6 +188,7 @@ class RevB(pcbkit.Layout):
         crystal, control lines, escape vias): its line would cross theirs. A run of resistors with
         such pins at both ends packs tighter; one open towards a corner spills that way."""
         cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
+        self.place_arrays(fps, u1, occ)
         sides = self.side_pins(u1)
         for side, pins in sides.items():
             for run, lo, hi, step, _ in self.runs(pins):
@@ -174,6 +212,12 @@ class RevB(pcbkit.Layout):
                             break
                     occ.take("F", courtyard(fp))
                     self.HAND[ref] = None
+                # the band between the chip and the run, over the run's pins and resistors, is its
+                # lines': kept free of other top-side parts
+                a_, b_ = min(t_pins + ts) - 0.3, max(t_pins + ts) + 0.3
+                near_, far_ = 4.95, off - 1.2
+                occ.take("F", {"B": (a_, cy + near_, b_, cy + far_), "T": (a_, cy - far_, b_, cy - near_),
+                               "L": (cx - far_, a_, cx - near_, b_), "R": (cx + near_, a_, cx + far_, b_)}[side])
 
     def after_hand(self, ref, fp, fps, occ):
         if ref != "U1":
@@ -186,7 +230,7 @@ class RevB(pcbkit.Layout):
         # decoupling sits on the bottom by its via
         cx, cy = ToMM(fp.GetPosition().x), ToMM(fp.GetPosition().y)
         pads = {p.GetNumber(): p for p in fp.Pads() if p.GetNumber()}
-        self.rail_vias, self.escape = [], {}
+        self.rail_vias, self.escape, self.rail_spots = [], {}, {}
         # (the supply pins first, with their wider tracks; then the tied-off pins)
         for p in sorted(fp.Pads(), key=lambda p: (p.GetNetname() not in AV_RAILS, int(p.GetNumber() or 0))):
             if p.GetNetname() not in AV_RAILS | STATIC_NETS:
@@ -237,6 +281,8 @@ class RevB(pcbkit.Layout):
             knee = (x + ux * 0.75, y + uy * 0.75)
             self.rail_vias.append((p, knee, v))
             self.escape[p.GetNumber()] = v
+            if p.GetNetname() in AV_RAILS:
+                self.rail_spots.setdefault(p.GetNetname(), []).append(v)
             for side in ("F", "B"):
                 occ.take(side, box)
         self.place_series(fps, fp, occ)
@@ -259,20 +305,23 @@ class RevB(pcbkit.Layout):
                 p.ref.startswith("FB") and nets_[-1] in AV_RAILS):
             return None
         rail = [n for n in nets_ if n in AV_RAILS][0]
-        pins = [(x, y) for x, y, r in ic_pads.get(rail, []) if r == "U1"]
         if p.ref.startswith("C") and p.value in ("100n", "10n"):
             # per-pin decoupling, round robin over the rail's pins (the 100 nF of a pair first), on
-            # the bottom right under its pin: the top round the chip is the pixel lines' (a via
-            # beside the pin takes it down)
+            # the top by the pin's escape via: all SMT parts on one side, one assembly pass. The
+            # band between the chip and its series rows is the pixel lines' (kept free), so they
+            # sit at the chip's corners, its analog side or past the rows
+            spots = self.rail_spots[rail]
             k = self.rr.get(rail, 0)
             self.rr[rail] = k + 1
-            return pins[(k // 2) % len(pins)], "B"
+            return spots[(k // 2) % len(spots)], "F"
         # the rail's ferrite and its 10 uF: at the chip too, after its pins' decoupling
-        return pins[0], "F"
+        return self.rail_spots[rail][0], "F"
 
     def rank_special(self, p, ic_pads):
         nets_ = set(p.pins.values()) - {"GND"}
-        if nets_ and nets_ <= AV_RAILS and p.ref.startswith("C") and p.value in ("100n", "10n"):
+        if nets_ and nets_ <= AV_RAILS and p.ref.startswith("C") and p.value == "100n":
+            return -1               # (each supply pin's 100 nF before everything, nearest its via)
+        if nets_ and nets_ <= AV_RAILS and p.ref.startswith("C") and p.value == "10n":
             return 1
         if nets_ & AV_RAILS and (p.ref.startswith("FB") or (p.ref.startswith("C") and p.value == "10u")) \
                 and not nets_ & self.BIAS_NETS:
@@ -309,6 +358,37 @@ class RevB(pcbkit.Layout):
                 self.track(b, knee, (vx, vy), w, pcbnew.F_Cu, p.GetNet())
             self.via(b, vx, vy, p.GetNet())
         print("U1 fanout: %d exposed-pad vias, %d pin escape vias" % (len(self.EP_VIAS), len(self.rail_vias)))
+
+    # The TMDS pairs, laid again after routing (Freerouting takes some through In2, which has no
+    # close ground on this stack, and leaves their halves apart): pair, the ADV7511's P and N pins,
+    # the ESD array and its P and N pads in and out (flow-through), the connector's P and N pins
+    TMDS = [("D2", "43", "42", "U9", "1", "10", "2", "9", "1", "3"),
+            ("D1", "40", "39", "U9", "4", "7", "5", "6", "4", "6"),
+            ("D0", "36", "35", "U10", "1", "10", "2", "9", "7", "9"),
+            ("CK", "33", "32", "U10", "4", "7", "5", "6", "10", "12")]
+
+    def post_route(self):
+        """Rip the TMDS copper up and lay each pair with mazeroute.py at the class's 0.2 mm: the P
+        line, then the N line along it (its pair-follow cost); the ADV7511 to the ESD array on the
+        outer layers, across the array and on to the connector on F.Cu."""
+        b = pcbnew.LoadBoard(self.OUT)
+        gone = [t for t in b.GetTracks() if t.GetNetname().startswith("TMDS_") and not t.IsLocked()]
+        for t in gone:
+            b.Remove(t)
+        pcbnew.SaveBoard(self.OUT, b)
+        print("TMDS ripped up: %d tracks and vias" % len(gone))
+        del b
+        for pr, up, un, u, pi, po, ni, no, jp, jn in self.TMDS:
+            partner = "TMDS_%s_P" % pr
+            for a, z, f, layers in (("U2." + up, u + "." + pi, None, "F.Cu,B.Cu"), ("U2." + un, u + "." + ni, partner, "F.Cu,B.Cu"),
+                                    (u + "." + pi, u + "." + po, None, "F.Cu"), (u + "." + ni, u + "." + no, partner, "F.Cu"),
+                                    (u + "." + po, "J6." + jp, None, "F.Cu"), (u + "." + no, "J6." + jn, partner, "F.Cu")):
+                self.mazeroute(a, z, f, layers, 0.2)
+        self.prune(self.OUT)
+        b = pcbnew.LoadBoard(self.OUT)
+        b.BuildConnectivity()
+        pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+        pcbnew.SaveBoard(self.OUT, b)
 
     def fanout_skip(self):
         return {"U1"}

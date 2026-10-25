@@ -24,6 +24,7 @@ LAYERS = os.environ.get("MAZE_LAYERS", "F.Cu,In2.Cu,B.Cu").split(",")
 TRACK = float(os.environ.get("MAZE_WIDTH", "0.127"))
 CLEAR, VIA_D, VIA_DRILL, HOLE = 0.15, 0.5, 0.3, 0.25
 RES = 0.025                                 # grid, mm
+SLACK = 0.01                                # (a straightened run passes up to a few um nearer than its grid cells)
 MARGIN = float(os.environ.get("MAZE_MARGIN", "4.0"))   # round the two pads, mm
 VIA_COST = 60                               # a via costs as much as 1.5 mm of track
 FOLLOW_OFF = 3.0                            # off a pair partner's side, a step costs this much more
@@ -69,6 +70,11 @@ def dump(board, a, z, out, partner=None):
                          "c": [(bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2]})
     for t in b.GetTracks():
         if t.GetNetname() == net:
+            if t.GetClass() == "PCB_VIA":         # (its own net's vias: only their drills count)
+                c = [ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)]
+                if near([c[0], c[1], c[0], c[1]]):
+                    obst.append({"kind": "via", "c": c, "r": 0, "hole": ToMM(t.GetDrillValue()) / 2,
+                                 "layers": [], "samenet": True})
             continue
         if partner and t.GetNetname() == partner and t.GetClass() != "PCB_VIA":
             follow.append({"layer": b.GetLayerName(t.GetLayer()),
@@ -122,8 +128,9 @@ def route(inp, out):
     for o in d["obst"]:
         dd = dist(o)
         for layer in o["layers"]:
-            tblock[L[layer]] |= dd < CLEAR + TRACK / 2
-        vblock |= dd < CLEAR + VIA_D / 2            # (vias go through every layer)
+            tblock[L[layer]] |= dd < CLEAR + SLACK + TRACK / 2
+        if not o.get("samenet"):
+            vblock |= dd < CLEAR + SLACK + VIA_D / 2    # (vias go through every layer)
         if o.get("hole"):                              # drill to drill
             vblock |= np.hypot(gx - o["c"][0], gy - o["c"][1]) < o["hole"] + VIA_DRILL / 2 + HOLE
 

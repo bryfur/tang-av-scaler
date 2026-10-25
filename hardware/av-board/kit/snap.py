@@ -26,10 +26,14 @@ def main():
             opt[k] = a[i + 1]
             del a[i:i + 2]
     src, out = a[0], a[1]
-    e = pcbnew.LoadBoard(src).GetBoardEdgesBoundingBox()
-    X0, Y0, X1, Y1 = (round(pcbnew.ToMM(v), 3) for v in (e.GetLeft(), e.GetTop(), e.GetRight(), e.GetBottom()))
+    # the SVG's page is everything plotted (parts overhanging the edge too); the picture spans the
+    # board's outline unless --clip says otherwise
+    b = pcbnew.LoadBoard(src)
+    e, a_ = b.GetBoardEdgesBoundingBox(), b.ComputeBoundingBox(False)
+    X0, Y0, X1, Y1 = (round(pcbnew.ToMM(v), 3) for v in (a_.GetLeft(), a_.GetTop(), a_.GetRight(), a_.GetBottom()))
+    edge = "%s,%s,%s,%s" % tuple(round(pcbnew.ToMM(v), 3) for v in (e.GetLeft(), e.GetTop(), e.GetRight(), e.GetBottom()))
     layers = opt.get("--layers", "F.Cu,B.Cu,F.Fab,B.Fab,Edge.Cuts")
-    clip = opt.get("--clip", "%s,%s,%s,%s" % (X0, Y0, X1, Y1))
+    clip = opt.get("--clip", edge)
     with tempfile.TemporaryDirectory() as tmp:
         svg = os.path.join(tmp, "b.svg")
         subprocess.run(["kicad-cli", "pcb", "export", "svg", "--layers", layers, "--black-and-white",

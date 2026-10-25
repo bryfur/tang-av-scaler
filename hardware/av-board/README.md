@@ -9,7 +9,7 @@ J10, HDMI out on J9. The Console's outline plus a 15 mm strip for the jacks, ove
 | Revision | Video in | Layers | Status |
 |---|---|---|---|
 | [rev-a](rev-a/) | ADV7842 (256-ball BGA) | 6 | Routed, DRC clean, fab files made (not ordered): about $400 at JLCPCB, the BGA and six layers the cost |
-| [rev-b](rev-b/) | ADV7181D (64-lead LFCSP) | 4 | Routed, DRC clean, fab files made (not ordered): the same board with the cheaper decoder, no BGA, four layers, 172 parts |
+| [rev-b](rev-b/) | ADV7181D (64-lead LFCSP) | 4 | Routed, DRC clean, fab files made (not ordered): the same board with the cheaper decoder, no BGA, four layers, 163 parts, SMT on the top only; a variant BOM leaves the RCA jacks for hand soldering |
 
 Both carry the PCM1808 (audio ADC) and the ADV7511 (HDMI transmitter: the Console's own HDMI
 port is rated 1080p30 / 720p60 only, so 1080p60 needs it). Each revision's README and design.md
@@ -38,13 +38,13 @@ the KiCad files. On a machine with KiCad 9 (here: the build host), from this dir
 | schematic | `python3 kit/gen_sch.py rev-b` | `rev-b/av-board-b.kicad_sch`, project and library tables |
 | ERC | `kicad-cli sch erc rev-b/av-board-b.kicad_sch` | (clean) |
 | netlist check | `kicad-cli sch export netlist -o /tmp/av.net rev-b/av-board-b.kicad_sch && python3 kit/check_netlist.py rev-b /tmp/av.net` | schematic = board.py, pin by pin |
-| PCB | `python3 rev-b/gen_pcb.py --route` | `rev-b/av-board-b.kicad_pcb`: placed, fanned out, routed, ground poured. Router: Freerouting (`FREEROUTING=1.9.0` default, under a private Xvfb; `2.5.0` headless), or DeepPCB (`ROUTER=deeppcb MINUTES=60`, API key in `~/.config/deeppcb/key`), or any session (`SES=file.ses`); a session from elsewhere gets a Freerouting finishing pass with its copper fixed (`FINISH=0`: none); `PCB=path` for a trial board elsewhere; `--silk`: the silkscreen pass again on a routed board |
+| PCB | `python3 rev-b/gen_pcb.py --route` | `rev-b/av-board-b.kicad_pcb`: placed, fanned out, routed, ground poured, the revision's own pass (rev B: the TMDS pairs laid again), then whatever is left unconnected finished by mazeroute.py (`--complete`). Router: Freerouting (`FREEROUTING=1.9.0` default, under a private Xvfb; `2.5.0` headless), or DeepPCB (`ROUTER=deeppcb MINUTES=60`, API key in `~/.config/deeppcb/key`), or any session (`SES=file.ses`); a session from elsewhere gets a Freerouting finishing pass with its copper fixed (`FINISH=0`: none); `PCB=path` for a trial board elsewhere; `--silk`: the silkscreen pass again on a routed board |
 | finishing | `kicad-cli pcb drc ...`, then for each connection left: `python3 kit/mazeroute.py dump BOARD REF.PAD REF.PAD /tmp/m.json [PARTNER_NET] && ~/tools/eda-venv/bin/python kit/mazeroute.py route /tmp/m.json /tmp/p.json && python3 kit/mazeroute.py apply BOARD /tmp/p.json` | a grid router (A*) for what Freerouting leaves: F/In2/B (`MAZE_LAYERS`, `MAZE_WIDTH`), new vias where they fit, our clearances; DRC after |
 | a router's result for some nets | `python3 kit/sesgraft.py BOARD x.ses PREFIX` | those nets' copper from a session added to a routed board |
 | placement check | `python3 kit/placecheck.py rev-b [--min 8]` | the small parts' signal pins far from the rest of their net (a part by the wrong anchor); `gen_pcb.py` itself prints the crossings left in each header bus |
 | picture | `python3 kit/snap.py BOARD out.png` | a PNG of the board (needs PyMuPDF in `~/tools/eda-venv`) |
 | DRC | `kicad-cli pcb drc BOARD` | |
-| fab files | `python3 kit/gen_fab.py rev-b` | `rev-b/fab/`: Gerbers + drill zip, JLCPCB BOM and CPL, all from the board's lower-left corner |
+| fab files | `python3 kit/gen_fab.py rev-b` | `rev-b/fab/`: Gerbers + drill zip, JLCPCB BOM and CPL, all from the board's lower-left corner; a BOM + CPL per assembly variant (`VARIANTS` in board.py: parts left for hand soldering) |
 | parts library | `./kit/fetch_lib.sh` | `lib/`: LCSC symbols/footprints (committed) and 3D models (not) |
 
 `kit/parts.py` is what board.py is written with (parts, LCSC numbers, the Console's headers);

@@ -17,6 +17,9 @@ from parts import PARTS, block, part, two, nxt, R, C, lib_pins, header, common_e
 
 NAME = "av-board-b"          # the KiCad project and fab files
 REV = "B"
+# Assembly variants (kit/gen_fab.py): the parts each leaves to be soldered by hand.
+# hand-jacks: the five RCA jacks (through-hole: about $9 of parts a board, and JLCPCB's through-hole fee)
+VARIANTS = {"hand-jacks": ["J1", "J2", "J3", "J4", "J5"]}
 
 
 # Net on each header pin (design.md "The two headers"); the rest are grounds. The FPGA can take
@@ -176,12 +179,22 @@ C("82n", "ELPF_RC", "AV_PVDD")
 C("10n", "ELPF", "AV_PVDD")
 
 # Pixel port: 16-bit SDR 4:2:2, Y on P19-P12, CbCr on P9-P2 [DS Table 11, CP 16-bit SDR]; 33 R in
-# series next to the chip on every output [DS Fig. 9]
-OUT_PINS = [("P19", "Y7"), ("P18", "Y6"), ("P17", "Y5"), ("P16", "Y4"), ("P15", "Y3"), ("P14", "Y2"),
-            ("P13", "Y1"), ("P12", "Y0"), ("P9", "C7"), ("P8", "C6"), ("P7", "C5"), ("P6", "C4"),
-            ("P5", "C3"), ("P4", "C2"), ("P3", "C1"), ("P2", "C0"), ("LLC", "LLC"), ("HS/CS", "HS"),
-            ("VS", "VS"), ("FIELD/DE", "DE")]
-for pname, sig in OUT_PINS:
+# series next to the chip on every output [DS Fig. 9]. Where four used pins sit side by side
+# (P19-P16, P15-P12, P6-P4 + LLC) a 4 x 0402 array at the pins' own 0.5 mm pitch, in line with
+# them (gen_pcb.py); a single 0402 on each of the others
+OUT_ARRAYS = [[("P19", "Y7"), ("P18", "Y6"), ("P17", "Y5"), ("P16", "Y4")],
+              [("P15", "Y3"), ("P14", "Y2"), ("P13", "Y1"), ("P12", "Y0")],
+              [("P6", "C4"), ("P5", "C3"), ("P4", "C2"), ("LLC", "LLC")]]
+OUT_SINGLE = [("P9", "C7"), ("P8", "C6"), ("P7", "C5"), ("P3", "C1"), ("P2", "C0"), ("HS/CS", "HS"),
+              ("VS", "VS"), ("FIELD/DE", "DE")]
+for group in OUT_ARRAYS:
+    pins = {}
+    for j, (pname, sig) in enumerate(group):
+        u1[pin(pname)] = "AV_" + sig
+        pins[str(1 + j)] = "AV_" + sig
+        pins[str(8 - j)] = "IN_" + sig
+    part(nxt("RN"), "33", "lcsc:4D02WGJ0750TCE", "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL", "C25501", pins)
+for pname, sig in OUT_SINGLE:
     u1[pin(pname)] = "AV_" + sig
     R("33", "AV_" + sig, "IN_" + sig)
 

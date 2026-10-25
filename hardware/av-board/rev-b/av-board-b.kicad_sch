@@ -3,7 +3,7 @@
   (generator "gen_sch.py")
   (generator_version "9.0")
   (uuid "32a576fd-87b7-5d3e-9be1-82bbddc38d72")
-  (paper "User" 1490 347)
+  (paper "User" 1490 328)
   (title_block
     (title "Tang Console AV board rev B")
     (company "tang-av-scaler")
@@ -1360,6 +1360,207 @@
             (effects
               (font (size 1.27 1.27))))
           (number "2"
+            (effects
+              (font (size 1.27 1.27))))))
+      (embedded_fonts no))
+    (symbol "lcsc:4D02WGJ0750TCE"
+      (exclude_from_sim no)
+      (in_bom yes)
+      (on_board yes)
+      (property "Reference" "RN"
+        (at 0 8.89 0)
+        (effects
+          (font (size 1.27 1.27))))
+      (property "Value" "4D02WGJ0750TCE"
+        (at 0 -8.89 0)
+        (effects
+          (font (size 1.27 1.27))))
+      (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
+        (at 0 -11.43 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (property "Datasheet" "https://lcsc.com/product-detail/Resistor-Networks-Arrays_75R-750-5_C39128.html"
+        (at 0 -13.97 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (property "Description" "75Ω (750) ±5%"
+        (at 0 0 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (property "Manufacturer" "UNI-ROYAL(厚声)"
+        (at 0 -16.51 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (property "MPN" "4D02WGJ0750TCE"
+        (at 0 -19.05 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (property "LCSC Part" "C39128"
+        (at 0 -21.59 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (property "ki_keywords" "Resistors"
+        (at 0 0 0)
+        (effects
+          (font (size 1.27 1.27))
+          (hide yes)))
+      (symbol "4D02WGJ0750TCE_0_1"
+        (polyline
+          (pts (xy -3.81 6.35) (xy -3.81 -6.35))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -3.81 6.35) (xy 3.81 6.35))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -3.81 3.81) (xy -2.29 3.81))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -3.81 1.27) (xy -2.29 1.27))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -3.81 -1.27) (xy -2.29 -1.27))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -3.81 -3.81) (xy -2.29 -3.81))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -3.81 -6.35) (xy 3.81 -6.35))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 4.32) (xy 2.29 4.32))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 4.32) (xy -2.29 3.3) (xy 2.29 3.3) (xy 2.29 4.32))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 1.78) (xy 2.29 1.78))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 1.78) (xy -2.29 0.76) (xy 2.29 0.76) (xy 2.29 1.78))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 -0.76) (xy 2.29 -0.76))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 -0.76) (xy -2.29 -1.78) (xy 2.29 -1.78) (xy 2.29 -0.76))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 -3.3) (xy 2.29 -3.3))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy -2.29 -3.3) (xy -2.29 -4.32) (xy 2.29 -4.32) (xy 2.29 -3.3))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy 2.29 3.81) (xy 3.81 3.81))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy 2.29 1.27) (xy 3.81 1.27))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy 2.29 -1.27) (xy 3.81 -1.27))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy 2.29 -3.81) (xy 3.81 -3.81))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (polyline
+          (pts (xy 3.81 6.35) (xy 3.81 -6.35))
+          (stroke (width 0) (type default))
+          (fill (type none)))
+        (pin passive line
+          (at -8.89 3.81 0)
+          (length 5.08)
+          (name "1"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "1"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at -8.89 1.27 0)
+          (length 5.08)
+          (name "2"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "2"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at -8.89 -1.27 0)
+          (length 5.08)
+          (name "3"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "3"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at -8.89 -3.81 0)
+          (length 5.08)
+          (name "4"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "4"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at 8.89 3.81 180)
+          (length 5.08)
+          (name "8"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "8"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at 8.89 1.27 180)
+          (length 5.08)
+          (name "7"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "7"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at 8.89 -1.27 180)
+          (length 5.08)
+          (name "6"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "6"
+            (effects
+              (font (size 1.27 1.27)))))
+        (pin passive line
+          (at 8.89 -3.81 180)
+          (length 5.08)
+          (name "5"
+            (effects
+              (font (size 1.27 1.27))))
+          (number "5"
             (effects
               (font (size 1.27 1.27))))))
       (embedded_fonts no))
@@ -10384,322 +10585,420 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C43") (unit 1)))))
   (wire
-    (pts (xy 767.08 166.37) (xy 767.08 163.83))
+    (pts (xy 765.81 166.37) (xy 763.27 166.37))
     (stroke (width 0) (type default))
-    (uuid "c026e0f1-c815-5012-9841-f97fd897e514"))
+    (uuid "62aa9d60-fdf9-562b-8312-69cabb7efca5"))
   (label "AV_Y7"
-    (at 767.08 163.83 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "805c43ac-3c32-5224-8b7c-704a3d89b70d"))
-  (wire
-    (pts (xy 767.08 173.99) (xy 767.08 176.53))
-    (stroke (width 0) (type default))
-    (uuid "eda6c75a-2696-5290-98e7-eb2d791236b6"))
-  (label "IN_Y7"
-    (at 767.08 176.53 270)
+    (at 763.27 166.37 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "ffd9d18d-cf2d-5daa-88f7-aa354bf844e5"))
-  (symbol
-    (lib_id "Device:R")
-    (at 767.08 170.18 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "bc940099-774b-568d-80b5-db4099c21aac")
-    (property "Reference" "R17"
-      (at 767.08 162.56 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 767.08 177.8 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 767.08 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 767.08 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 767.08 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "995cccd7-1da9-55df-a073-e82694757ebf"))
-    (pin "2" (uuid "818efd6a-6268-56bd-a882-9c90fac92a71"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R17") (unit 1)))))
+    (uuid "ca3b8cfe-c906-5f41-ace8-d36ae01f467a"))
   (wire
-    (pts (xy 792.48 166.37) (xy 792.48 163.83))
+    (pts (xy 765.81 168.91) (xy 763.27 168.91))
     (stroke (width 0) (type default))
-    (uuid "d2b56a6f-1afa-59c9-947b-882b530cdaa8"))
+    (uuid "7fb5b107-857e-5d4c-ba55-12c5a46aa298"))
   (label "AV_Y6"
-    (at 792.48 163.83 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "34b0138c-6b5b-584b-96a9-87d866513cf2"))
-  (wire
-    (pts (xy 792.48 173.99) (xy 792.48 176.53))
-    (stroke (width 0) (type default))
-    (uuid "79d34048-63ae-5162-aa96-63bd3d272140"))
-  (label "IN_Y6"
-    (at 792.48 176.53 270)
+    (at 763.27 168.91 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "c449027a-3401-5271-bdd1-bd3481a4f899"))
-  (symbol
-    (lib_id "Device:R")
-    (at 792.48 170.18 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "2a88aa6c-872a-5bdf-a127-8a41b8afa357")
-    (property "Reference" "R18"
-      (at 792.48 162.56 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 792.48 177.8 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 792.48 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 792.48 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 792.48 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "1c2fe8c3-9d30-50f5-947f-ea7d57e71102"))
-    (pin "2" (uuid "bb2dcaef-11ad-5ca7-a9e9-97e9f3e10619"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R18") (unit 1)))))
+    (uuid "2f70fa95-b7e2-5a15-be9e-0b670f36ace6"))
   (wire
-    (pts (xy 816.61 166.37) (xy 816.61 163.83))
+    (pts (xy 765.81 171.45) (xy 763.27 171.45))
     (stroke (width 0) (type default))
-    (uuid "89045dfd-1a46-55e7-a27d-baec98152025"))
+    (uuid "27456686-aa98-5bc2-a599-b9f3a8c391fe"))
   (label "AV_Y5"
-    (at 816.61 163.83 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "0bb1e354-2edd-5f9e-ba27-2e6c58bfc64d"))
-  (wire
-    (pts (xy 816.61 173.99) (xy 816.61 176.53))
-    (stroke (width 0) (type default))
-    (uuid "134d967c-11c8-59f3-9081-8473c34505ac"))
-  (label "IN_Y5"
-    (at 816.61 176.53 270)
+    (at 763.27 171.45 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "1fcf80c5-9d5e-52f8-8742-5c0e4414bf3a"))
-  (symbol
-    (lib_id "Device:R")
-    (at 816.61 170.18 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "702e4732-7f2a-5bbc-a9ce-e223cefac250")
-    (property "Reference" "R19"
-      (at 816.61 162.56 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 816.61 177.8 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 816.61 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 816.61 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 816.61 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "19285317-676e-5b6f-bfeb-00e0536855f0"))
-    (pin "2" (uuid "7181a308-0466-5d93-8172-3e777e200887"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R19") (unit 1)))))
+    (uuid "bc554ea6-722e-5bd3-a702-3c2a455724a8"))
   (wire
-    (pts (xy 842.01 166.37) (xy 842.01 163.83))
+    (pts (xy 765.81 173.99) (xy 763.27 173.99))
     (stroke (width 0) (type default))
-    (uuid "f6306a1c-2595-5c11-938b-0a11f06c7c7b"))
+    (uuid "9557a84c-38bb-50a8-9502-9143afb43800"))
   (label "AV_Y4"
-    (at 842.01 163.83 90)
+    (at 763.27 173.99 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "c57c68f6-611b-5e77-831c-fd159c82d78a"))
+  (wire
+    (pts (xy 783.59 166.37) (xy 786.13 166.37))
+    (stroke (width 0) (type default))
+    (uuid "895338dc-1682-52ed-9ba9-fa5e805e30c4"))
+  (label "IN_Y7"
+    (at 786.13 166.37 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "8afab478-4c2b-5ed8-9c2c-4ab71bc69e2c"))
+    (uuid "f71b4f73-e26e-5af9-8d75-645bc116b6e5"))
   (wire
-    (pts (xy 842.01 173.99) (xy 842.01 176.53))
+    (pts (xy 783.59 168.91) (xy 786.13 168.91))
     (stroke (width 0) (type default))
-    (uuid "042ff2a5-c16f-5697-994d-8087dd3e8196"))
+    (uuid "51436169-2e00-5efc-bb10-4b7cf7b43064"))
+  (label "IN_Y6"
+    (at 786.13 168.91 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "0f1f9b12-8661-5ccd-b55f-90295265c55c"))
+  (wire
+    (pts (xy 783.59 171.45) (xy 786.13 171.45))
+    (stroke (width 0) (type default))
+    (uuid "89bc71b0-3d05-50f1-a892-f9e72edf06e5"))
+  (label "IN_Y5"
+    (at 786.13 171.45 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "65cfecd9-b7d9-52e7-846e-f7cfc3a5683b"))
+  (wire
+    (pts (xy 783.59 173.99) (xy 786.13 173.99))
+    (stroke (width 0) (type default))
+    (uuid "5ce7f48b-db86-5bfd-b3bc-f5d0a4a9f244"))
   (label "IN_Y4"
-    (at 842.01 176.53 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "4ed60202-9ac4-5ce9-8e5a-7974fadb1cad"))
-  (symbol
-    (lib_id "Device:R")
-    (at 842.01 170.18 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "2d565edb-7ec5-5776-8ee1-0c3218bf7ba4")
-    (property "Reference" "R20"
-      (at 842.01 162.56 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 842.01 177.8 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 842.01 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 842.01 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 842.01 170.18 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "ad36fa10-669a-5d16-9b64-1cb0a6baaaa2"))
-    (pin "2" (uuid "b4ff9eff-5b6f-5ac4-af3a-f45c5c5e7282"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R20") (unit 1)))))
-  (wire
-    (pts (xy 867.41 166.37) (xy 867.41 163.83))
-    (stroke (width 0) (type default))
-    (uuid "f4cf9a92-7969-518f-b0b4-6ccaddb7005f"))
-  (label "AV_Y3"
-    (at 867.41 163.83 90)
+    (at 786.13 173.99 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "e0270d94-d55a-56cc-a448-6ad6c6c7166a"))
-  (wire
-    (pts (xy 867.41 173.99) (xy 867.41 176.53))
-    (stroke (width 0) (type default))
-    (uuid "78ef8fec-9afa-59de-924b-08b151475c52"))
-  (label "IN_Y3"
-    (at 867.41 176.53 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "825aa51e-d933-5bbf-b96e-f5b08965621f"))
+    (uuid "c474d61f-35ca-5fd6-a48c-f42a3ac4c31b"))
   (symbol
-    (lib_id "Device:R")
-    (at 867.41 170.18 0)
+    (lib_id "lcsc:4D02WGJ0750TCE")
+    (at 774.7 170.18 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "0a5f7cf9-08ea-5c37-83bd-318f09792ae2")
-    (property "Reference" "R21"
-      (at 867.41 162.56 0)
+    (uuid "a66120bf-251f-5262-b1c0-06f0cfae6781")
+    (property "Reference" "RN1"
+      (at 774.7 162.56 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "33"
-      (at 867.41 177.8 0)
+      (at 774.7 177.8 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 867.41 170.18 0)
+    (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
+      (at 774.7 170.18 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 867.41 170.18 0)
+      (at 774.7 170.18 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25105"
-      (at 867.41 170.18 0)
+    (property "LCSC" "C25501"
+      (at 774.7 170.18 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "55857d77-515a-5128-a2bf-75e112088074"))
-    (pin "2" (uuid "253a03b6-2258-5313-8ece-7a386c966622"))
+    (pin "1" (uuid "7acf7b55-e3e1-51a3-9986-4392a8975416"))
+    (pin "2" (uuid "8b9c57fe-2d53-5ff7-b500-727c8b92ce3b"))
+    (pin "3" (uuid "34f88b63-b7fa-590f-b641-2cc2cc55596a"))
+    (pin "4" (uuid "f684d332-4794-53ed-b7ae-30b7568ac06d"))
+    (pin "8" (uuid "d5499004-abac-5075-80d0-b705a8080873"))
+    (pin "7" (uuid "bf09a208-019b-5984-bb77-a3143f2ebc32"))
+    (pin "6" (uuid "2d9eb23d-9cf9-56f6-9ee6-dda61a9cea07"))
+    (pin "5" (uuid "97c6573e-eec4-585d-aa9b-5e75ce54024c"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R21") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN1") (unit 1)))))
+  (wire
+    (pts (xy 806.45 166.37) (xy 803.91 166.37))
+    (stroke (width 0) (type default))
+    (uuid "5232dce8-40a3-53b6-89c5-197879e1c424"))
+  (label "AV_Y3"
+    (at 803.91 166.37 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "7bfbef37-a959-5870-8e8f-071fc9f3c357"))
+  (wire
+    (pts (xy 806.45 168.91) (xy 803.91 168.91))
+    (stroke (width 0) (type default))
+    (uuid "1ff93256-0092-576e-b115-6935cd88873e"))
+  (label "AV_Y2"
+    (at 803.91 168.91 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "93d62ed3-288d-5755-8220-0e4813ea029b"))
+  (wire
+    (pts (xy 806.45 171.45) (xy 803.91 171.45))
+    (stroke (width 0) (type default))
+    (uuid "99f73b09-80b4-53b6-99e2-709b226da3b7"))
+  (label "AV_Y1"
+    (at 803.91 171.45 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "14c8b29c-6de2-53c8-bdec-f10ba58d0407"))
+  (wire
+    (pts (xy 806.45 173.99) (xy 803.91 173.99))
+    (stroke (width 0) (type default))
+    (uuid "064285bf-653f-5eb2-92bd-8e282380cb41"))
+  (label "AV_Y0"
+    (at 803.91 173.99 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "3ba52b00-6fa9-5804-9f37-4a271a35e5d6"))
+  (wire
+    (pts (xy 824.23 166.37) (xy 826.77 166.37))
+    (stroke (width 0) (type default))
+    (uuid "ae738f1c-5c3d-5ba7-95a7-f792d92b4bdf"))
+  (label "IN_Y3"
+    (at 826.77 166.37 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "7d8db67a-fc32-5c76-a0a7-8c1ce87abc8f"))
+  (wire
+    (pts (xy 824.23 168.91) (xy 826.77 168.91))
+    (stroke (width 0) (type default))
+    (uuid "7d85408c-15ee-5bbc-9191-e24705d47211"))
+  (label "IN_Y2"
+    (at 826.77 168.91 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "869577d7-33c3-5e7c-becf-03fa2bcdbae6"))
+  (wire
+    (pts (xy 824.23 171.45) (xy 826.77 171.45))
+    (stroke (width 0) (type default))
+    (uuid "bb16451b-1184-5bba-9d0e-d1ff9419ab4b"))
+  (label "IN_Y1"
+    (at 826.77 171.45 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "e0152a6a-d8ca-509d-bb95-3b36af66f7b9"))
+  (wire
+    (pts (xy 824.23 173.99) (xy 826.77 173.99))
+    (stroke (width 0) (type default))
+    (uuid "1db1bf53-f223-56ec-b194-060b2c3cccff"))
+  (label "IN_Y0"
+    (at 826.77 173.99 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "25f96259-13e6-5476-a1ca-7ce844b545ef"))
+  (symbol
+    (lib_id "lcsc:4D02WGJ0750TCE")
+    (at 815.34 170.18 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "262b4db3-d855-59f9-842f-cc2d001a4dd6")
+    (property "Reference" "RN2"
+      (at 815.34 162.56 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "33"
+      (at 815.34 177.8 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
+      (at 815.34 170.18 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 815.34 170.18 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25501"
+      (at 815.34 170.18 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "e8375ffe-6514-52cb-b7f3-3115960b3676"))
+    (pin "2" (uuid "75030ecc-f99f-5652-b48b-1df9466b1b0a"))
+    (pin "3" (uuid "bf0f91d4-de2d-5547-9279-d563f108b80b"))
+    (pin "4" (uuid "5f61f4e9-25e1-536d-9568-4144acb49540"))
+    (pin "8" (uuid "daaceff0-bf57-585b-ba9c-cde241eccca6"))
+    (pin "7" (uuid "8b91da02-9d3a-5356-b66e-5a714f1e1850"))
+    (pin "6" (uuid "4d6087c5-c556-5c6d-83fd-735e0d822a95"))
+    (pin "5" (uuid "f7ea12ba-df7f-5895-bfc5-2ff584e75ff4"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN2") (unit 1)))))
+  (wire
+    (pts (xy 848.36 166.37) (xy 845.82 166.37))
+    (stroke (width 0) (type default))
+    (uuid "1aed9955-8b4b-5bcb-91c5-09c9281d4896"))
+  (label "AV_C4"
+    (at 845.82 166.37 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "bc6fce20-6ef3-5587-96c0-fd61b3c158c7"))
+  (wire
+    (pts (xy 848.36 168.91) (xy 845.82 168.91))
+    (stroke (width 0) (type default))
+    (uuid "be67e88b-c55f-5eb3-b41f-f93befe1d805"))
+  (label "AV_C3"
+    (at 845.82 168.91 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "b8760d49-1677-5682-87fe-6343af7c4ad2"))
+  (wire
+    (pts (xy 848.36 171.45) (xy 845.82 171.45))
+    (stroke (width 0) (type default))
+    (uuid "e918184d-cc4d-57be-a6f8-4fd6121af8fd"))
+  (label "AV_C2"
+    (at 845.82 171.45 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "7802fc56-1f3d-5d39-b6de-683664ba201f"))
+  (wire
+    (pts (xy 848.36 173.99) (xy 845.82 173.99))
+    (stroke (width 0) (type default))
+    (uuid "bb204868-e7bc-582b-9468-93d4faa33435"))
+  (label "AV_LLC"
+    (at 845.82 173.99 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "27d10585-87c1-52a9-8c28-2a40da2a6f59"))
+  (wire
+    (pts (xy 866.14 166.37) (xy 868.68 166.37))
+    (stroke (width 0) (type default))
+    (uuid "bb481c1c-37db-54cf-9ea4-fd19bb95f9f1"))
+  (label "IN_C4"
+    (at 868.68 166.37 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "c8639249-f2ab-5986-9d6b-a8e95307b014"))
+  (wire
+    (pts (xy 866.14 168.91) (xy 868.68 168.91))
+    (stroke (width 0) (type default))
+    (uuid "a157df6c-bdc0-5235-85b6-469c450dcadd"))
+  (label "IN_C3"
+    (at 868.68 168.91 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "4b67848b-bbf3-5093-ac41-bd72a6d61d13"))
+  (wire
+    (pts (xy 866.14 171.45) (xy 868.68 171.45))
+    (stroke (width 0) (type default))
+    (uuid "f1247f83-1aa3-5251-9bc5-290be8d765fb"))
+  (label "IN_C2"
+    (at 868.68 171.45 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "e8092f6e-c66f-5cde-bf39-82f3f2ef7ebc"))
+  (wire
+    (pts (xy 866.14 173.99) (xy 868.68 173.99))
+    (stroke (width 0) (type default))
+    (uuid "001b5da9-9ac5-5787-ac4a-92060dc748ee"))
+  (label "IN_LLC"
+    (at 868.68 173.99 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "5d294075-bf6f-55e0-9abf-f8d9e7ccac35"))
+  (symbol
+    (lib_id "lcsc:4D02WGJ0750TCE")
+    (at 857.25 170.18 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "ded5b958-6066-5ea5-aee4-ba9014dd60c0")
+    (property "Reference" "RN3"
+      (at 857.25 162.56 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "33"
+      (at 857.25 177.8 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "lcsc:RES-ARRAY-SMD_0402-8P-L2.0-W1.0-BL"
+      (at 857.25 170.18 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 857.25 170.18 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25501"
+      (at 857.25 170.18 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "1088b000-4a91-5cd5-a76a-0e5b9d67edb3"))
+    (pin "2" (uuid "e18a1eab-a16c-5dfc-a0a4-12a61799ed74"))
+    (pin "3" (uuid "dfd6670a-d945-5a06-99d2-925654d61c35"))
+    (pin "4" (uuid "71a2d119-efed-50b8-a155-537aa54fbad3"))
+    (pin "8" (uuid "4adb39e3-c2d5-5d49-ada9-7a63e39f2478"))
+    (pin "7" (uuid "652d7b92-baca-5f32-b34b-707dfe56a22f"))
+    (pin "6" (uuid "1a494fea-6440-56ca-bfda-e4546daf8755"))
+    (pin "5" (uuid "76708706-1b7d-5339-90d9-0f5d772aba7f"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "RN3") (unit 1)))))
   (wire
     (pts (xy 662.94 185.42) (xy 662.94 182.88))
     (stroke (width 0) (type default))
-    (uuid "a7fe95c2-3cb3-5c3b-9424-688c94f4fe82"))
-  (label "AV_Y2"
+    (uuid "c026e0f1-c815-5012-9841-f97fd897e514"))
+  (label "AV_C7"
     (at 662.94 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "3bc907ff-b9ea-53fb-810d-39fc87ff72aa"))
+    (uuid "08dfbc65-93c9-5941-b74c-a25b699e343d"))
   (wire
     (pts (xy 662.94 193.04) (xy 662.94 195.58))
     (stroke (width 0) (type default))
-    (uuid "0413b725-139e-5001-9def-0a980ccb0b2a"))
-  (label "IN_Y2"
+    (uuid "eda6c75a-2696-5290-98e7-eb2d791236b6"))
+  (label "IN_C7"
     (at 662.94 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "ff03c9d9-974f-5315-826e-b2064a068215"))
+    (uuid "8de20cad-a0b5-592b-a79e-55710b1ccff0"))
   (symbol
     (lib_id "Device:R")
     (at 662.94 189.23 0)
@@ -10709,8 +11008,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "6146f354-688b-52e6-b5f1-5c44970bd4e8")
-    (property "Reference" "R22"
+    (uuid "bc940099-774b-568d-80b5-db4099c21aac")
+    (property "Reference" "R17"
       (at 662.94 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10733,32 +11032,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "f9e297b0-6e01-5cb3-aaa5-0ba8c1a376b1"))
-    (pin "2" (uuid "7526f1ee-2de1-5df9-b6bc-f18000ab80ca"))
+    (pin "1" (uuid "995cccd7-1da9-55df-a073-e82694757ebf"))
+    (pin "2" (uuid "818efd6a-6268-56bd-a882-9c90fac92a71"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R22") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R17") (unit 1)))))
   (wire
     (pts (xy 687.07 185.42) (xy 687.07 182.88))
     (stroke (width 0) (type default))
-    (uuid "5a36e951-1c86-524c-8c59-ba7588bf8d7d"))
-  (label "AV_Y1"
+    (uuid "d2b56a6f-1afa-59c9-947b-882b530cdaa8"))
+  (label "AV_C6"
     (at 687.07 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "93d48568-01e2-510a-bfa4-4dea961c0540"))
+    (uuid "7460d6f1-5eec-59f0-a63d-38281974f1b5"))
   (wire
     (pts (xy 687.07 193.04) (xy 687.07 195.58))
     (stroke (width 0) (type default))
-    (uuid "1e074303-f276-5e3b-99da-1ec8d4faaf2f"))
-  (label "IN_Y1"
+    (uuid "79d34048-63ae-5162-aa96-63bd3d272140"))
+  (label "IN_C6"
     (at 687.07 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "f1791eea-5c38-5f4b-8532-80856da1c606"))
+    (uuid "d871a281-caa6-5d60-a443-ae23f011b66f"))
   (symbol
     (lib_id "Device:R")
     (at 687.07 189.23 0)
@@ -10768,8 +11067,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "c46e6e4b-4f50-5a41-9c51-702e1802e13c")
-    (property "Reference" "R23"
+    (uuid "2a88aa6c-872a-5bdf-a127-8a41b8afa357")
+    (property "Reference" "R18"
       (at 687.07 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10792,32 +11091,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "4e49f8a6-226d-53bf-8d0b-bd2a6735ac19"))
-    (pin "2" (uuid "56300930-e1a2-5eba-9f15-1ce62ae4ded9"))
+    (pin "1" (uuid "1c2fe8c3-9d30-50f5-947f-ea7d57e71102"))
+    (pin "2" (uuid "bb2dcaef-11ad-5ca7-a9e9-97e9f3e10619"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R23") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R18") (unit 1)))))
   (wire
     (pts (xy 712.47 185.42) (xy 712.47 182.88))
     (stroke (width 0) (type default))
-    (uuid "7837ceb9-b7e5-599b-9681-5521f1d97b99"))
-  (label "AV_Y0"
+    (uuid "89045dfd-1a46-55e7-a27d-baec98152025"))
+  (label "AV_C5"
     (at 712.47 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "655a4dca-57de-54bb-bc33-0c35c9f78154"))
+    (uuid "e63b4879-72b6-5b9d-b562-de3fa3807f62"))
   (wire
     (pts (xy 712.47 193.04) (xy 712.47 195.58))
     (stroke (width 0) (type default))
-    (uuid "a52cdede-84d3-509c-b4bc-2f19dc2fbdaa"))
-  (label "IN_Y0"
+    (uuid "134d967c-11c8-59f3-9081-8473c34505ac"))
+  (label "IN_C5"
     (at 712.47 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "94bc6181-9237-5dfb-b097-6408b7748a4d"))
+    (uuid "2490ab13-05b7-51cc-b080-851e695c7adb"))
   (symbol
     (lib_id "Device:R")
     (at 712.47 189.23 0)
@@ -10827,8 +11126,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "8d88c45e-ef74-5856-b724-9c2c2314fb25")
-    (property "Reference" "R24"
+    (uuid "702e4732-7f2a-5bbc-a9ce-e223cefac250")
+    (property "Reference" "R19"
       (at 712.47 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10851,32 +11150,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "d73447f4-b695-50a2-a549-1552b7221ac1"))
-    (pin "2" (uuid "ac668880-0124-53bd-8ff3-581dcb0b58d9"))
+    (pin "1" (uuid "19285317-676e-5b6f-bfeb-00e0536855f0"))
+    (pin "2" (uuid "7181a308-0466-5d93-8172-3e777e200887"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R24") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R19") (unit 1)))))
   (wire
     (pts (xy 737.87 185.42) (xy 737.87 182.88))
     (stroke (width 0) (type default))
-    (uuid "529e0dd3-b4bf-5a68-8458-dc452218afc5"))
-  (label "AV_C7"
+    (uuid "f6306a1c-2595-5c11-938b-0a11f06c7c7b"))
+  (label "AV_C1"
     (at 737.87 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "8051f1a7-d09d-5ee8-9f8c-3e87676ddccd"))
+    (uuid "e9783b20-e332-514a-8b6b-37ffd6cd9a05"))
   (wire
     (pts (xy 737.87 193.04) (xy 737.87 195.58))
     (stroke (width 0) (type default))
-    (uuid "eb4dfce1-b31b-5dda-9fa5-b54e66ea48ee"))
-  (label "IN_C7"
+    (uuid "042ff2a5-c16f-5697-994d-8087dd3e8196"))
+  (label "IN_C1"
     (at 737.87 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "fb024619-8cba-529d-b032-6afadbfe4ea3"))
+    (uuid "6937025d-ef85-511e-9d14-6d896a0c6996"))
   (symbol
     (lib_id "Device:R")
     (at 737.87 189.23 0)
@@ -10886,8 +11185,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "eeff8288-7a44-5b19-a422-31427df9a8bb")
-    (property "Reference" "R25"
+    (uuid "2d565edb-7ec5-5776-8ee1-0c3218bf7ba4")
+    (property "Reference" "R20"
       (at 737.87 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10910,32 +11209,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "edc18f56-3947-5e31-b78a-287f7fb5d889"))
-    (pin "2" (uuid "015a00f0-5cdb-5ace-a3b3-d48c4c7c9105"))
+    (pin "1" (uuid "ad36fa10-669a-5d16-9b64-1cb0a6baaaa2"))
+    (pin "2" (uuid "b4ff9eff-5b6f-5ac4-af3a-f45c5c5e7282"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R25") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R20") (unit 1)))))
   (wire
     (pts (xy 763.27 185.42) (xy 763.27 182.88))
     (stroke (width 0) (type default))
-    (uuid "1d5ff01d-c32a-5ddf-a0cc-27211f7f13d2"))
-  (label "AV_C6"
+    (uuid "f4cf9a92-7969-518f-b0b4-6ccaddb7005f"))
+  (label "AV_C0"
     (at 763.27 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "1db9c352-3cb0-51d5-8242-46bf167dbef5"))
+    (uuid "59e855f1-282b-56bd-92bd-b6b18ae184bd"))
   (wire
     (pts (xy 763.27 193.04) (xy 763.27 195.58))
     (stroke (width 0) (type default))
-    (uuid "4ec00794-4e0f-5283-a13e-9e05338692b5"))
-  (label "IN_C6"
+    (uuid "78ef8fec-9afa-59de-924b-08b151475c52"))
+  (label "IN_C0"
     (at 763.27 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "9d5980f3-3347-587a-9cc5-3f043deaf9cd"))
+    (uuid "53fb6c62-c343-5bf9-bdc8-c138904b5078"))
   (symbol
     (lib_id "Device:R")
     (at 763.27 189.23 0)
@@ -10945,8 +11244,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "bfa4b5f8-6bc5-550e-af4c-179e0b3069ff")
-    (property "Reference" "R26"
+    (uuid "0a5f7cf9-08ea-5c37-83bd-318f09792ae2")
+    (property "Reference" "R21"
       (at 763.27 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10969,32 +11268,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "83192dac-3cd1-5e18-80dc-f8331fb3a6e2"))
-    (pin "2" (uuid "3f79e017-5f7b-5363-a744-82c0c611131b"))
+    (pin "1" (uuid "55857d77-515a-5128-a2bf-75e112088074"))
+    (pin "2" (uuid "253a03b6-2258-5313-8ece-7a386c966622"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R26") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R21") (unit 1)))))
   (wire
     (pts (xy 788.67 185.42) (xy 788.67 182.88))
     (stroke (width 0) (type default))
-    (uuid "6d4af4f2-6d0b-5e9e-82df-57304cd509dc"))
-  (label "AV_C5"
+    (uuid "a7fe95c2-3cb3-5c3b-9424-688c94f4fe82"))
+  (label "AV_HS"
     (at 788.67 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "d527c9fe-3e6d-5e02-89e8-6e456ab95026"))
+    (uuid "f6082d44-857f-5383-a974-9ad50876ed7d"))
   (wire
     (pts (xy 788.67 193.04) (xy 788.67 195.58))
     (stroke (width 0) (type default))
-    (uuid "97ee39fe-4a85-5c6e-a75e-99d544a82f6f"))
-  (label "IN_C5"
+    (uuid "0413b725-139e-5001-9def-0a980ccb0b2a"))
+  (label "IN_HS"
     (at 788.67 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "c5a143b6-f5f5-5a0a-aae5-4aaed336845a"))
+    (uuid "f5228673-f591-5b11-9e81-1674e1c2bc74"))
   (symbol
     (lib_id "Device:R")
     (at 788.67 189.23 0)
@@ -11004,8 +11303,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "9ef02740-861c-5f52-997b-0b9a221c13e1")
-    (property "Reference" "R27"
+    (uuid "6146f354-688b-52e6-b5f1-5c44970bd4e8")
+    (property "Reference" "R22"
       (at 788.67 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -11028,32 +11327,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "569322ee-d273-57d2-86a3-bf401ff70ebb"))
-    (pin "2" (uuid "7a99f77c-a84e-54ed-b6e8-3362b20a9660"))
+    (pin "1" (uuid "f9e297b0-6e01-5cb3-aaa5-0ba8c1a376b1"))
+    (pin "2" (uuid "7526f1ee-2de1-5df9-b6bc-f18000ab80ca"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R27") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R22") (unit 1)))))
   (wire
     (pts (xy 812.8 185.42) (xy 812.8 182.88))
     (stroke (width 0) (type default))
-    (uuid "ca3d7d49-586c-514a-a025-dbc4e0445921"))
-  (label "AV_C4"
+    (uuid "5a36e951-1c86-524c-8c59-ba7588bf8d7d"))
+  (label "AV_VS"
     (at 812.8 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "f9faeef7-e9b6-5142-b709-61e6cb806044"))
+    (uuid "515d6e7c-7dbf-5ba7-af4a-1f8d9cf3a77c"))
   (wire
     (pts (xy 812.8 193.04) (xy 812.8 195.58))
     (stroke (width 0) (type default))
-    (uuid "25265684-9cb7-5869-a1dc-38e8ca2d9abc"))
-  (label "IN_C4"
+    (uuid "1e074303-f276-5e3b-99da-1ec8d4faaf2f"))
+  (label "IN_VS"
     (at 812.8 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "dced9d3d-2e24-54e5-93db-02538d7568cc"))
+    (uuid "260bb589-ba34-5c4b-b2b3-0de6ab961a1b"))
   (symbol
     (lib_id "Device:R")
     (at 812.8 189.23 0)
@@ -11063,8 +11362,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "da218ba0-70df-549b-ab4c-3c9ece7b2084")
-    (property "Reference" "R28"
+    (uuid "c46e6e4b-4f50-5a41-9c51-702e1802e13c")
+    (property "Reference" "R23"
       (at 812.8 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -11087,32 +11386,32 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "11dac394-d3d9-5205-b9af-48e9a5131fe3"))
-    (pin "2" (uuid "3d397ea5-5b34-58f1-b684-97edce14a179"))
+    (pin "1" (uuid "4e49f8a6-226d-53bf-8d0b-bd2a6735ac19"))
+    (pin "2" (uuid "56300930-e1a2-5eba-9f15-1ce62ae4ded9"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R28") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R23") (unit 1)))))
   (wire
     (pts (xy 838.2 185.42) (xy 838.2 182.88))
     (stroke (width 0) (type default))
-    (uuid "174ae917-f354-58b6-8772-d0c9e9c8b680"))
-  (label "AV_C3"
+    (uuid "7837ceb9-b7e5-599b-9681-5521f1d97b99"))
+  (label "AV_DE"
     (at 838.2 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "77681cb7-cbf8-5895-a1fb-a8e148053a6c"))
+    (uuid "8977a7b2-c963-5019-a777-5fcf43c836d6"))
   (wire
     (pts (xy 838.2 193.04) (xy 838.2 195.58))
     (stroke (width 0) (type default))
-    (uuid "b4066f9c-4492-5a28-a09f-de0892af6b2c"))
-  (label "IN_C3"
+    (uuid "a52cdede-84d3-509c-b4bc-2f19dc2fbdaa"))
+  (label "IN_DE"
     (at 838.2 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "3ae70c58-7758-5b61-a99e-a295b423ae18"))
+    (uuid "67257942-1118-5cb7-889e-654282861878"))
   (symbol
     (lib_id "Device:R")
     (at 838.2 189.23 0)
@@ -11122,8 +11421,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "7c576e00-f33e-569a-885b-a884fe5a3b14")
-    (property "Reference" "R29"
+    (uuid "8d88c45e-ef74-5856-b724-9c2c2314fb25")
+    (property "Reference" "R24"
       (at 838.2 181.61 0)
       (effects
         (font (size 1.27 1.27))))
@@ -11146,91 +11445,91 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "9458209b-b103-542e-bba4-933eeab9631c"))
-    (pin "2" (uuid "c1a242c5-d2ec-595b-a009-481452542afd"))
+    (pin "1" (uuid "d73447f4-b695-50a2-a549-1552b7221ac1"))
+    (pin "2" (uuid "ac668880-0124-53bd-8ff3-581dcb0b58d9"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R29") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R24") (unit 1)))))
   (wire
-    (pts (xy 863.6 185.42) (xy 863.6 182.88))
+    (pts (xy 864.87 185.42) (xy 864.87 182.88))
     (stroke (width 0) (type default))
-    (uuid "08e51f9f-6062-5fc4-b3d5-2fc94e23fe4e"))
-  (label "AV_C2"
-    (at 863.6 182.88 90)
+    (uuid "529e0dd3-b4bf-5a68-8458-dc452218afc5"))
+  (label "3V3"
+    (at 864.87 182.88 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "890dd336-0ff6-561b-8360-8257961b0770"))
+    (uuid "ead6c516-9f28-5d0d-9f58-29adf0163b51"))
   (wire
-    (pts (xy 863.6 193.04) (xy 863.6 195.58))
+    (pts (xy 864.87 193.04) (xy 864.87 195.58))
     (stroke (width 0) (type default))
-    (uuid "77d7ce13-2379-5952-851e-41c05cb1dbae"))
-  (label "IN_C2"
-    (at 863.6 195.58 270)
+    (uuid "eb4dfce1-b31b-5dda-9fa5-b54e66ea48ee"))
+  (label "IN_SCL"
+    (at 864.87 195.58 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "d60c27ea-a1a1-521b-ad7b-027e7cf69769"))
+    (uuid "2157be64-0fa5-5f2c-a2e0-3c1d2fa68efb"))
   (symbol
     (lib_id "Device:R")
-    (at 863.6 189.23 0)
+    (at 864.87 189.23 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "68c3831b-545e-5792-8b41-6b0669ab42ab")
-    (property "Reference" "R30"
-      (at 863.6 181.61 0)
+    (uuid "eeff8288-7a44-5b19-a422-31427df9a8bb")
+    (property "Reference" "R25"
+      (at 864.87 181.61 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 863.6 196.85 0)
+    (property "Value" "4.7k"
+      (at 864.87 196.85 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 863.6 189.23 0)
+      (at 864.87 189.23 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 863.6 189.23 0)
+      (at 864.87 189.23 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25105"
-      (at 863.6 189.23 0)
+    (property "LCSC" "C25900"
+      (at 864.87 189.23 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "d9382c55-6e3e-55dd-8783-bbec75023fc6"))
-    (pin "2" (uuid "7dc1174f-34da-53ac-ac6b-662069333d8e"))
+    (pin "1" (uuid "edc18f56-3947-5e31-b78a-287f7fb5d889"))
+    (pin "2" (uuid "015a00f0-5cdb-5ace-a3b3-d48c4c7c9105"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R30") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R25") (unit 1)))))
   (wire
     (pts (xy 662.94 205.74) (xy 662.94 203.2))
     (stroke (width 0) (type default))
-    (uuid "966e2bf0-65c0-58da-9e4d-f0dc175a1395"))
-  (label "AV_C1"
+    (uuid "1d5ff01d-c32a-5ddf-a0cc-27211f7f13d2"))
+  (label "3V3"
     (at 662.94 203.2 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "abc3b8c0-73b2-5181-b6a6-08156ade5b58"))
+    (uuid "50673bb2-d55c-5c45-84b1-767e1d6af02f"))
   (wire
     (pts (xy 662.94 213.36) (xy 662.94 215.9))
     (stroke (width 0) (type default))
-    (uuid "4c257946-4d58-59ec-8045-1c01f8f3afec"))
-  (label "IN_C1"
+    (uuid "4ec00794-4e0f-5283-a13e-9e05338692b5"))
+  (label "IN_SDA"
     (at 662.94 215.9 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "457b5041-6bd8-56fd-b070-e0798cc31fb8"))
+    (uuid "b0f5e8be-5b7c-5016-8eb4-ade88a8e8064"))
   (symbol
     (lib_id "Device:R")
     (at 662.94 209.55 0)
@@ -11240,12 +11539,12 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "065e5d9a-933b-5e3b-9e3c-de2da56f0550")
-    (property "Reference" "R31"
+    (uuid "bfa4b5f8-6bc5-550e-af4c-179e0b3069ff")
+    (property "Reference" "R26"
       (at 662.94 201.93 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "33"
+    (property "Value" "4.7k"
       (at 662.94 217.17 0)
       (effects
         (font (size 1.27 1.27))))
@@ -11259,8 +11558,308 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25105"
+    (property "LCSC" "C25900"
       (at 662.94 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "83192dac-3cd1-5e18-80dc-f8331fb3a6e2"))
+    (pin "2" (uuid "3f79e017-5f7b-5363-a744-82c0c611131b"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R26") (unit 1)))))
+  (wire
+    (pts (xy 694.69 205.74) (xy 694.69 203.2))
+    (stroke (width 0) (type default))
+    (uuid "6d4af4f2-6d0b-5e9e-82df-57304cd509dc"))
+  (label "IN_RESET_N"
+    (at 694.69 203.2 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "34dbfa2d-76bd-5c02-bf3c-b591855b3c96"))
+  (wire
+    (pts (xy 694.69 213.36) (xy 694.69 215.9))
+    (stroke (width 0) (type default))
+    (uuid "97ee39fe-4a85-5c6e-a75e-99d544a82f6f"))
+  (label "GND"
+    (at 694.69 215.9 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "773148ca-7ed7-5e3e-8d2f-117f5e0b3237"))
+  (symbol
+    (lib_id "Device:R")
+    (at 694.69 209.55 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "9ef02740-861c-5f52-997b-0b9a221c13e1")
+    (property "Reference" "R27"
+      (at 694.69 201.93 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "4.7k"
+      (at 694.69 217.17 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 694.69 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 694.69 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25900"
+      (at 694.69 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Note" "held in reset until the FPGA drives it (5 ms low minimum [DS pin 51])"
+      (at 694.69 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "569322ee-d273-57d2-86a3-bf401ff70ebb"))
+    (pin "2" (uuid "7a99f77c-a84e-54ed-b6e8-3362b20a9660"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R27") (unit 1)))))
+  (wire
+    (pts (xy 728.98 205.74) (xy 728.98 203.2))
+    (stroke (width 0) (type default))
+    (uuid "ca3d7d49-586c-514a-a025-dbc4e0445921"))
+  (label "AV_DVDDIO"
+    (at 728.98 203.2 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "e95d5d32-2dd2-5afe-94ee-263fd78c8ccb"))
+  (wire
+    (pts (xy 728.98 213.36) (xy 728.98 215.9))
+    (stroke (width 0) (type default))
+    (uuid "25265684-9cb7-5869-a1dc-38e8ca2d9abc"))
+  (label "IN_INT"
+    (at 728.98 215.9 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "e2b6e55a-598d-55c0-8b65-08faa4d6a9bd"))
+  (symbol
+    (lib_id "Device:R")
+    (at 728.98 209.55 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "da218ba0-70df-549b-ab4c-3c9ece7b2084")
+    (property "Reference" "R28"
+      (at 728.98 201.93 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "4.7k"
+      (at 728.98 217.17 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 728.98 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 728.98 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25900"
+      (at 728.98 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "11dac394-d3d9-5205-b9af-48e9a5131fe3"))
+    (pin "2" (uuid "3d397ea5-5b34-58f1-b684-97edce14a179"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R28") (unit 1)))))
+  (wire
+    (pts (xy 762 205.74) (xy 762 203.2))
+    (stroke (width 0) (type default))
+    (uuid "174ae917-f354-58b6-8772-d0c9e9c8b680"))
+  (label "AV_DVDDIO"
+    (at 762 203.2 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "f7304699-7565-532f-b93b-cacdaad9a010"))
+  (wire
+    (pts (xy 762 213.36) (xy 762 215.9))
+    (stroke (width 0) (type default))
+    (uuid "b4066f9c-4492-5a28-a09f-de0892af6b2c"))
+  (label "ALSB"
+    (at 762 215.9 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "59c67d6b-4d26-5c76-a420-56c1bd43182a"))
+  (symbol
+    (lib_id "Device:R")
+    (at 762 209.55 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "7c576e00-f33e-569a-885b-a884fe5a3b14")
+    (property "Reference" "R29"
+      (at 762 201.93 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "4.7k"
+      (at 762 217.17 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 762 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 762 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25900"
+      (at 762 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "9458209b-b103-542e-bba4-933eeab9631c"))
+    (pin "2" (uuid "c1a242c5-d2ec-595b-a009-481452542afd"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R29") (unit 1)))))
+  (wire
+    (pts (xy 795.02 205.74) (xy 795.02 203.2))
+    (stroke (width 0) (type default))
+    (uuid "08e51f9f-6062-5fc4-b3d5-2fc94e23fe4e"))
+  (label "AV_DVDDIO"
+    (at 795.02 203.2 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "c42010f4-f1ca-5ac6-a063-7b01eaa3ca99"))
+  (wire
+    (pts (xy 795.02 213.36) (xy 795.02 215.9))
+    (stroke (width 0) (type default))
+    (uuid "77d7ce13-2379-5952-851e-41c05cb1dbae"))
+  (label "PWRDWN"
+    (at 795.02 215.9 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "61bc5ed2-9834-55fa-8f95-6a8b2e7c6561"))
+  (symbol
+    (lib_id "Device:R")
+    (at 795.02 209.55 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "68c3831b-545e-5792-8b41-6b0669ab42ab")
+    (property "Reference" "R30"
+      (at 795.02 201.93 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "4.7k"
+      (at 795.02 217.17 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 795.02 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 795.02 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25900"
+      (at 795.02 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "d9382c55-6e3e-55dd-8783-bbec75023fc6"))
+    (pin "2" (uuid "7dc1174f-34da-53ac-ac6b-662069333d8e"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R30") (unit 1)))))
+  (wire
+    (pts (xy 824.23 205.74) (xy 824.23 203.2))
+    (stroke (width 0) (type default))
+    (uuid "966e2bf0-65c0-58da-9e4d-f0dc175a1395"))
+  (label "PD_FB"
+    (at 824.23 203.2 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "1db19212-2a57-54ed-afa0-746398c2f07d"))
+  (wire
+    (pts (xy 824.23 213.36) (xy 824.23 215.9))
+    (stroke (width 0) (type default))
+    (uuid "4c257946-4d58-59ec-8045-1c01f8f3afec"))
+  (label "GND"
+    (at 824.23 215.9 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "a529aaf8-76ce-58fd-ad27-6a95f562006a"))
+  (symbol
+    (lib_id "Device:R")
+    (at 824.23 209.55 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "065e5d9a-933b-5e3b-9e3c-de2da56f0550")
+    (property "Reference" "R31"
+      (at 824.23 201.93 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "10k"
+      (at 824.23 217.17 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 824.23 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 824.23 209.55 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C25744"
+      (at 824.23 209.55 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -11269,30 +11868,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R31") (unit 1)))))
   (wire
-    (pts (xy 687.07 205.74) (xy 687.07 203.2))
+    (pts (xy 858.52 205.74) (xy 858.52 203.2))
     (stroke (width 0) (type default))
     (uuid "a6f9fb00-ccb8-5cb3-9751-6dc1ac9d836f"))
-  (label "AV_C0"
-    (at 687.07 203.2 90)
+  (label "PD_HS_IN_CS_IN"
+    (at 858.52 203.2 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "9ab69839-ab63-5e9c-a3aa-7c5d2dfe40f7"))
+    (uuid "3d8129f7-f1c4-5a5d-ae3c-dba4ddb82997"))
   (wire
-    (pts (xy 687.07 213.36) (xy 687.07 215.9))
+    (pts (xy 858.52 213.36) (xy 858.52 215.9))
     (stroke (width 0) (type default))
     (uuid "ce35fda3-f852-5041-bb0a-7bb9d6354b1b"))
-  (label "IN_C0"
-    (at 687.07 215.9 270)
+  (label "GND"
+    (at 858.52 215.9 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "ae45357c-1815-585c-a93f-71a6fcb36282"))
+    (uuid "ee250fc7-0561-5372-aeb5-c934fb788675"))
   (symbol
     (lib_id "Device:R")
-    (at 687.07 209.55 0)
+    (at 858.52 209.55 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -11301,25 +11900,25 @@
     (fields_autoplaced yes)
     (uuid "5b67e53d-f19a-58bc-b761-3a824674e733")
     (property "Reference" "R32"
-      (at 687.07 201.93 0)
+      (at 858.52 201.93 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 687.07 217.17 0)
+    (property "Value" "10k"
+      (at 858.52 217.17 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 687.07 209.55 0)
+      (at 858.52 209.55 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 687.07 209.55 0)
+      (at 858.52 209.55 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25105"
-      (at 687.07 209.55 0)
+    (property "LCSC" "C25744"
+      (at 858.52 209.55 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -11328,30 +11927,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R32") (unit 1)))))
   (wire
-    (pts (xy 713.74 205.74) (xy 713.74 203.2))
+    (pts (xy 665.48 224.79) (xy 665.48 222.25))
     (stroke (width 0) (type default))
     (uuid "93de8318-a80f-56a8-9145-dff9b66e0d70"))
-  (label "AV_LLC"
-    (at 713.74 203.2 90)
+  (label "PD_VS_IN"
+    (at 665.48 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "eb4eb9bc-eb90-50f3-b4b6-2decf1eac0a2"))
+    (uuid "a85b1a27-f788-5df5-a937-6761df97cbae"))
   (wire
-    (pts (xy 713.74 213.36) (xy 713.74 215.9))
+    (pts (xy 665.48 232.41) (xy 665.48 234.95))
     (stroke (width 0) (type default))
     (uuid "dc71b7ae-56ff-5f67-b1e5-0bf5c25b48e1"))
-  (label "IN_LLC"
-    (at 713.74 215.9 270)
+  (label "GND"
+    (at 665.48 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "5f3f92db-9b27-50e5-bc2e-28d4cad138d0"))
+    (uuid "0eb3aadd-3dfc-561b-8a81-c6b8b1f00838"))
   (symbol
     (lib_id "Device:R")
-    (at 713.74 209.55 0)
+    (at 665.48 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -11360,25 +11959,25 @@
     (fields_autoplaced yes)
     (uuid "17452ed1-2060-5f01-9f1c-be57f7dae24e")
     (property "Reference" "R33"
-      (at 713.74 201.93 0)
+      (at 665.48 220.98 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 713.74 217.17 0)
+    (property "Value" "10k"
+      (at 665.48 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 713.74 209.55 0)
+      (at 665.48 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 713.74 209.55 0)
+      (at 665.48 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25105"
-      (at 713.74 209.55 0)
+    (property "LCSC" "C25744"
+      (at 665.48 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -11387,743 +11986,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R33") (unit 1)))))
   (wire
-    (pts (xy 740.41 205.74) (xy 740.41 203.2))
-    (stroke (width 0) (type default))
-    (uuid "beed2301-f87c-5369-9892-c56068235e2f"))
-  (label "AV_HS"
-    (at 740.41 203.2 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "43319a27-f087-593c-9b65-9e164563a3ef"))
-  (wire
-    (pts (xy 740.41 213.36) (xy 740.41 215.9))
-    (stroke (width 0) (type default))
-    (uuid "e72193c9-f9eb-5124-ba20-f2bad6ea30a0"))
-  (label "IN_HS"
-    (at 740.41 215.9 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "26b7100f-dd20-59fe-a7cb-33e6f1604bb8"))
-  (symbol
-    (lib_id "Device:R")
-    (at 740.41 209.55 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "73b836f5-c7de-5d6d-bca6-ec08698b4ece")
-    (property "Reference" "R34"
-      (at 740.41 201.93 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 740.41 217.17 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 740.41 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 740.41 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 740.41 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "d35f0d13-ba59-50ea-906c-4fb3304d5965"))
-    (pin "2" (uuid "e9aaf65a-3c5f-54c8-9ce5-4e2d967357bb"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R34") (unit 1)))))
-  (wire
-    (pts (xy 764.54 205.74) (xy 764.54 203.2))
-    (stroke (width 0) (type default))
-    (uuid "7e675e3d-4ab5-5076-80ab-fb43c913ba0b"))
-  (label "AV_VS"
-    (at 764.54 203.2 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "b78a0fda-c11e-5ceb-932c-44352d74be2f"))
-  (wire
-    (pts (xy 764.54 213.36) (xy 764.54 215.9))
-    (stroke (width 0) (type default))
-    (uuid "12c983ba-c0cf-50e5-8857-a4a91e170c49"))
-  (label "IN_VS"
-    (at 764.54 215.9 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "92277ae2-4260-5de3-bf1d-a2c4afb15a2e"))
-  (symbol
-    (lib_id "Device:R")
-    (at 764.54 209.55 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "ad58614b-33f4-5499-add3-8100727ad5af")
-    (property "Reference" "R35"
-      (at 764.54 201.93 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 764.54 217.17 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 764.54 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 764.54 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 764.54 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "338f65b8-dd3c-5091-be08-328317a79cd0"))
-    (pin "2" (uuid "8dd4c1ca-9e70-55ee-9846-fde911cb7415"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R35") (unit 1)))))
-  (wire
-    (pts (xy 789.94 205.74) (xy 789.94 203.2))
-    (stroke (width 0) (type default))
-    (uuid "7bd5198b-8d91-560b-b108-9bb9418b1275"))
-  (label "AV_DE"
-    (at 789.94 203.2 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "d46cba37-17b8-50c2-9d0f-9e6cc5f228fd"))
-  (wire
-    (pts (xy 789.94 213.36) (xy 789.94 215.9))
-    (stroke (width 0) (type default))
-    (uuid "267aa673-0831-5f57-8235-6b2485ccec3e"))
-  (label "IN_DE"
-    (at 789.94 215.9 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "d1d19b43-18ba-5cfc-b367-e09172235c85"))
-  (symbol
-    (lib_id "Device:R")
-    (at 789.94 209.55 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "07cae836-b109-565b-a5cf-222c019a5fad")
-    (property "Reference" "R36"
-      (at 789.94 201.93 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "33"
-      (at 789.94 217.17 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 789.94 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 789.94 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25105"
-      (at 789.94 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "354fd3aa-eba3-5453-bf38-c13f973b6f54"))
-    (pin "2" (uuid "c0c80e8c-0205-5a7c-9f43-f3c0748da472"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R36") (unit 1)))))
-  (wire
-    (pts (xy 816.61 205.74) (xy 816.61 203.2))
-    (stroke (width 0) (type default))
-    (uuid "78563aa3-44fe-5e52-9573-52ef8bb3d86f"))
-  (label "3V3"
-    (at 816.61 203.2 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "4cd3ffd6-b572-514c-8289-08e47c96b6b8"))
-  (wire
-    (pts (xy 816.61 213.36) (xy 816.61 215.9))
-    (stroke (width 0) (type default))
-    (uuid "a7fc25be-865c-5e0e-adc5-b65916923397"))
-  (label "IN_SCL"
-    (at 816.61 215.9 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "263a7c6d-6ef0-5eea-a261-7504aea931b7"))
-  (symbol
-    (lib_id "Device:R")
-    (at 816.61 209.55 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "6a35bc08-7953-53c4-bb7a-3f6f8c94fa2c")
-    (property "Reference" "R37"
-      (at 816.61 201.93 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "4.7k"
-      (at 816.61 217.17 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 816.61 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 816.61 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25900"
-      (at 816.61 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "87d1e320-cd5a-55ec-8fe0-5eac0de39b61"))
-    (pin "2" (uuid "c22d7034-89c8-53d5-a268-aab57068fbe8"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R37") (unit 1)))))
-  (wire
-    (pts (xy 843.28 205.74) (xy 843.28 203.2))
-    (stroke (width 0) (type default))
-    (uuid "48e55d6d-afa2-5bc1-b7fc-c78665f96fd0"))
-  (label "3V3"
-    (at 843.28 203.2 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "62ef830a-717f-5e95-ae68-b94efed75ce1"))
-  (wire
-    (pts (xy 843.28 213.36) (xy 843.28 215.9))
-    (stroke (width 0) (type default))
-    (uuid "efe1392f-f8fd-54db-80ef-0583c7fc9df5"))
-  (label "IN_SDA"
-    (at 843.28 215.9 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "30261713-acc5-571c-8a5e-4d10f0d47bdf"))
-  (symbol
-    (lib_id "Device:R")
-    (at 843.28 209.55 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "facec072-69bb-5679-8ff9-417149a5fabd")
-    (property "Reference" "R38"
-      (at 843.28 201.93 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "4.7k"
-      (at 843.28 217.17 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 843.28 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 843.28 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25900"
-      (at 843.28 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "4f4f0aa7-c221-5ebd-a997-d6f1cde914a5"))
-    (pin "2" (uuid "4e0cfcef-f7d4-5f43-9b32-0949b0781221"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R38") (unit 1)))))
-  (wire
-    (pts (xy 875.03 205.74) (xy 875.03 203.2))
-    (stroke (width 0) (type default))
-    (uuid "57774aa1-c574-5e2a-83f2-6a8bc059cef1"))
-  (label "IN_RESET_N"
-    (at 875.03 203.2 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "3122fe00-329e-55d5-993e-bbe2edf8cbf7"))
-  (wire
-    (pts (xy 875.03 213.36) (xy 875.03 215.9))
-    (stroke (width 0) (type default))
-    (uuid "4b63ab0e-6aeb-5c51-b1a5-981162e3e711"))
-  (label "GND"
-    (at 875.03 215.9 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "da18274f-d80f-54af-9cb5-00dc5bd2a328"))
-  (symbol
-    (lib_id "Device:R")
-    (at 875.03 209.55 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "5636d3f2-db2b-51fb-b666-104560631af3")
-    (property "Reference" "R39"
-      (at 875.03 201.93 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "4.7k"
-      (at 875.03 217.17 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 875.03 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 875.03 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25900"
-      (at 875.03 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Note" "held in reset until the FPGA drives it (5 ms low minimum [DS pin 51])"
-      (at 875.03 209.55 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "c72ccd99-0fec-521d-b2ff-84380e212672"))
-    (pin "2" (uuid "9db8a86a-caa2-57d4-8470-d4c6cbce2330"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R39") (unit 1)))))
-  (wire
-    (pts (xy 666.75 224.79) (xy 666.75 222.25))
-    (stroke (width 0) (type default))
-    (uuid "e69ee2f1-2c86-5143-b462-54e96a2ec2f5"))
-  (label "AV_DVDDIO"
-    (at 666.75 222.25 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "e949f36a-56f8-5fdc-b37c-eebb2c6dc787"))
-  (wire
-    (pts (xy 666.75 232.41) (xy 666.75 234.95))
-    (stroke (width 0) (type default))
-    (uuid "cf8b315a-345e-52af-9c43-b484220801d6"))
-  (label "IN_INT"
-    (at 666.75 234.95 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "9b4e39d4-cd7c-5d10-87e3-33b81705f04b"))
-  (symbol
-    (lib_id "Device:R")
-    (at 666.75 228.6 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "9e44069b-012c-562b-8a60-42b6ee6e532a")
-    (property "Reference" "R40"
-      (at 666.75 220.98 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "4.7k"
-      (at 666.75 236.22 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 666.75 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 666.75 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25900"
-      (at 666.75 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "58ef1c02-9791-5c2d-bff4-0e6f70983f68"))
-    (pin "2" (uuid "55bad92c-bfe4-5abe-9efb-a2694c1649ad"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R40") (unit 1)))))
-  (wire
-    (pts (xy 699.77 224.79) (xy 699.77 222.25))
-    (stroke (width 0) (type default))
-    (uuid "c1658da5-5821-510e-a829-f0f70a852ef4"))
-  (label "AV_DVDDIO"
-    (at 699.77 222.25 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "7b17f637-f601-5420-a4db-14afbc3adace"))
-  (wire
-    (pts (xy 699.77 232.41) (xy 699.77 234.95))
-    (stroke (width 0) (type default))
-    (uuid "512f8234-bb32-516e-9dca-8f4a36fb74ce"))
-  (label "ALSB"
-    (at 699.77 234.95 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "ac16900d-c97a-5cf9-bd9b-b544c73ec663"))
-  (symbol
-    (lib_id "Device:R")
-    (at 699.77 228.6 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "bb16258c-90bb-5727-8d4e-13418d87df16")
-    (property "Reference" "R41"
-      (at 699.77 220.98 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "4.7k"
-      (at 699.77 236.22 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 699.77 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 699.77 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25900"
-      (at 699.77 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "2c5cd973-f37e-5327-90d7-73551e68886c"))
-    (pin "2" (uuid "592f9472-9768-55a1-88b3-247412f513b3"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R41") (unit 1)))))
-  (wire
-    (pts (xy 732.79 224.79) (xy 732.79 222.25))
-    (stroke (width 0) (type default))
-    (uuid "7ba3a712-f4d1-5597-bccc-2e0c35de12e9"))
-  (label "AV_DVDDIO"
-    (at 732.79 222.25 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "4b0e7ef8-0dbf-56ef-a69a-3b5fc2383ad7"))
-  (wire
-    (pts (xy 732.79 232.41) (xy 732.79 234.95))
-    (stroke (width 0) (type default))
-    (uuid "11e1e46b-cef2-5aa3-ae9a-3b8676b7c7ba"))
-  (label "PWRDWN"
-    (at 732.79 234.95 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "1d543f3a-d9ef-5f61-91d3-b88a7028d8b9"))
-  (symbol
-    (lib_id "Device:R")
-    (at 732.79 228.6 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "69eb5b41-93bc-562a-a39f-3ec50208ec41")
-    (property "Reference" "R42"
-      (at 732.79 220.98 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "4.7k"
-      (at 732.79 236.22 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 732.79 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 732.79 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25900"
-      (at 732.79 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "5c3b9fc2-47d1-5942-a8ff-47e154083445"))
-    (pin "2" (uuid "90815430-a3a6-5e1f-a8db-1c22053316cc"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R42") (unit 1)))))
-  (wire
-    (pts (xy 762 224.79) (xy 762 222.25))
-    (stroke (width 0) (type default))
-    (uuid "6231f002-0494-563d-88d8-b46b7d684d78"))
-  (label "PD_FB"
-    (at 762 222.25 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "4287b9bb-7459-5ce3-b27f-272eabcf32e5"))
-  (wire
-    (pts (xy 762 232.41) (xy 762 234.95))
-    (stroke (width 0) (type default))
-    (uuid "ef1b072c-aae4-5bdf-9127-2bc117cc1ebd"))
-  (label "GND"
-    (at 762 234.95 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "6aa5f6ce-ffab-5d90-9bd4-df3623a01c9e"))
-  (symbol
-    (lib_id "Device:R")
-    (at 762 228.6 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "c3820432-8061-59fc-8837-9a3913d123ab")
-    (property "Reference" "R43"
-      (at 762 220.98 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "10k"
-      (at 762 236.22 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 762 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 762 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25744"
-      (at 762 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "570f8129-7b83-50aa-ac69-6668bf3011e7"))
-    (pin "2" (uuid "bdd9c24a-a061-51cc-9236-9f85bb2b0ea2"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R43") (unit 1)))))
-  (wire
-    (pts (xy 796.29 224.79) (xy 796.29 222.25))
-    (stroke (width 0) (type default))
-    (uuid "f63ab69f-d44f-545c-97f3-08ad80c1f50d"))
-  (label "PD_HS_IN_CS_IN"
-    (at 796.29 222.25 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "007ccb46-7d4e-581b-860d-9d94aa8e14ac"))
-  (wire
-    (pts (xy 796.29 232.41) (xy 796.29 234.95))
-    (stroke (width 0) (type default))
-    (uuid "37ba3eff-274c-5e59-b563-70be6b97cb53"))
-  (label "GND"
-    (at 796.29 234.95 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "6ac387e4-4fce-51b9-a7dd-02141dc6cfdc"))
-  (symbol
-    (lib_id "Device:R")
-    (at 796.29 228.6 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "e50c1c0a-4f97-524a-bfde-22dde8c3e51d")
-    (property "Reference" "R44"
-      (at 796.29 220.98 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "10k"
-      (at 796.29 236.22 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 796.29 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 796.29 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25744"
-      (at 796.29 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "e0fb2345-2c25-521b-9a44-28e60b6aeada"))
-    (pin "2" (uuid "bb5f9129-b544-5ba2-8272-8fe6c6e3d59b"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R44") (unit 1)))))
-  (wire
-    (pts (xy 833.12 224.79) (xy 833.12 222.25))
-    (stroke (width 0) (type default))
-    (uuid "19ba6756-0f91-5a7e-a252-482fbf082926"))
-  (label "PD_VS_IN"
-    (at 833.12 222.25 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "f0e11fdb-3fd3-5f72-b596-438e4c92af75"))
-  (wire
-    (pts (xy 833.12 232.41) (xy 833.12 234.95))
-    (stroke (width 0) (type default))
-    (uuid "0e6d7959-c538-56c2-8784-0515fb789391"))
-  (label "GND"
-    (at 833.12 234.95 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "90dc8f08-684a-5ed6-833e-9f4e941366d7"))
-  (symbol
-    (lib_id "Device:R")
-    (at 833.12 228.6 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "e59af62f-5562-50d4-bcb8-d5ea46cad5db")
-    (property "Reference" "R45"
-      (at 833.12 220.98 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "10k"
-      (at 833.12 236.22 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 833.12 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 833.12 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C25744"
-      (at 833.12 228.6 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "e1d703f0-fb40-5783-ae17-5f3e1a94cd0c"))
-    (pin "2" (uuid "99792d42-1720-5fe1-9628-32a36c4b4226"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R45") (unit 1)))))
-  (wire
-    (pts (xy 863.6 224.79) (xy 863.6 222.25))
+    (pts (xy 697.23 224.79) (xy 697.23 222.25))
     (stroke (width 0) (type default))
     (uuid "4ae39604-42a4-53de-9fe0-5ee9caabc996"))
   (label "AV_DVDDIO"
-    (at 863.6 222.25 90)
+    (at 697.23 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "1bcb0cc7-bdf6-5bd9-b9d1-7c162168dc6e"))
+    (uuid "1b689b2c-d109-59fc-8efe-68e9a2dd805e"))
   (wire
-    (pts (xy 863.6 232.41) (xy 863.6 234.95))
+    (pts (xy 697.23 232.41) (xy 697.23 234.95))
     (stroke (width 0) (type default))
     (uuid "1d9b2ba3-4dbc-5531-9550-d28c7ecc1f96"))
   (label "GND"
-    (at 863.6 234.95 270)
+    (at 697.23 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "495f2e26-9d0a-5577-86e7-907f6a493f63"))
+    (uuid "c5d3fddd-05c7-574c-bf35-da266ed17d3d"))
   (symbol
     (lib_id "Device:C")
-    (at 863.6 228.6 0)
+    (at 697.23 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12132,25 +12018,25 @@
     (fields_autoplaced yes)
     (uuid "953af540-7519-523c-bc85-e6d9b2379d91")
     (property "Reference" "C44"
-      (at 863.6 220.98 0)
+      (at 697.23 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100n"
-      (at 863.6 236.22 0)
+      (at 697.23 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 863.6 228.6 0)
+      (at 697.23 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 863.6 228.6 0)
+      (at 697.23 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C1525"
-      (at 863.6 228.6 0)
+      (at 697.23 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12159,30 +12045,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C44") (unit 1)))))
   (wire
-    (pts (xy 665.48 243.84) (xy 665.48 241.3))
+    (pts (xy 727.71 224.79) (xy 727.71 222.25))
     (stroke (width 0) (type default))
     (uuid "3009c750-743d-54a7-81ec-483f024885c3"))
   (label "AV_DVDDIO"
-    (at 665.48 241.3 90)
+    (at 727.71 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "8752afba-392c-5a5a-92e0-8b5a44306211"))
+    (uuid "3a7275ba-764c-5358-aa89-fa8b24d7c980"))
   (wire
-    (pts (xy 665.48 251.46) (xy 665.48 254))
+    (pts (xy 727.71 232.41) (xy 727.71 234.95))
     (stroke (width 0) (type default))
     (uuid "10697866-23d7-5657-9ede-3d2a3872b7e6"))
   (label "GND"
-    (at 665.48 254 270)
+    (at 727.71 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "0b7aea1e-3e11-5ab5-8860-f67abfdd5086"))
+    (uuid "65ec0bb2-e4c6-5dca-a193-b6ee033a1f1e"))
   (symbol
     (lib_id "Device:C")
-    (at 665.48 247.65 0)
+    (at 727.71 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12191,25 +12077,25 @@
     (fields_autoplaced yes)
     (uuid "c924bb91-6723-5ca8-924d-96d5a83085b7")
     (property "Reference" "C45"
-      (at 665.48 240.03 0)
+      (at 727.71 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10n"
-      (at 665.48 255.27 0)
+      (at 727.71 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 665.48 247.65 0)
+      (at 727.71 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 665.48 247.65 0)
+      (at 727.71 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15195"
-      (at 665.48 247.65 0)
+      (at 727.71 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12218,30 +12104,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C45") (unit 1)))))
   (wire
-    (pts (xy 697.23 243.84) (xy 697.23 241.3))
+    (pts (xy 758.19 224.79) (xy 758.19 222.25))
     (stroke (width 0) (type default))
     (uuid "ad438e30-e823-5598-9f63-6fcb16954203"))
   (label "AV_DVDDIO"
-    (at 697.23 241.3 90)
+    (at 758.19 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "fd07fcc0-c5c8-51bd-bad1-786ee1bbfb89"))
+    (uuid "ee0e3ad3-d16c-5249-884b-16fc8a7ce9cc"))
   (wire
-    (pts (xy 697.23 251.46) (xy 697.23 254))
+    (pts (xy 758.19 232.41) (xy 758.19 234.95))
     (stroke (width 0) (type default))
     (uuid "84997d91-0ac4-5075-9a9d-a7dbadde26f0"))
   (label "GND"
-    (at 697.23 254 270)
+    (at 758.19 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "bd2321c2-4971-532d-a9c8-43caf8d56b87"))
+    (uuid "a5da2a1b-cfef-5986-857b-81071fb5d847"))
   (symbol
     (lib_id "Device:C")
-    (at 697.23 247.65 0)
+    (at 758.19 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12250,25 +12136,25 @@
     (fields_autoplaced yes)
     (uuid "0284d82e-b2c7-5a4f-a3d3-3b77b4477000")
     (property "Reference" "C46"
-      (at 697.23 240.03 0)
+      (at 758.19 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100n"
-      (at 697.23 255.27 0)
+      (at 758.19 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 697.23 247.65 0)
+      (at 758.19 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 697.23 247.65 0)
+      (at 758.19 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C1525"
-      (at 697.23 247.65 0)
+      (at 758.19 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12277,30 +12163,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C46") (unit 1)))))
   (wire
-    (pts (xy 727.71 243.84) (xy 727.71 241.3))
+    (pts (xy 789.94 224.79) (xy 789.94 222.25))
     (stroke (width 0) (type default))
     (uuid "825f5953-a78e-5c48-b914-3240b23f1a27"))
   (label "AV_DVDDIO"
-    (at 727.71 241.3 90)
+    (at 789.94 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "4d40b618-a46a-562e-9456-cd4e61d28e52"))
+    (uuid "b16503bc-6631-5b4c-aa69-d024781c1572"))
   (wire
-    (pts (xy 727.71 251.46) (xy 727.71 254))
+    (pts (xy 789.94 232.41) (xy 789.94 234.95))
     (stroke (width 0) (type default))
     (uuid "ad007c4c-6a31-5964-b88f-adf6de703bd3"))
   (label "GND"
-    (at 727.71 254 270)
+    (at 789.94 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "c6eea4a2-1440-566f-b6c7-15d2224bafc8"))
+    (uuid "995274cf-63fa-5d9a-b989-5476094de87a"))
   (symbol
     (lib_id "Device:C")
-    (at 727.71 247.65 0)
+    (at 789.94 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12309,25 +12195,25 @@
     (fields_autoplaced yes)
     (uuid "0737049f-cb18-5617-a4cb-a5e158b01acd")
     (property "Reference" "C47"
-      (at 727.71 240.03 0)
+      (at 789.94 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10n"
-      (at 727.71 255.27 0)
+      (at 789.94 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 727.71 247.65 0)
+      (at 789.94 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 727.71 247.65 0)
+      (at 789.94 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15195"
-      (at 727.71 247.65 0)
+      (at 789.94 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12336,30 +12222,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C47") (unit 1)))))
   (wire
-    (pts (xy 756.92 243.84) (xy 756.92 241.3))
+    (pts (xy 819.15 224.79) (xy 819.15 222.25))
     (stroke (width 0) (type default))
     (uuid "e9febffe-763f-5133-9231-5e0f6a1e031c"))
   (label "AV_DVDD"
-    (at 756.92 241.3 90)
+    (at 819.15 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "aa5d7b02-9d9e-5191-b5fd-a8a6567955f6"))
+    (uuid "0136df2b-f167-5b0a-8258-5663c739fdab"))
   (wire
-    (pts (xy 756.92 251.46) (xy 756.92 254))
+    (pts (xy 819.15 232.41) (xy 819.15 234.95))
     (stroke (width 0) (type default))
     (uuid "3f1cf9c9-409f-5290-93e8-2d91257aecc8"))
   (label "GND"
-    (at 756.92 254 270)
+    (at 819.15 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "99fa4631-1e7f-5480-b203-546459876fa1"))
+    (uuid "ed1525e4-99bb-5841-bc8d-9d3190e98e1f"))
   (symbol
     (lib_id "Device:C")
-    (at 756.92 247.65 0)
+    (at 819.15 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12368,25 +12254,25 @@
     (fields_autoplaced yes)
     (uuid "21105ca0-801c-51eb-af9c-329877179f39")
     (property "Reference" "C48"
-      (at 756.92 240.03 0)
+      (at 819.15 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100n"
-      (at 756.92 255.27 0)
+      (at 819.15 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 756.92 247.65 0)
+      (at 819.15 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 756.92 247.65 0)
+      (at 819.15 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C1525"
-      (at 756.92 247.65 0)
+      (at 819.15 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12395,30 +12281,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C48") (unit 1)))))
   (wire
-    (pts (xy 783.59 243.84) (xy 783.59 241.3))
+    (pts (xy 845.82 224.79) (xy 845.82 222.25))
     (stroke (width 0) (type default))
     (uuid "100ec7f8-d6a1-5e24-8ea7-f931a71bf91d"))
   (label "AV_DVDD"
-    (at 783.59 241.3 90)
+    (at 845.82 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "ba022211-c097-5ed1-9a81-76e817e4ad54"))
+    (uuid "0c0d642d-b1cf-59ce-bc4d-fa73a953c99a"))
   (wire
-    (pts (xy 783.59 251.46) (xy 783.59 254))
+    (pts (xy 845.82 232.41) (xy 845.82 234.95))
     (stroke (width 0) (type default))
     (uuid "9b360bea-76ae-5b31-9e7a-120615a4e1e6"))
   (label "GND"
-    (at 783.59 254 270)
+    (at 845.82 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "dd6a8cd7-0977-516f-b98f-efc4d3777a8c"))
+    (uuid "d2586d28-2082-583a-8fdf-897d2db99458"))
   (symbol
     (lib_id "Device:C")
-    (at 783.59 247.65 0)
+    (at 845.82 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12427,25 +12313,25 @@
     (fields_autoplaced yes)
     (uuid "1cb797ad-2af4-52a0-9695-02eb293ea692")
     (property "Reference" "C49"
-      (at 783.59 240.03 0)
+      (at 845.82 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10n"
-      (at 783.59 255.27 0)
+      (at 845.82 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 783.59 247.65 0)
+      (at 845.82 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 783.59 247.65 0)
+      (at 845.82 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15195"
-      (at 783.59 247.65 0)
+      (at 845.82 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12454,30 +12340,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C49") (unit 1)))))
   (wire
-    (pts (xy 811.53 243.84) (xy 811.53 241.3))
+    (pts (xy 873.76 224.79) (xy 873.76 222.25))
     (stroke (width 0) (type default))
     (uuid "c4b7f89b-d961-59f5-8fae-c9c16f6a6cf3"))
   (label "AV_DVDD"
-    (at 811.53 241.3 90)
+    (at 873.76 222.25 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "01e2c375-c711-5544-82c8-50beee294b11"))
+    (uuid "308c42d7-068b-534f-8413-ec9577bc2564"))
   (wire
-    (pts (xy 811.53 251.46) (xy 811.53 254))
+    (pts (xy 873.76 232.41) (xy 873.76 234.95))
     (stroke (width 0) (type default))
     (uuid "de3d55bf-44b7-5395-920d-8ddc664973ec"))
   (label "GND"
-    (at 811.53 254 270)
+    (at 873.76 234.95 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "46cb1d71-ca5d-5840-b7e8-f82205cc8266"))
+    (uuid "97300988-734a-55e6-a12c-411fa3ef9e87"))
   (symbol
     (lib_id "Device:C")
-    (at 811.53 247.65 0)
+    (at 873.76 228.6 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12486,25 +12372,25 @@
     (fields_autoplaced yes)
     (uuid "6ba62f73-8bf0-5d32-b387-5d760fb5bb45")
     (property "Reference" "C50"
-      (at 811.53 240.03 0)
+      (at 873.76 220.98 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100n"
-      (at 811.53 255.27 0)
+      (at 873.76 236.22 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 811.53 247.65 0)
+      (at 873.76 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 811.53 247.65 0)
+      (at 873.76 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C1525"
-      (at 811.53 247.65 0)
+      (at 873.76 228.6 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12513,30 +12399,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C50") (unit 1)))))
   (wire
-    (pts (xy 838.2 243.84) (xy 838.2 241.3))
+    (pts (xy 662.94 243.84) (xy 662.94 241.3))
     (stroke (width 0) (type default))
     (uuid "cca01b81-4efa-5e60-9e16-1409be98de7e"))
   (label "AV_DVDD"
-    (at 838.2 241.3 90)
+    (at 662.94 241.3 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "3bc868f4-9529-5b75-801a-7163d013fd1a"))
+    (uuid "43012a3d-383e-5a4b-ba81-2354146a468f"))
   (wire
-    (pts (xy 838.2 251.46) (xy 838.2 254))
+    (pts (xy 662.94 251.46) (xy 662.94 254))
     (stroke (width 0) (type default))
     (uuid "f4e1e69c-e60a-541d-9d68-e86c93158e6a"))
   (label "GND"
-    (at 838.2 254 270)
+    (at 662.94 254 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "5351fa6a-8dbf-5be0-aeda-b846336aaf40"))
+    (uuid "a55c26d3-db7b-5a8f-9012-ecc33b7173dc"))
   (symbol
     (lib_id "Device:C")
-    (at 838.2 247.65 0)
+    (at 662.94 247.65 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12545,25 +12431,25 @@
     (fields_autoplaced yes)
     (uuid "3562355d-37d0-5878-8e74-54516ff1b081")
     (property "Reference" "C51"
-      (at 838.2 240.03 0)
+      (at 662.94 240.03 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10n"
-      (at 838.2 255.27 0)
+      (at 662.94 255.27 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 838.2 247.65 0)
+      (at 662.94 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 838.2 247.65 0)
+      (at 662.94 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15195"
-      (at 838.2 247.65 0)
+      (at 662.94 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12572,30 +12458,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C51") (unit 1)))))
   (wire
-    (pts (xy 864.87 243.84) (xy 864.87 241.3))
+    (pts (xy 690.88 243.84) (xy 690.88 241.3))
     (stroke (width 0) (type default))
     (uuid "557628eb-8b4f-55aa-ba74-af8e02b1cd41"))
   (label "AV_PVDD"
-    (at 864.87 241.3 90)
+    (at 690.88 241.3 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "557a2059-e6ce-5a8c-b313-cec2e21568ba"))
+    (uuid "c941b9c3-d03f-5c6f-9493-4bf7ae7c0f12"))
   (wire
-    (pts (xy 864.87 251.46) (xy 864.87 254))
+    (pts (xy 690.88 251.46) (xy 690.88 254))
     (stroke (width 0) (type default))
     (uuid "b1c1e81e-c755-5430-9b00-ac93d76e1929"))
   (label "GND"
-    (at 864.87 254 270)
+    (at 690.88 254 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "38095373-1333-5a9a-a268-3be5122efb27"))
+    (uuid "30408b07-c92e-5e98-aa8c-67e5239bab7a"))
   (symbol
     (lib_id "Device:C")
-    (at 864.87 247.65 0)
+    (at 690.88 247.65 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12604,25 +12490,25 @@
     (fields_autoplaced yes)
     (uuid "8c4f8528-4158-5249-9186-444362b7c866")
     (property "Reference" "C52"
-      (at 864.87 240.03 0)
+      (at 690.88 240.03 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100n"
-      (at 864.87 255.27 0)
+      (at 690.88 255.27 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 864.87 247.65 0)
+      (at 690.88 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 864.87 247.65 0)
+      (at 690.88 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C1525"
-      (at 864.87 247.65 0)
+      (at 690.88 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12631,30 +12517,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C52") (unit 1)))))
   (wire
-    (pts (xy 662.94 264.16) (xy 662.94 261.62))
+    (pts (xy 717.55 243.84) (xy 717.55 241.3))
     (stroke (width 0) (type default))
     (uuid "791208c9-1549-5c58-9ffd-3e5e0e3cbdf6"))
   (label "AV_PVDD"
-    (at 662.94 261.62 90)
+    (at 717.55 241.3 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "1265ff60-cf83-52ca-bf2d-62780f7cda0c"))
+    (uuid "2867e0d6-5a0b-5a49-82ce-b49dbf05dcde"))
   (wire
-    (pts (xy 662.94 271.78) (xy 662.94 274.32))
+    (pts (xy 717.55 251.46) (xy 717.55 254))
     (stroke (width 0) (type default))
     (uuid "9288d006-a25b-54af-9938-c52929ca8292"))
   (label "GND"
-    (at 662.94 274.32 270)
+    (at 717.55 254 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "f19849fc-a03b-52f7-9a53-6b3751daea3d"))
+    (uuid "4bbede0a-f0fb-506f-9ec0-58beada6340f"))
   (symbol
     (lib_id "Device:C")
-    (at 662.94 267.97 0)
+    (at 717.55 247.65 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12663,25 +12549,25 @@
     (fields_autoplaced yes)
     (uuid "a1e418b5-88c5-5e87-9363-dd05f77817fc")
     (property "Reference" "C53"
-      (at 662.94 260.35 0)
+      (at 717.55 240.03 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10n"
-      (at 662.94 275.59 0)
+      (at 717.55 255.27 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 662.94 267.97 0)
+      (at 717.55 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 662.94 267.97 0)
+      (at 717.55 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15195"
-      (at 662.94 267.97 0)
+      (at 717.55 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12690,30 +12576,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C53") (unit 1)))))
   (wire
-    (pts (xy 690.88 264.16) (xy 690.88 261.62))
+    (pts (xy 744.22 243.84) (xy 744.22 241.3))
     (stroke (width 0) (type default))
     (uuid "18fcdf4f-71c5-5082-8d07-888ee20f3352"))
   (label "AV_AVDD"
-    (at 690.88 261.62 90)
+    (at 744.22 241.3 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "95872e8b-dddd-53bc-926b-14fa8bc4b8c7"))
+    (uuid "a9c3576c-6bfd-58f3-9992-c44f0735d235"))
   (wire
-    (pts (xy 690.88 271.78) (xy 690.88 274.32))
+    (pts (xy 744.22 251.46) (xy 744.22 254))
     (stroke (width 0) (type default))
     (uuid "e80a3cef-ad49-5f06-9c02-64c3eebad926"))
   (label "GND"
-    (at 690.88 274.32 270)
+    (at 744.22 254 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "d8c30be3-2738-5603-b8da-2f2cbbf1d995"))
+    (uuid "68eba5ef-7a5d-5260-bce0-b4c374162d2d"))
   (symbol
     (lib_id "Device:C")
-    (at 690.88 267.97 0)
+    (at 744.22 247.65 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12722,25 +12608,25 @@
     (fields_autoplaced yes)
     (uuid "41e8b079-5508-5c88-bb22-88e86aca1f38")
     (property "Reference" "C54"
-      (at 690.88 260.35 0)
+      (at 744.22 240.03 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100n"
-      (at 690.88 275.59 0)
+      (at 744.22 255.27 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 690.88 267.97 0)
+      (at 744.22 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 690.88 267.97 0)
+      (at 744.22 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C1525"
-      (at 690.88 267.97 0)
+      (at 744.22 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -12749,30 +12635,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C54") (unit 1)))))
   (wire
-    (pts (xy 717.55 264.16) (xy 717.55 261.62))
+    (pts (xy 772.16 243.84) (xy 772.16 241.3))
     (stroke (width 0) (type default))
     (uuid "c73305ea-67f4-583e-8de3-dbde33f332f1"))
   (label "AV_AVDD"
-    (at 717.55 261.62 90)
+    (at 772.16 241.3 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "f04a90f4-9c34-578f-8787-eb474ae90810"))
+    (uuid "db3462f5-d659-5382-8076-54405061ae4e"))
   (wire
-    (pts (xy 717.55 271.78) (xy 717.55 274.32))
+    (pts (xy 772.16 251.46) (xy 772.16 254))
     (stroke (width 0) (type default))
     (uuid "366db60f-83cc-5efd-ac87-0d064c9a2013"))
   (label "GND"
-    (at 717.55 274.32 270)
+    (at 772.16 254 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "b320a8c5-9a19-5345-8c52-d42c8e70ce2e"))
+    (uuid "d6106a4f-5cce-5d6e-a64f-c62714d13cd1"))
   (symbol
     (lib_id "Device:C")
-    (at 717.55 267.97 0)
+    (at 772.16 247.65 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -12781,25 +12667,25 @@
     (fields_autoplaced yes)
     (uuid "4603f3f5-6513-5dca-8fea-ddbbeb6fd956")
     (property "Reference" "C55"
-      (at 717.55 260.35 0)
+      (at 772.16 240.03 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10n"
-      (at 717.55 275.59 0)
+      (at 772.16 255.27 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 717.55 267.97 0)
+      (at 772.16 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 717.55 267.97 0)
+      (at 772.16 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15195"
-      (at 717.55 267.97 0)
+      (at 772.16 247.65 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -13013,7 +12899,7 @@
   (wire
     (pts (xy 985.52 35.56) (xy 985.52 33.02))
     (stroke (width 0) (type default))
-    (uuid "4679414b-3740-5d07-a951-fb7378de49bf"))
+    (uuid "beed2301-f87c-5369-9892-c56068235e2f"))
   (label "MD0"
     (at 985.52 33.02 90)
     (fields_autoplaced yes)
@@ -13024,7 +12910,7 @@
   (wire
     (pts (xy 985.52 43.18) (xy 985.52 45.72))
     (stroke (width 0) (type default))
-    (uuid "b26ff51e-4d10-5b3b-9580-fba3f31d8c93"))
+    (uuid "e72193c9-f9eb-5124-ba20-f2bad6ea30a0"))
   (label "GND"
     (at 985.52 45.72 270)
     (fields_autoplaced yes)
@@ -13041,8 +12927,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "006b359c-05d7-538e-9cb1-bac700713c84")
-    (property "Reference" "R46"
+    (uuid "73b836f5-c7de-5d6d-bca6-ec08698b4ece")
+    (property "Reference" "R34"
       (at 985.52 31.75 0)
       (effects
         (font (size 1.27 1.27))))
@@ -13065,14 +12951,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "e05b3391-b3cc-5064-9f30-160eb0b7ea80"))
-    (pin "2" (uuid "0d2cf55b-c9eb-57b5-8b8f-676cf10894d2"))
+    (pin "1" (uuid "d35f0d13-ba59-50ea-906c-4fb3304d5965"))
+    (pin "2" (uuid "e9aaf65a-3c5f-54c8-9ce5-4e2d967357bb"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R46") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R34") (unit 1)))))
   (wire
     (pts (xy 1009.65 35.56) (xy 1009.65 33.02))
     (stroke (width 0) (type default))
-    (uuid "1779ea75-40bc-527b-b0a6-a515723500f2"))
+    (uuid "7e675e3d-4ab5-5076-80ab-fb43c913ba0b"))
   (label "MD1"
     (at 1009.65 33.02 90)
     (fields_autoplaced yes)
@@ -13083,7 +12969,7 @@
   (wire
     (pts (xy 1009.65 43.18) (xy 1009.65 45.72))
     (stroke (width 0) (type default))
-    (uuid "ee10d8a8-8f8f-5c00-90d9-8332389c344a"))
+    (uuid "12c983ba-c0cf-50e5-8857-a4a91e170c49"))
   (label "GND"
     (at 1009.65 45.72 270)
     (fields_autoplaced yes)
@@ -13100,8 +12986,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "b3147a05-ed23-5cd5-9bae-c43a694420f9")
-    (property "Reference" "R47"
+    (uuid "ad58614b-33f4-5499-add3-8100727ad5af")
+    (property "Reference" "R35"
       (at 1009.65 31.75 0)
       (effects
         (font (size 1.27 1.27))))
@@ -13124,14 +13010,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "e5304caf-9fbd-59ae-9c97-5997e39a095e"))
-    (pin "2" (uuid "02716fa8-b245-5ad6-946a-2ccb6e47f7ab"))
+    (pin "1" (uuid "338f65b8-dd3c-5091-be08-328317a79cd0"))
+    (pin "2" (uuid "8dd4c1ca-9e70-55ee-9846-fde911cb7415"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R47") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R35") (unit 1)))))
   (wire
     (pts (xy 1032.51 35.56) (xy 1032.51 33.02))
     (stroke (width 0) (type default))
-    (uuid "3602b205-36d6-5851-8fdf-dd094fafa913"))
+    (uuid "7bd5198b-8d91-560b-b108-9bb9418b1275"))
   (label "FMT"
     (at 1032.51 33.02 90)
     (fields_autoplaced yes)
@@ -13142,7 +13028,7 @@
   (wire
     (pts (xy 1032.51 43.18) (xy 1032.51 45.72))
     (stroke (width 0) (type default))
-    (uuid "e98c611f-2cd4-5fe2-9615-2ae9d6d04712"))
+    (uuid "267aa673-0831-5f57-8235-6b2485ccec3e"))
   (label "GND"
     (at 1032.51 45.72 270)
     (fields_autoplaced yes)
@@ -13159,8 +13045,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "35874c08-df16-5f1d-b9c0-45445f7b5f83")
-    (property "Reference" "R48"
+    (uuid "07cae836-b109-565b-a5cf-222c019a5fad")
+    (property "Reference" "R36"
       (at 1032.51 31.75 0)
       (effects
         (font (size 1.27 1.27))))
@@ -13183,10 +13069,10 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "7efc0c14-8322-56d0-b2f2-a8eca3bf95f8"))
-    (pin "2" (uuid "0a476b4b-18e5-583e-b12a-d880f233b08d"))
+    (pin "1" (uuid "354fd3aa-eba3-5453-bf38-c13f973b6f54"))
+    (pin "2" (uuid "c0c80e8c-0205-5a7c-9f43-f3c0748da472"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R48") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R36") (unit 1)))))
   (wire
     (pts (xy 1054.1 35.56) (xy 1054.1 33.02))
     (stroke (width 0) (type default))
@@ -13667,7 +13553,7 @@
   (wire
     (pts (xy 1043.94 69.85) (xy 1043.94 67.31))
     (stroke (width 0) (type default))
-    (uuid "bd8944b1-bca4-5111-8c59-77ac7d0d8652"))
+    (uuid "78563aa3-44fe-5e52-9573-52ef8bb3d86f"))
   (label "RCA_L"
     (at 1043.94 67.31 90)
     (fields_autoplaced yes)
@@ -13678,7 +13564,7 @@
   (wire
     (pts (xy 1043.94 77.47) (xy 1043.94 80.01))
     (stroke (width 0) (type default))
-    (uuid "29535097-0a73-5e01-ad9b-ae8ecbd8cf25"))
+    (uuid "a7fc25be-865c-5e0e-adc5-b65916923397"))
   (label "AUD_DIV_L"
     (at 1043.94 80.01 270)
     (fields_autoplaced yes)
@@ -13695,8 +13581,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "46ad1f52-8240-54e9-99e5-e0161c6a4690")
-    (property "Reference" "R49"
+    (uuid "6a35bc08-7953-53c4-bb7a-3f6f8c94fa2c")
+    (property "Reference" "R37"
       (at 1043.94 66.04 0)
       (effects
         (font (size 1.27 1.27))))
@@ -13719,14 +13605,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "553da9cd-a726-52c9-9ee6-7fe825ba708d"))
-    (pin "2" (uuid "941ed6be-8af2-57a9-bc38-5e9b821a8f6e"))
+    (pin "1" (uuid "87d1e320-cd5a-55ec-8fe0-5eac0de39b61"))
+    (pin "2" (uuid "c22d7034-89c8-53d5-a268-aab57068fbe8"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R49") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R37") (unit 1)))))
   (wire
     (pts (xy 1076.96 69.85) (xy 1076.96 67.31))
     (stroke (width 0) (type default))
-    (uuid "1d0c9dfa-85bd-58c3-89ce-0266ed16b9b8"))
+    (uuid "48e55d6d-afa2-5bc1-b7fc-c78665f96fd0"))
   (label "AUD_DIV_L"
     (at 1076.96 67.31 90)
     (fields_autoplaced yes)
@@ -13737,7 +13623,7 @@
   (wire
     (pts (xy 1076.96 77.47) (xy 1076.96 80.01))
     (stroke (width 0) (type default))
-    (uuid "8b78a240-d093-59e6-9fe9-dd713866e6d7"))
+    (uuid "efe1392f-f8fd-54db-80ef-0583c7fc9df5"))
   (label "GND"
     (at 1076.96 80.01 270)
     (fields_autoplaced yes)
@@ -13754,8 +13640,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "c6551cb9-8540-592d-8361-c8078f4a2461")
-    (property "Reference" "R50"
+    (uuid "facec072-69bb-5679-8ff9-417149a5fabd")
+    (property "Reference" "R38"
       (at 1076.96 66.04 0)
       (effects
         (font (size 1.27 1.27))))
@@ -13778,10 +13664,10 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "e700afce-b9b6-51b5-8a60-b661089d035f"))
-    (pin "2" (uuid "4ec200fa-06bf-5f83-82b5-4457892e17d0"))
+    (pin "1" (uuid "4f4f0aa7-c221-5ebd-a997-d6f1cde914a5"))
+    (pin "2" (uuid "4e0cfcef-f7d4-5f43-9b32-0949b0781221"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R50") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R38") (unit 1)))))
   (wire
     (pts (xy 935.99 88.9) (xy 935.99 86.36))
     (stroke (width 0) (type default))
@@ -13967,7 +13853,7 @@
   (wire
     (pts (xy 1022.35 88.9) (xy 1022.35 86.36))
     (stroke (width 0) (type default))
-    (uuid "420bb654-a7f7-57a6-a335-83515930b493"))
+    (uuid "57774aa1-c574-5e2a-83f2-6a8bc059cef1"))
   (label "RCA_R"
     (at 1022.35 86.36 90)
     (fields_autoplaced yes)
@@ -13978,7 +13864,7 @@
   (wire
     (pts (xy 1022.35 96.52) (xy 1022.35 99.06))
     (stroke (width 0) (type default))
-    (uuid "ae396d47-a77a-52f1-b699-8af0743fce66"))
+    (uuid "4b63ab0e-6aeb-5c51-b1a5-981162e3e711"))
   (label "AUD_DIV_R"
     (at 1022.35 99.06 270)
     (fields_autoplaced yes)
@@ -13995,8 +13881,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "114908e7-888b-5672-8435-3c157f0d0dd3")
-    (property "Reference" "R51"
+    (uuid "5636d3f2-db2b-51fb-b666-104560631af3")
+    (property "Reference" "R39"
       (at 1022.35 85.09 0)
       (effects
         (font (size 1.27 1.27))))
@@ -14019,14 +13905,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "c75ede9d-3dd0-56ef-9228-cd395fa90f17"))
-    (pin "2" (uuid "7c207fa6-857b-5ba9-a698-2b22763648cf"))
+    (pin "1" (uuid "c72ccd99-0fec-521d-b2ff-84380e212672"))
+    (pin "2" (uuid "9db8a86a-caa2-57d4-8470-d4c6cbce2330"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R51") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R39") (unit 1)))))
   (wire
     (pts (xy 1055.37 88.9) (xy 1055.37 86.36))
     (stroke (width 0) (type default))
-    (uuid "d028f7e3-f37e-5122-9ac1-4f317d7dea8f"))
+    (uuid "e69ee2f1-2c86-5143-b462-54e96a2ec2f5"))
   (label "AUD_DIV_R"
     (at 1055.37 86.36 90)
     (fields_autoplaced yes)
@@ -14037,7 +13923,7 @@
   (wire
     (pts (xy 1055.37 96.52) (xy 1055.37 99.06))
     (stroke (width 0) (type default))
-    (uuid "0466fcac-3951-5bf9-9cf2-1587b4959eb0"))
+    (uuid "cf8b315a-345e-52af-9c43-b484220801d6"))
   (label "GND"
     (at 1055.37 99.06 270)
     (fields_autoplaced yes)
@@ -14054,8 +13940,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "2f346057-dfa4-5a19-9c3d-f0d8f8fa9151")
-    (property "Reference" "R52"
+    (uuid "9e44069b-012c-562b-8a60-42b6ee6e532a")
+    (property "Reference" "R40"
       (at 1055.37 85.09 0)
       (effects
         (font (size 1.27 1.27))))
@@ -14078,10 +13964,10 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "2514f9ba-2c15-5a62-9411-3b075251dd58"))
-    (pin "2" (uuid "a8ce31f1-66f5-562f-ba86-c3be7d5a661e"))
+    (pin "1" (uuid "58ef1c02-9791-5c2d-bff4-0e6f70983f68"))
+    (pin "2" (uuid "55bad92c-bfe4-5abe-9efb-a2694c1649ad"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R52") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R40") (unit 1)))))
   (wire
     (pts (xy 1087.12 88.9) (xy 1087.12 86.36))
     (stroke (width 0) (type default))
@@ -16184,7 +16070,7 @@
   (wire
     (pts (xy 1155.7 177.8) (xy 1155.7 175.26))
     (stroke (width 0) (type default))
-    (uuid "9ae30ee3-cf0b-5483-9303-f99bf032050d"))
+    (uuid "c1658da5-5821-510e-a829-f0f70a852ef4"))
   (label "OUT_MCLK"
     (at 1155.7 175.26 90)
     (fields_autoplaced yes)
@@ -16195,7 +16081,7 @@
   (wire
     (pts (xy 1155.7 185.42) (xy 1155.7 187.96))
     (stroke (width 0) (type default))
-    (uuid "1d62c7f1-494f-5208-9753-8f463d49253c"))
+    (uuid "512f8234-bb32-516e-9dca-8f4a36fb74ce"))
   (label "TX_MCLK"
     (at 1155.7 187.96 270)
     (fields_autoplaced yes)
@@ -16212,8 +16098,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "973a5efa-59e7-57e1-bc98-66385bd715d0")
-    (property "Reference" "R53"
+    (uuid "bb16258c-90bb-5727-8d4e-13418d87df16")
+    (property "Reference" "R41"
       (at 1155.7 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16236,14 +16122,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "85eb7fb0-98bc-5834-9a62-5fb722484f30"))
-    (pin "2" (uuid "6f49fe93-21be-5c03-ae0e-376fa0bba9ec"))
+    (pin "1" (uuid "2c5cd973-f37e-5327-90d7-73551e68886c"))
+    (pin "2" (uuid "592f9472-9768-55a1-88b3-247412f513b3"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R53") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R41") (unit 1)))))
   (wire
     (pts (xy 1186.18 177.8) (xy 1186.18 175.26))
     (stroke (width 0) (type default))
-    (uuid "a52b92ff-f2a6-5759-9c4c-ae4750a26677"))
+    (uuid "7ba3a712-f4d1-5597-bccc-2e0c35de12e9"))
   (label "OUT_SCLK"
     (at 1186.18 175.26 90)
     (fields_autoplaced yes)
@@ -16254,7 +16140,7 @@
   (wire
     (pts (xy 1186.18 185.42) (xy 1186.18 187.96))
     (stroke (width 0) (type default))
-    (uuid "7a962c14-3f20-5e9a-9608-f2d74598bbd7"))
+    (uuid "11e1e46b-cef2-5aa3-ae9a-3b8676b7c7ba"))
   (label "TX_SCLK"
     (at 1186.18 187.96 270)
     (fields_autoplaced yes)
@@ -16271,8 +16157,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "a5cee785-ff3c-5aeb-8e0e-15f6e15b9971")
-    (property "Reference" "R54"
+    (uuid "69eb5b41-93bc-562a-a39f-3ec50208ec41")
+    (property "Reference" "R42"
       (at 1186.18 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16295,14 +16181,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "d8c8f9b5-0b0a-501d-8203-1284eca3763f"))
-    (pin "2" (uuid "e6af7766-42e9-5cb2-bd70-cebb811d5226"))
+    (pin "1" (uuid "5c3b9fc2-47d1-5942-a8ff-47e154083445"))
+    (pin "2" (uuid "90815430-a3a6-5e1f-a8db-1c22053316cc"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R54") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R42") (unit 1)))))
   (wire
     (pts (xy 1219.2 177.8) (xy 1219.2 175.26))
     (stroke (width 0) (type default))
-    (uuid "8c745439-cdc2-5833-83f3-47405b03d8f5"))
+    (uuid "6231f002-0494-563d-88d8-b46b7d684d78"))
   (label "OUT_LRCLK"
     (at 1219.2 175.26 90)
     (fields_autoplaced yes)
@@ -16313,7 +16199,7 @@
   (wire
     (pts (xy 1219.2 185.42) (xy 1219.2 187.96))
     (stroke (width 0) (type default))
-    (uuid "a82acd06-d535-572d-9486-39a5bce7f428"))
+    (uuid "ef1b072c-aae4-5bdf-9127-2bc117cc1ebd"))
   (label "TX_LRCLK"
     (at 1219.2 187.96 270)
     (fields_autoplaced yes)
@@ -16330,8 +16216,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "65f520db-9994-5728-a787-74ad835a2f04")
-    (property "Reference" "R55"
+    (uuid "c3820432-8061-59fc-8837-9a3913d123ab")
+    (property "Reference" "R43"
       (at 1219.2 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16354,14 +16240,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "661d9552-d160-5ccf-8b0f-65af74eab708"))
-    (pin "2" (uuid "5fe5e0ac-388b-5811-84f0-beea88cb3d14"))
+    (pin "1" (uuid "570f8129-7b83-50aa-ac69-6668bf3011e7"))
+    (pin "2" (uuid "bdd9c24a-a061-51cc-9236-9f85bb2b0ea2"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R55") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R43") (unit 1)))))
   (wire
     (pts (xy 1250.95 177.8) (xy 1250.95 175.26))
     (stroke (width 0) (type default))
-    (uuid "92bf9b25-c056-57bb-af08-4f589034dcd1"))
+    (uuid "f63ab69f-d44f-545c-97f3-08ad80c1f50d"))
   (label "OUT_I2S0"
     (at 1250.95 175.26 90)
     (fields_autoplaced yes)
@@ -16372,7 +16258,7 @@
   (wire
     (pts (xy 1250.95 185.42) (xy 1250.95 187.96))
     (stroke (width 0) (type default))
-    (uuid "16814aa7-5c54-5988-a3c9-da65da7a51dc"))
+    (uuid "37ba3eff-274c-5e59-b563-70be6b97cb53"))
   (label "TX_I2S0"
     (at 1250.95 187.96 270)
     (fields_autoplaced yes)
@@ -16389,8 +16275,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "b9b2d38d-f3c0-5421-bb73-ae9a55c365ac")
-    (property "Reference" "R56"
+    (uuid "e50c1c0a-4f97-524a-bfde-22dde8c3e51d")
+    (property "Reference" "R44"
       (at 1250.95 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16413,14 +16299,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "9ccdf3d3-67a0-5026-8fa4-9ae03bd2a973"))
-    (pin "2" (uuid "9b98c511-e49c-59de-9f83-21c6ff0a3ad7"))
+    (pin "1" (uuid "e0fb2345-2c25-521b-9a44-28e60b6aeada"))
+    (pin "2" (uuid "bb5f9129-b544-5ba2-8272-8fe6c6e3d59b"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R56") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R44") (unit 1)))))
   (wire
     (pts (xy 1278.89 177.8) (xy 1278.89 175.26))
     (stroke (width 0) (type default))
-    (uuid "7dd9d64a-af7e-588e-b04b-9bbeb2633cd3"))
+    (uuid "19ba6756-0f91-5a7e-a252-482fbf082926"))
   (label "R_EXT"
     (at 1278.89 175.26 90)
     (fields_autoplaced yes)
@@ -16431,7 +16317,7 @@
   (wire
     (pts (xy 1278.89 185.42) (xy 1278.89 187.96))
     (stroke (width 0) (type default))
-    (uuid "dcc954c9-25f0-5354-8935-ee7c13193951"))
+    (uuid "0e6d7959-c538-56c2-8784-0515fb789391"))
   (label "GND"
     (at 1278.89 187.96 270)
     (fields_autoplaced yes)
@@ -16448,8 +16334,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "51dff494-3b13-51dd-9441-af386cdfa063")
-    (property "Reference" "R57"
+    (uuid "e59af62f-5562-50d4-bcb8-d5ea46cad5db")
+    (property "Reference" "R45"
       (at 1278.89 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16472,14 +16358,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "6dc4652d-a4ba-5901-a3ff-d92527333162"))
-    (pin "2" (uuid "b002a535-f0e4-5c9e-b055-a7db7975b52b"))
+    (pin "1" (uuid "e1d703f0-fb40-5783-ae17-5f3e1a94cd0c"))
+    (pin "2" (uuid "99792d42-1720-5fe1-9628-32a36c4b4226"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R57") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R45") (unit 1)))))
   (wire
     (pts (xy 1305.56 177.8) (xy 1305.56 175.26))
     (stroke (width 0) (type default))
-    (uuid "ca6a1bb5-9238-5250-a2ce-88e47f455c78"))
+    (uuid "4679414b-3740-5d07-a951-fb7378de49bf"))
   (label "3V3"
     (at 1305.56 175.26 90)
     (fields_autoplaced yes)
@@ -16490,7 +16376,7 @@
   (wire
     (pts (xy 1305.56 185.42) (xy 1305.56 187.96))
     (stroke (width 0) (type default))
-    (uuid "3c1660b3-4f20-5894-bdfa-f2ffb0e5958e"))
+    (uuid "b26ff51e-4d10-5b3b-9580-fba3f31d8c93"))
   (label "OUT_SCL"
     (at 1305.56 187.96 270)
     (fields_autoplaced yes)
@@ -16507,8 +16393,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "bf09d1be-05c6-5a71-a5a2-eaa1051c7fc0")
-    (property "Reference" "R58"
+    (uuid "006b359c-05d7-538e-9cb1-bac700713c84")
+    (property "Reference" "R46"
       (at 1305.56 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16531,14 +16417,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "60fed728-ab85-5c2a-91d7-655eb8bd633b"))
-    (pin "2" (uuid "43e0dd64-a1f2-52b7-80e8-906db39ef32c"))
+    (pin "1" (uuid "e05b3391-b3cc-5064-9f30-160eb0b7ea80"))
+    (pin "2" (uuid "0d2cf55b-c9eb-57b5-8b8f-676cf10894d2"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R58") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R46") (unit 1)))))
   (wire
     (pts (xy 1334.77 177.8) (xy 1334.77 175.26))
     (stroke (width 0) (type default))
-    (uuid "5495d983-788b-5bd8-b56b-dab623336307"))
+    (uuid "1779ea75-40bc-527b-b0a6-a515723500f2"))
   (label "3V3"
     (at 1334.77 175.26 90)
     (fields_autoplaced yes)
@@ -16549,7 +16435,7 @@
   (wire
     (pts (xy 1334.77 185.42) (xy 1334.77 187.96))
     (stroke (width 0) (type default))
-    (uuid "4bace1b0-034b-5fb9-a8be-e934fb9d2927"))
+    (uuid "ee10d8a8-8f8f-5c00-90d9-8332389c344a"))
   (label "OUT_SDA"
     (at 1334.77 187.96 270)
     (fields_autoplaced yes)
@@ -16566,8 +16452,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "d44db7f7-6ea0-5ba4-9836-302b877bad82")
-    (property "Reference" "R59"
+    (uuid "b3147a05-ed23-5cd5-9bae-c43a694420f9")
+    (property "Reference" "R47"
       (at 1334.77 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16590,14 +16476,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "6d9393a9-9bc4-57e5-b270-e863431dbb4b"))
-    (pin "2" (uuid "26191a71-a312-543d-9884-607af9159bb2"))
+    (pin "1" (uuid "e5304caf-9fbd-59ae-9c97-5997e39a095e"))
+    (pin "2" (uuid "02716fa8-b245-5ad6-946a-2ccb6e47f7ab"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R59") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R47") (unit 1)))))
   (wire
     (pts (xy 1363.98 177.8) (xy 1363.98 175.26))
     (stroke (width 0) (type default))
-    (uuid "22762623-a056-515b-9c1a-c31a821c50dc"))
+    (uuid "3602b205-36d6-5851-8fdf-dd094fafa913"))
   (label "3V3"
     (at 1363.98 175.26 90)
     (fields_autoplaced yes)
@@ -16608,7 +16494,7 @@
   (wire
     (pts (xy 1363.98 185.42) (xy 1363.98 187.96))
     (stroke (width 0) (type default))
-    (uuid "abb4c34d-56a2-590c-8a5f-a31c61589280"))
+    (uuid "e98c611f-2cd4-5fe2-9615-2ae9d6d04712"))
   (label "OUT_INT"
     (at 1363.98 187.96 270)
     (fields_autoplaced yes)
@@ -16625,8 +16511,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "8cd80ae7-d5f4-50a7-ac12-2ece495c5794")
-    (property "Reference" "R60"
+    (uuid "35874c08-df16-5f1d-b9c0-45445f7b5f83")
+    (property "Reference" "R48"
       (at 1363.98 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16649,14 +16535,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "9552b71a-24c1-5eae-a056-7fd401102ccb"))
-    (pin "2" (uuid "98b06744-d902-50ae-9055-c0b81e6ad4c3"))
+    (pin "1" (uuid "7efc0c14-8322-56d0-b2f2-a8eca3bf95f8"))
+    (pin "2" (uuid "0a476b4b-18e5-583e-b12a-d880f233b08d"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R60") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R48") (unit 1)))))
   (wire
     (pts (xy 1391.92 177.8) (xy 1391.92 175.26))
     (stroke (width 0) (type default))
-    (uuid "ac4388ba-3049-583a-be13-8530839b523b"))
+    (uuid "bd8944b1-bca4-5111-8c59-77ac7d0d8652"))
   (label "OUT_PD"
     (at 1391.92 175.26 90)
     (fields_autoplaced yes)
@@ -16667,7 +16553,7 @@
   (wire
     (pts (xy 1391.92 185.42) (xy 1391.92 187.96))
     (stroke (width 0) (type default))
-    (uuid "7ab516dc-65ab-53f6-b535-3f438228f92e"))
+    (uuid "29535097-0a73-5e01-ad9b-ae8ecbd8cf25"))
   (label "GND"
     (at 1391.92 187.96 270)
     (fields_autoplaced yes)
@@ -16684,8 +16570,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "cb715d9b-3f84-5ada-93f4-74cd173715f9")
-    (property "Reference" "R61"
+    (uuid "46ad1f52-8240-54e9-99e5-e0161c6a4690")
+    (property "Reference" "R49"
       (at 1391.92 173.99 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16708,10 +16594,10 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "340a105b-b57f-5ab0-bd30-94d3e28527ca"))
-    (pin "2" (uuid "5cc81019-3989-59eb-a17b-8f6912f3ab4a"))
+    (pin "1" (uuid "553da9cd-a726-52c9-9ee6-7fe825ba708d"))
+    (pin "2" (uuid "941ed6be-8af2-57a9-bc38-5e9b821a8f6e"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R61") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R49") (unit 1)))))
   (wire
     (pts (xy 1419.86 177.8) (xy 1419.86 175.26))
     (stroke (width 0) (type default))
@@ -17364,7 +17250,7 @@
   (wire
     (pts (xy 1397 196.85) (xy 1397 194.31))
     (stroke (width 0) (type default))
-    (uuid "278f2f56-0c67-53b0-947d-7c488227665e"))
+    (uuid "1d0c9dfa-85bd-58c3-89ce-0266ed16b9b8"))
   (label "HDMI_5V"
     (at 1397 194.31 90)
     (fields_autoplaced yes)
@@ -17375,7 +17261,7 @@
   (wire
     (pts (xy 1397 204.47) (xy 1397 207.01))
     (stroke (width 0) (type default))
-    (uuid "c8604c31-4ac7-5eac-8514-d42530a4a287"))
+    (uuid "8b78a240-d093-59e6-9fe9-dd713866e6d7"))
   (label "HDMI_SCL"
     (at 1397 207.01 270)
     (fields_autoplaced yes)
@@ -17392,8 +17278,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "aae824b1-d921-5260-b9c5-cc1ff91240fe")
-    (property "Reference" "R62"
+    (uuid "c6551cb9-8540-592d-8361-c8078f4a2461")
+    (property "Reference" "R50"
       (at 1397 193.04 0)
       (effects
         (font (size 1.27 1.27))))
@@ -17416,14 +17302,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "5e34397e-2208-5d49-afbc-eadb7499faf6"))
-    (pin "2" (uuid "02738e0d-88a2-5693-aa02-8ec50ad98b92"))
+    (pin "1" (uuid "e700afce-b9b6-51b5-8a60-b661089d035f"))
+    (pin "2" (uuid "4ec200fa-06bf-5f83-82b5-4457892e17d0"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R62") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R50") (unit 1)))))
   (wire
     (pts (xy 1428.75 196.85) (xy 1428.75 194.31))
     (stroke (width 0) (type default))
-    (uuid "69674a63-9f30-5e60-9828-60ac58c315b8"))
+    (uuid "420bb654-a7f7-57a6-a335-83515930b493"))
   (label "HDMI_5V"
     (at 1428.75 194.31 90)
     (fields_autoplaced yes)
@@ -17434,7 +17320,7 @@
   (wire
     (pts (xy 1428.75 204.47) (xy 1428.75 207.01))
     (stroke (width 0) (type default))
-    (uuid "9ccc7e5d-3e89-5a1f-ad6a-78ba5913be41"))
+    (uuid "ae396d47-a77a-52f1-b699-8af0743fce66"))
   (label "HDMI_SDA"
     (at 1428.75 207.01 270)
     (fields_autoplaced yes)
@@ -17451,8 +17337,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "82e7b5db-2e50-5639-92b4-46e7b0f7bf18")
-    (property "Reference" "R63"
+    (uuid "114908e7-888b-5672-8435-3c157f0d0dd3")
+    (property "Reference" "R51"
       (at 1428.75 193.04 0)
       (effects
         (font (size 1.27 1.27))))
@@ -17475,14 +17361,14 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "d802aa94-e4c1-510d-949d-636bdeefb475"))
-    (pin "2" (uuid "c274519b-4e79-59e8-9707-1335252e3054"))
+    (pin "1" (uuid "c75ede9d-3dd0-56ef-9228-cd395fa90f17"))
+    (pin "2" (uuid "7c207fa6-857b-5ba9-a698-2b22763648cf"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R63") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R51") (unit 1)))))
   (wire
     (pts (xy 1155.7 217.17) (xy 1155.7 214.63))
     (stroke (width 0) (type default))
-    (uuid "837fb1cb-6062-568e-88b4-922375283aac"))
+    (uuid "d028f7e3-f37e-5122-9ac1-4f317d7dea8f"))
   (label "HDMI_HPD"
     (at 1155.7 214.63 90)
     (fields_autoplaced yes)
@@ -17493,7 +17379,7 @@
   (wire
     (pts (xy 1155.7 224.79) (xy 1155.7 227.33))
     (stroke (width 0) (type default))
-    (uuid "e60d378e-5c77-5766-afc7-03e30d4263e6"))
+    (uuid "0466fcac-3951-5bf9-9cf2-1587b4959eb0"))
   (label "GND"
     (at 1155.7 227.33 270)
     (fields_autoplaced yes)
@@ -17510,8 +17396,8 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "96f37950-6929-5ac0-9c00-9c1ea49f4579")
-    (property "Reference" "R64"
+    (uuid "2f346057-dfa4-5a19-9c3d-f0d8f8fa9151")
+    (property "Reference" "R52"
       (at 1155.7 213.36 0)
       (effects
         (font (size 1.27 1.27))))
@@ -17539,10 +17425,10 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "0ff25e8b-9f3b-5a71-b143-2136fe6d683b"))
-    (pin "2" (uuid "fef817b4-5b8e-5f27-8cb8-b41ddc5207d9"))
+    (pin "1" (uuid "2514f9ba-2c15-5a62-9411-3b075251dd58"))
+    (pin "2" (uuid "a8ce31f1-66f5-562f-ba86-c3be7d5a661e"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R64") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R52") (unit 1)))))
   (wire
     (pts (xy 1184.91 217.17) (xy 1182.37 217.17))
     (stroke (width 0) (type default))
