@@ -7,6 +7,7 @@ exposed pad (thermal vias, a paste grid).
     python3 rev-b/gen_pcb.py [--route]       (see kit/pcbkit.py)
 """
 
+import math
 import os
 import sys
 
@@ -16,10 +17,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), "kit"))
 import board  # noqa: E402
 import pcbkit  # noqa: E402
 import pcbnew  # noqa: E402
-from pcbkit import courtyard, fit_adv7511, fit_esd, pad_pos  # noqa: E402
+from pcbkit import courtyard, fit_adv7511, fit_esd, pad_pos, seg_dist  # noqa: E402
 from pcbnew import VECTOR2I, FromMM, ToMM  # noqa: E402
 
 AV_RAILS = {"AV_DVDD", "AV_PVDD", "AV_AVDD", "AV_DVDDIO"}
+# the ADV7181D's pins tied off through a resistor (no signal): an escape via each, like a supply pin
+STATIC_NETS = {"ALSB", "PWRDWN", "PD_FB", "PD_HS_IN_CS_IN", "PD_VS_IN"}
+
+
+def ToMM2(p):
+    return ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
 
 
 def layers(*ids):
@@ -91,61 +98,160 @@ class RevB(pcbkit.Layout):
         super().__init__(board, HERE)
         self.FIT = {"U1": fit_u1, "U2": fit_adv7511, "U9": fit_esd, "U10": fit_esd}
         self.rr = {}                # decoupling round robin over a rail's pins
+        self.series = {[n for n in p.pins.values() if n.startswith("AV_")][0]: p.ref
+                       for p in board.PARTS if p.ref.startswith("R") and p.value == "33"}
+        self.escape = {}
 
     # --- hooks
 
-    def place_series(self, fps, u1, occ, off=6.6, pitch=1.1):
-        """The 33 R series resistors in a row along each side of the ADV7181D, each in line with
-        its pin (spread to pitch where pins are closer), across the row, its chip end inwards."""
+    def side_pins(self, u1):
+        """side -> [(position along the side, net)] of the ADV7181D's pins that have a line out
+        (GND pins join the pad inwards; unused pins have none); a pin with an escape via at the
+        via's position."""
         cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
-        pins = {p.GetNetname(): (ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)) for p in u1.Pads()}
-        rows = {}
-        for p in board.PARTS:
-            if p.ref.startswith("R") and p.value == "33":
-                near = [n for n in p.pins.values() if n in pins][0]
-                px, py = pins[near]
-                dx, dy = px - cx, py - cy
-                side = ("B" if dy > 0 else "T") if abs(dy) > abs(dx) else ("R" if dx > 0 else "L")
-                rows.setdefault(side, []).append((px if side in "TB" else py, p.ref, near))
-        for side, row in rows.items():
-            row.sort()
-            ts = [t for t, _, _ in row]
-            for _ in range(50):                 # at least pitch apart, in order
-                for k in range(1, len(ts)):
-                    if ts[k] - ts[k - 1] < pitch:
-                        d = (pitch - (ts[k] - ts[k - 1])) / 2
-                        ts[k - 1] -= d
-                        ts[k] += d
-            for (_, ref, near), t in zip(row, ts):
-                fp = fps[ref]
-                x, y = {"B": (t, cy + off), "T": (t, cy - off), "L": (cx - off, t), "R": (cx + off, t)}[side]
-                fp.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
-                for a in (0, 90, 180, 270):
-                    fp.SetOrientationDegrees(a)
-                    inner = [q for q in fp.Pads() if q.GetNetname() == near][0]
-                    ix, iy = ToMM(inner.GetPosition().x), ToMM(inner.GetPosition().y)
-                    if (ix - x) * (cx - x) + (iy - y) * (cy - y) > 0 and \
-                            (abs(ix - x) > 0.1 if side in "LR" else abs(iy - y) > 0.1):
-                        break
-                occ.take("F", courtyard(fp))
-                self.HAND[ref] = None
+        sides = {}
+        for p in u1.Pads():
+            n = p.GetNetname()
+            if not p.GetNumber() or p.GetNumber() == "65" or not n or n == "GND":
+                continue
+            px, py = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
+            dx, dy = px - cx, py - cy
+            side = ("B" if dy > 0 else "T") if abs(dy) > abs(dx) else ("R" if dx > 0 else "L")
+            if p.GetNumber() in self.escape:        # (an escape via blocks where it is)
+                px, py = self.escape[p.GetNumber()]
+            sides.setdefault(side, []).append((px if side in "TB" else py, n))
+        for pins in sides.values():
+            pins.sort()
+        return sides
+
+    def runs(self, pins, pitch=1.1, tight=0.95):
+        """The runs of series-resistor pins along one side, each with the room it may use (lo,
+        hi: half a pitch inside the next pins with lines of their own), its step and its slack."""
+        out, k = [], 0
+        while k < len(pins):
+            if pins[k][1] not in self.series:
+                k += 1
+                continue
+            run = [k]
+            while run[-1] + 1 < len(pins) and pins[run[-1] + 1][1] in self.series:
+                run.append(run[-1] + 1)
+            k = run[-1] + 1
+            lo = pins[run[0] - 1][0] + 0.5 if run[0] > 0 else -1e9
+            hi = pins[run[-1] + 1][0] - 0.5 if run[-1] + 1 < len(pins) else 1e9
+            n = len(run)
+            room = min(hi, 1e8) - max(lo, -1e8)
+            step = pitch if n < 2 or room >= pitch * (n - 1) else max(tight, room / (n - 1))
+            out.append((run, lo, hi, step, room - tight * (n - 1)))
+        return out
+
+    def place_series(self, fps, u1, occ, off=7.6):
+        """The 33 R series resistors in a row along each side of the ADV7181D, each across the row,
+        its chip end inwards, as near in line with its pin as the pitch allows. A resistor stays
+        between the pins on either side of its own that have lines of their own going out (the
+        crystal, control lines, escape vias): its line would cross theirs. A run of resistors with
+        such pins at both ends packs tighter; one open towards a corner spills that way."""
+        cx, cy = ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)
+        sides = self.side_pins(u1)
+        for side, pins in sides.items():
+            for run, lo, hi, step, _ in self.runs(pins):
+                t_pins = [pins[r][0] for r in run]
+                n = len(run)
+                # centred on its pins, then moved inside (lo, hi)
+                c = (t_pins[0] + t_pins[-1]) / 2
+                ts = [c + (r - (n - 1) / 2) * step for r in range(n)]
+                ts = [t + max(0.0, lo - ts[0]) + min(0.0, hi - ts[-1]) for t in ts]
+                for (_, net), t in zip([pins[r] for r in run], ts):
+                    ref = self.series[net]
+                    fp = fps[ref]
+                    x, y = {"B": (t, cy + off), "T": (t, cy - off), "L": (cx - off, t), "R": (cx + off, t)}[side]
+                    fp.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
+                    for a in (0, 90, 180, 270):
+                        fp.SetOrientationDegrees(a)
+                        inner = [q for q in fp.Pads() if q.GetNetname() == net][0]
+                        ix, iy = ToMM(inner.GetPosition().x), ToMM(inner.GetPosition().y)
+                        if (ix - x) * (cx - x) + (iy - y) * (cy - y) > 0 and \
+                                (abs(ix - x) > 0.1 if side in "LR" else abs(iy - y) > 0.1):
+                            break
+                    occ.take("F", courtyard(fp))
+                    self.HAND[ref] = None
 
     def after_hand(self, ref, fp, fps, occ):
         if ref != "U1":
             return
+        # each supply pin's and tied-off pin's escape: out from its side to a via past its
+        # neighbours' tips, short of the series rows (1.1 mm from the pin's centre), in front of
+        # itself or of a neighbour with no line out of its own (a GND pin, which joins the pad
+        # inwards, or an unused one), else further out: of the spots clear of the vias before it,
+        # the one that leaves the series resistors most room. Kept free on both sides. A rail's
+        # decoupling sits on the bottom by its via
+        cx, cy = ToMM(fp.GetPosition().x), ToMM(fp.GetPosition().y)
+        pads = {p.GetNumber(): p for p in fp.Pads() if p.GetNumber()}
+        self.rail_vias, self.escape = [], {}
+        # (the supply pins first, with their wider tracks; then the tied-off pins)
+        for p in sorted(fp.Pads(), key=lambda p: (p.GetNetname() not in AV_RAILS, int(p.GetNumber() or 0))):
+            if p.GetNetname() not in AV_RAILS | STATIC_NETS:
+                continue
+            x, y = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
+            ux, uy = (0, 1 if y > cy else -1) if abs(y - cy) > abs(x - cx) else (1 if x > cx else -1, 0)
+            n = int(p.GetNumber())
+            # in front of itself, or of a neighbour on its side with no line out of its own (a GND
+            # pin, which joins the pad inwards, or an unused one), or of none (past the corner);
+            # never in front of a neighbour with a line: it would block that line
+            spots = []
+            for d in (1.1, 1.8):
+                spots.append((x + ux * d, y + uy * d))
+                for s_ in (0.5, -0.5):
+                    v = (x + ux * d - uy * s_, y + uy * d + ux * s_)
+                    front = [q for q in pads.values() if q.GetNumber() != "65" and
+                             abs(ToMM(q.GetPosition().x) + ux * d - v[0]) < 0.1 and
+                             abs(ToMM(q.GetPosition().y) + uy * d - v[1]) < 0.1]
+                    if all(q.GetNetname() in ("", "GND") for q in front):
+                        spots.append(v)
+            # of the free spots, the one that leaves the series-resistor runs most room
+            best = None
+            for v in spots:
+                # (clear of the hand-placed parts, and 0.65 mm from the other escape vias' centres:
+                # 0.5 mm vias with the 0.127 mm clearance between them)
+                box = (v[0] - 0.3, v[1] - 0.3, v[0] + 0.3, v[1] + 0.3)
+                if not (occ.free("F", box) and occ.free("B", box)) or \
+                        any(math.hypot(v[0] - w[0], v[1] - w[1]) < 0.65 for k, w in self.escape.items() if k != p.GetNumber()):
+                    continue
+                # (its track clear of the vias before it, theirs clear of its via: 0.15 mm)
+                w_ = 0.25 if p.GetNetname() in AV_RAILS else self.TRACK
+                knee_ = (x + ux * 0.75, y + uy * 0.75)
+                if any(min(seg_dist(o[0], o[1], x, y, *knee_), seg_dist(o[0], o[1], *knee_, *v)) < 0.25 + w_ / 2 + 0.15
+                       for _, _, o in self.rail_vias) or \
+                        any(min(seg_dist(v[0], v[1], *ToMM2(q), *k_), seg_dist(v[0], v[1], *k_, *o)) <
+                            0.25 + (0.25 if q.GetNetname() in AV_RAILS else self.TRACK) / 2 + 0.15
+                            for q, k_, o in self.rail_vias):
+                    continue
+                self.escape[p.GetNumber()] = v
+                slack = min([r[4] for pins_ in self.side_pins(fp).values() for r in self.runs(pins_)] or [0])
+                if best is None or slack > best[0] + 1e-6:
+                    best = (slack, v, box)
+            self.escape.pop(p.GetNumber(), None)
+            if best is None:
+                raise SystemExit("U1 pin %s: no escape via spot" % p.GetNumber())
+            _, v, box = best
+            # (straight out past the neighbours' tips first, then to the via)
+            knee = (x + ux * 0.75, y + uy * 0.75)
+            self.rail_vias.append((p, knee, v))
+            self.escape[p.GetNumber()] = v
+            for side in ("F", "B"):
+                occ.take(side, box)
         self.place_series(fps, fp, occ)
-        ep = [p for p in fp.Pads() if p.GetNumber() == "65"][0]
+        ep = pads["65"]
         ep.SetLayerSet(layers(pcbnew.F_Cu, pcbnew.F_Mask))
-        cx, cy = ToMM(ep.GetPosition().x), ToMM(ep.GetPosition().y)
+        ex, ey = ToMM(ep.GetPosition().x), ToMM(ep.GetPosition().y)
         for dx, dy in self.EP_PASTE:
-            p = pcbnew.PAD(fp)
-            p.SetShape(pcbnew.PAD_SHAPE_RECT)
-            p.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
-            p.SetLayerSet(layers(pcbnew.F_Paste))
-            p.SetSize(VECTOR2I(FromMM(1.6), FromMM(1.6)))
-            p.SetNumber("")
-            fp.Add(p)
-            p.SetPosition(VECTOR2I(FromMM(cx + dx), FromMM(cy + dy)))
+            q = pcbnew.PAD(fp)
+            q.SetShape(pcbnew.PAD_SHAPE_RECT)
+            q.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
+            q.SetLayerSet(layers(pcbnew.F_Paste))
+            q.SetSize(VECTOR2I(FromMM(1.6), FromMM(1.6)))
+            q.SetNumber("")
+            fp.Add(q)
+            q.SetPosition(VECTOR2I(FromMM(ex + dx), FromMM(ey + dy)))
 
     def anchor_special(self, p, ic_pads, fps):
         nets_ = [n for n in p.pins.values() if n != "GND"]
@@ -191,11 +297,18 @@ class RevB(pcbkit.Layout):
         for p in u1.Pads():
             if p.GetNetname() == "GND" and p.GetNumber() != "65" and p.GetNumber():
                 x, y = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
-                # inwards, to 0.5 mm inside the pad's edge
-                ux, uy = cx - x, cy - y
-                d = (ux * ux + uy * uy) ** 0.5
-                self.track(b, (x, y), (x + ux / d * 1.4, y + uy / d * 1.4), 0.2, pcbnew.F_Cu, p.GetNet())
-        print("U1 fanout: %d exposed-pad vias" % len(self.EP_VIAS))
+                # straight in from the pin's side (along the pin, clear of its neighbours) to 0.5 mm
+                # inside the pad's edge
+                ux, uy = (0, 1 if cy > y else -1) if abs(cy - y) > abs(cx - x) else (1 if cx > x else -1, 0)
+                self.track(b, (x, y), (x + ux * 1.4, y + uy * 1.4), 0.2, pcbnew.F_Cu, p.GetNet())
+        for p, knee, (vx, vy) in self.rail_vias:
+            x, y = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
+            w = 0.25 if p.GetNetname() in AV_RAILS else self.TRACK
+            self.track(b, (x, y), knee, w, pcbnew.F_Cu, p.GetNet())
+            if abs(knee[0] - vx) + abs(knee[1] - vy) > 1e-6:
+                self.track(b, knee, (vx, vy), w, pcbnew.F_Cu, p.GetNet())
+            self.via(b, vx, vy, p.GetNet())
+        print("U1 fanout: %d exposed-pad vias, %d pin escape vias" % (len(self.EP_VIAS), len(self.rail_vias)))
 
     def fanout_skip(self):
         return {"U1"}

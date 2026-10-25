@@ -40,8 +40,9 @@ SOG float (the data sheet gives them no connection).
 
 Crystal [DS Table 1, pins 21/22, Fig. 9]: 28.63636 MHz fundamental between XTAL (22) and XTAL1
 (21), 1 M across. The load caps follow rev A's sum for the same 20 pF crystal (TXM, LCSC C362486,
-+-20 ppm against the decoder's +-50 ppm): C = 2 (CL - Cstray) - Cpg = 31 pF [AN-1260], so 30 pF
-C0G. Fig. 9's 47 pF suit the 30 pF-class crystal on ADI's board.
++-20 ppm against the decoder's +-50 ppm): C = 2 (CL - Cstray) - Cpg = 31 pF [AN-1260]; 33 pF C0G,
+the nearest JLCPCB basic part, pulls the crystal about 12 ppm low, still inside +-50 ppm. Fig.
+9's 47 pF suit the 30 pF-class crystal on ADI's board.
 
 ADC references [DS Fig. 9]: CAPY2 (40) to GND through two 0.1 uF; between CAPY1 (39) and CAPY2,
 and between CAPC2 (44) and CAPY2, 10 uF + 0.1 uF + 10 nF each; REFOUT (42) and CML (43) each
@@ -129,4 +130,16 @@ first, the 1.8 V LDOs enabled about 30 ms later) holds.
 - The exposed pad: a 3 x 3 grid of 1.6 mm paste windows (about half the pad; a full 7.1 mm
   aperture lifts the part) and 12 ground vias in the lanes between them; the four GND pins join
   the pad on F.Cu.
+- The ADV7181D's escape: every supply pin and every tied-off pin (ALSB, PWRDWN, FB, HS_IN,
+  VS_IN) has its own via just past its neighbours' tips, laid before routing, like rev A's BGA
+  fanout; the supply pins' decoupling sits on the bottom by those vias. Without them the router
+  boxed these pins in between their neighbours' escapes (the first routes left 11 and 3
+  connections, all at such pins). The 33 R rows are 7.6 mm from the chip's centre, outside the
+  vias.
 - Part count: 172 (rev A 230).
+- Cost: the jacks are CUI RCJ-014 (yellow, $1.69) for Y, Pb and L and RCJ-012 (red) for Pr and R,
+  where rev A had the black RCJ-011 ($3.82, 40 in stock): one footprint for the series, the
+  silkscreen names each input. The ADV7511's audio series resistors are 49.9 R (JLCPCB basic) for
+  [HWG 7.3]'s 51 R, the crystal's caps 33 pF (above). The regulators' dividers keep TI's E96
+  values: the TPS7A7001 wants R2 at 27-33 k [TI 8.1.3], and no basic pair gives 3.3 V or 1.8 V
+  from there.

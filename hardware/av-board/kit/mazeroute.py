@@ -24,7 +24,7 @@ LAYERS = os.environ.get("MAZE_LAYERS", "F.Cu,In2.Cu,B.Cu").split(",")
 TRACK = float(os.environ.get("MAZE_WIDTH", "0.127"))
 CLEAR, VIA_D, VIA_DRILL, HOLE = 0.15, 0.5, 0.3, 0.25
 RES = 0.025                                 # grid, mm
-MARGIN = 4.0                                # round the two pads, mm
+MARGIN = float(os.environ.get("MAZE_MARGIN", "4.0"))   # round the two pads, mm
 VIA_COST = 60                               # a via costs as much as 1.5 mm of track
 FOLLOW_OFF = 3.0                            # off a pair partner's side, a step costs this much more
 
@@ -94,6 +94,8 @@ def dump(board, a, z, out, partner=None):
 
 def route(inp, out):
     import numpy as np
+    if os.path.exists(out):
+        os.remove(out)              # (no path: no stale path left for apply to put in again)
     d = json.load(open(inp))
     x0, y0, x1, y1 = d["region"]
     nx, ny = int((x1 - x0) / RES) + 1, int((y1 - y0) / RES) + 1

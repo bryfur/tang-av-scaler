@@ -129,10 +129,13 @@ def pin(name):
 # Component in: 75 R to GND at the jack, 0.1 uF to the input; Y on AIN10, Pb on AIN8, Pr on AIN6
 # [DS Fig. 9, Table 8 "Component YUV": Y = AIN10, U = AIN8, V = AIN6]; Y also through 1 nF to SOY,
 # sync on Y [DS Fig. 9]
-for jack, sig, ain, lc, colour in (("J1", "Y", "AIN10", "C4992678", "black"), ("J2", "PB", "AIN8", "C4992678", "black"),
-                                   ("J3", "PR", "AIN6", "C4991691", "red")):
-    part(jack, "RCA " + {"Y": "Y", "PB": "Pb", "PR": "Pr"}[sig],
-         "lcsc:RCJ-011" if colour == "black" else "lcsc:RCJ-014", "lcsc:CONN-TH_RCJ-011", lc,
+# Jacks: CUI RCJ-01x, one footprint, the last digit the colour (1 black, 2 red, 3 white, 4 yellow
+# [RCJ-01 data sheet]): yellow RCJ-014 ($1.69, 200 in stock) where rev A had black RCJ-011 ($3.82,
+# 40), red RCJ-012 for Pr and R; the silkscreen names each input
+RCA_YELLOW, RCA_RED = "C4991844", "C4991691"
+for jack, sig, ain, lc, colour in (("J1", "Y", "AIN10", RCA_YELLOW, "yellow"), ("J2", "PB", "AIN8", RCA_YELLOW, "yellow"),
+                                   ("J3", "PR", "AIN6", RCA_RED, "red")):
+    part(jack, "RCA " + {"Y": "Y", "PB": "Pb", "PR": "Pr"}[sig], "lcsc:RCJ-014", "lcsc:CONN-TH_RCJ-011", lc,
          {"2": "RCA_" + sig, "1": "GND"}, note=colour + " RCJ-01x")
     two(nxt("R"), "R0603", "75", "RCA_" + sig, "GND")
     C("100n", "RCA_" + sig, "AIN_" + sig)
@@ -141,13 +144,14 @@ C("1n", "RCA_Y", "SYNC_Y")
 u1[pin("SOY")] = "SYNC_Y"
 
 # Crystal: 28.63636 MHz fundamental [DS Table 1, pin 21], 1 M across [DS Fig. 9]; load caps for
-# the 20 pF crystal as on rev A, C = 2 (CL - Cstray) - Cpg = 31 pF [AN-1260]: 30 pF C0G (Fig. 9's
-# 47 pF suit its own crystal)
+# the 20 pF crystal as on rev A, C = 2 (CL - Cstray) - Cpg = 31 pF [AN-1260]: 33 pF C0G, the
+# nearest JLCPCB basic part (about -12 ppm; the crystal's +-20 ppm stays inside the decoder's
+# +-50 ppm). Fig. 9's 47 pF suit its own crystal
 part("Y1", "28.63636MHz 20pF", "lcsc:SMD-5032_2P28.63636M20pF", "lcsc:CRYSTAL-SMD_L5.0-W3.2", "C362486",
      {"1": "XTAL", "2": "XTAL1"})
 R("1M", "XTAL", "XTAL1")
-C("30p", "XTAL")
-C("30p", "XTAL1")
+C("33p", "XTAL")
+C("33p", "XTAL1")
 u1[pin("XTAL")] = "XTAL"
 u1[pin("XTAL1")] = "XTAL1"
 
@@ -224,8 +228,8 @@ two(nxt("FB"), "FB0603", "600R", "+5V", "5VA")
 for rail in ("VREF", "5VA", "3V3"):
     C("100n", rail)
     C("10u", rail)
-for jack, ch, lc, colour in (("J4", "L", "C4992678", "black"), ("J5", "R", "C4991691", "red")):
-    part(jack, "RCA " + ch, "lcsc:RCJ-011" if colour == "black" else "lcsc:RCJ-014", "lcsc:CONN-TH_RCJ-011", lc,
+for jack, ch, lc, colour in (("J4", "L", RCA_YELLOW, "yellow"), ("J5", "R", RCA_RED, "red")):
+    part(jack, "RCA " + ch, "lcsc:RCJ-014", "lcsc:CONN-TH_RCJ-011", lc,
          {"2": "RCA_" + ch, "1": "GND"}, note=colour + " RCJ-01x")
     R("10k", "RCA_" + ch, "AUD_DIV_" + ch)
     R("10k", "AUD_DIV_" + ch, "GND")
@@ -266,10 +270,11 @@ for name, net in (("CLK", "OUT_CLK"), ("HSYNC", "OUT_HSYNC"), ("VSYNC", "OUT_VSY
 for name in ("I2S1", "I2S2", "I2S3", "SPDIF", "DSD0", "DSD1", "DSD2", "DSD3", "DSD4", "DSD5", "DSDCLK",
              "CEC", "CEC_CLK", "HEAC+", "HEAC-"):
     u2[pin(name)] = "GND"                           # [HWG 6.1.1, 6.2.1, 6.4.1]
-# Audio: 51 R series at the source (the header side) [HWG 7.3]
+# Audio: series resistors at the source (the header side) [HWG 7.3: 51 R]; 49.9 R, the nearest
+# JLCPCB basic part
 for name, sig in (("MCLK", "MCLK"), ("SCLK", "SCLK"), ("LRCLK", "LRCLK"), ("I2S0", "I2S0")):
     u2[pin(name)] = "TX_" + sig
-    R("51", "OUT_" + sig, "TX_" + sig)
+    R("49.9", "OUT_" + sig, "TX_" + sig)
 part("U2", "ADV7511KSTZ", "lcsc:ADV7511KSTZ", "lcsc:LQFP-100_L14.0-W14.0-P0.50-LS16.0-BL", "C179459", u2)
 R("887", "R_EXT", "GND")                            # 1 % [HWG 7.6]
 R("2k", "3V3", "OUT_SCL")                           # [HWG 7.4]
