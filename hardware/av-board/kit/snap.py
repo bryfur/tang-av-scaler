@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 
-import gen_pcb
+import pcbnew
 
 PY = os.path.expanduser("~/tools/eda-venv/bin/python")
 
@@ -25,8 +25,10 @@ def main():
             opt[k] = a[i + 1]
             del a[i:i + 2]
     src, out = a[0], a[1]
+    e = pcbnew.LoadBoard(src).GetBoardEdgesBoundingBox()
+    X0, Y0, X1, Y1 = (round(pcbnew.ToMM(v), 3) for v in (e.GetLeft(), e.GetTop(), e.GetRight(), e.GetBottom()))
     layers = opt.get("--layers", "F.Cu,B.Cu,F.Fab,B.Fab,Edge.Cuts")
-    clip = opt.get("--clip", "%s,%s,%s,%s" % (gen_pcb.X0, gen_pcb.Y0, gen_pcb.X1, gen_pcb.Y1))
+    clip = opt.get("--clip", "%s,%s,%s,%s" % (X0, Y0, X1, Y1))
     with tempfile.TemporaryDirectory() as tmp:
         pdf, edge = os.path.join(tmp, "b.pdf"), os.path.join(tmp, "e.pdf")
         for out_, layers_ in ((pdf, layers), (edge, "Edge.Cuts")):
@@ -45,7 +47,7 @@ k = r.width / (X1 - X0)
 c = pymupdf.Rect(r.x0 + (x0 - X0) * k, r.y0 + (y0 - Y0) * k, r.x0 + (x1 - X0) * k, r.y0 + (y1 - Y0) * k)
 zoom = 2400 / c.width
 p.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=c).save(sys.argv[2])
-""", pdf, out, "%s,%s,%s,%s,%s" % (gen_pcb.X0, gen_pcb.Y0, gen_pcb.X1, gen_pcb.Y1, clip), edge], check=True)
+""", pdf, out, "%s,%s,%s,%s,%s" % (X0, Y0, X1, Y1, clip), edge], check=True)
     print(out)
 
 

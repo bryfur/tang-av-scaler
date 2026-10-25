@@ -12,7 +12,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from sexp import dump, parse  # noqa: E402
 
-path = os.path.join(HERE, "lib", "lcsc.kicad_sym")
+path = os.path.join(os.path.dirname(HERE), "lib", "lcsc.kicad_sym")
 lib = parse(open(path).read())
 
 

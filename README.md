@@ -5,7 +5,7 @@ anti-aliased with SMAA, scaled, and sent out as 1080p60 HDMI with the console's 
 
 ```
 PS2 component (YPbPr) + stereo audio
-  -> AV board: ADV7842 (video ADC/decoder)                         on the Console's J10 header
+  -> AV board: ADV7181D (video ADC/decoder; rev A: ADV7842)         on the Console's J10 header
                PCM1808 (audio ADC)                                on the Console's J9 header
   -> GW5AST-138 FPGA: capture -> deinterlace -> SMAA 1x -> scale
   -> AV board: ADV7511 (HDMI transmitter)                           on the Console's J9 header
@@ -14,9 +14,10 @@ PS2 component (YPbPr) + stereo audio
 
 | Directory | What |
 |---|---|
-| `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. |
+| `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. Revisions in `rev-a/`, `rev-b/`, their shared generators in `kit/`. |
 
-Status: the board's design is in progress; nothing has been built.
+Status: rev A (ADV7842, six layers) is routed and ready to order but costs about $400 at
+JLCPCB; rev B (ADV7181D, four layers) is in design. Nothing has been built.
 
 ## The host board
 

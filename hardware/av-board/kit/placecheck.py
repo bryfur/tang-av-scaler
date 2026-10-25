@@ -2,20 +2,25 @@
 """Placement report: for every small part, how far each of its signal pins is from the nearest
 other pad on the same net (a long one is a part placed by the wrong anchor).
 
-    python3 placecheck.py [board.kicad_pcb] [--min 8]
+    python3 kit/placecheck.py rev-b [board.kicad_pcb] [--min 8]
 """
 import math
+import os
 import sys
 
 import pcbnew
 
-import gen_pcb
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pcbkit  # noqa: E402
+import rev  # noqa: E402
 
 
 def main():
-    a = [x for x in sys.argv[1:] if not x.startswith("--")]
+    r, rest = rev.args(__doc__)
+    lay = pcbkit.layout_of(rev.rev_dir(r))
+    a = [x for x in rest if not x.startswith("--")]
     lim = float(sys.argv[sys.argv.index("--min") + 1]) if "--min" in sys.argv else 8.0
-    b = pcbnew.LoadBoard(a[0] if a else gen_pcb.OUT)
+    b = pcbnew.LoadBoard(a[0] if a else lay.OUT)
     pads = {}
     for fp in b.GetFootprints():
         for p in fp.Pads():
@@ -28,7 +33,7 @@ def main():
             continue
         for p in fp.Pads():
             n = p.GetNetname()
-            if not n or n == "GND" or n in gen_pcb.POWER_NETS:
+            if not n or n == "GND" or n in lay.POWER_NETS:
                 continue
             v = p.GetPosition()
             x, y = pcbnew.ToMM(v.x), pcbnew.ToMM(v.y)

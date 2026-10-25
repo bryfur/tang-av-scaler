@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""JLCPCB files from av-board.kicad_pcb: Gerbers + drill (zipped), BOM and CPL (placement).
+"""JLCPCB files from a revision's board: Gerbers + drill (zipped), BOM and CPL (placement).
 
-    python3 gen_fab.py          # fab/av-board-gerbers.zip, fab/av-board-bom.csv, fab/av-board-cpl.csv
+    python3 kit/gen_fab.py rev-b     # rev-b/fab/<name>-gerbers.zip, <name>-bom.csv, <name>-cpl.csv
 
 BOM: one line per LCSC part (Comment, Designator, Footprint, LCSC Part #); DNP parts left out.
 CPL: Designator, Mid X, Mid Y, Layer, Rotation, in mm from the board's lower-left corner, y up
@@ -20,8 +20,11 @@ import zipfile
 import pcbnew
 from pcbnew import VECTOR2I, ToMM
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-NAME = "av-board"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rev  # noqa: E402
+
+HERE = rev.rev_dir(rev.args(__doc__)[0])
+NAME = rev.board(HERE).NAME
 PCB = os.path.join(HERE, NAME + ".kicad_pcb")
 FAB = os.path.join(HERE, "fab")
 COPPER = {4: "F.Cu,In1.Cu,In2.Cu,B.Cu", 6: "F.Cu,In1.Cu,In2.Cu,In3.Cu,In4.Cu,B.Cu"}

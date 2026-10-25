@@ -19,7 +19,7 @@ DEEPPCB_FANOUT (U1, the BGA; empty for none). These are the steps DeepPCB's assi
 for this board. For a finishing run on a routed board: DEEPPCB_PROTECT=1 (all existing copper
 kept), DEEPPCB_PAIR_WIDTH_MM / DEEPPCB_PAIR_GAP_MM (the pairs' geometry), DEEPPCB_NOVIA=nets.
 
-gen_pcb.py takes the session with SES=out.ses python3 gen_pcb.py --route.
+A revision's gen_pcb.py takes the session with SES=out.ses python3 rev-x/gen_pcb.py --route.
 """
 
 import json

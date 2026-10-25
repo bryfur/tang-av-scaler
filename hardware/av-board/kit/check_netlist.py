@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Compare the netlist KiCad makes from av-board.kicad_sch with board.py, pin by pin.
+"""Compare the netlist KiCad makes from a revision's schematic with its board.py, pin by pin.
 
-    kicad-cli sch export netlist -o /tmp/av.net av-board.kicad_sch && python3 check_netlist.py /tmp/av.net
+    kicad-cli sch export netlist -o /tmp/av.net rev-b/av-board-b.kicad_sch && python3 kit/check_netlist.py rev-b /tmp/av.net
 """
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import board  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import rev  # noqa: E402
 from sexp import find, findall, parse  # noqa: E402
 
-net = parse(open(sys.argv[1]).read())
+r, a = rev.args(__doc__)
+board = rev.board(r)
+net = parse(open(a[0]).read())
 kicad = {}
 for n in findall(find(net, "nets"), "net"):
     name = str(find(n, "name")[1]).lstrip("/")
