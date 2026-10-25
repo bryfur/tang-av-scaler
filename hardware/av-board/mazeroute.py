@@ -2,7 +2,8 @@
 """A small grid router (A*) for the last connections an autorouter leaves: one net between two
 pads, round everything already on the board, changing layer through new vias where a via fits.
 
-    python3 mazeroute.py dump BOARD REF.PAD REF.PAD out.json   # KiCad's python: the obstacles
+    python3 mazeroute.py dump BOARD REF.PAD REF.PAD out.json [PARTNER_NET]   # KiCad's python: the obstacles
+                                    # (PARTNER_NET: route alongside that net's copper, a pair's other half)
     ~/tools/eda-venv/bin/python mazeroute.py route in.json out.json   # numpy: the path
     python3 mazeroute.py apply BOARD out.json                  # KiCad's python: tracks + vias in
 
@@ -21,9 +22,10 @@ TRACK, CLEAR, VIA_D, VIA_DRILL, HOLE = 0.127, 0.15, 0.5, 0.3, 0.25
 RES = 0.025                                 # grid, mm
 MARGIN = 4.0                                # round the two pads, mm
 VIA_COST = 60                               # a via costs as much as 1.5 mm of track
+FOLLOW_OFF = 3.0                            # off a pair partner's side, a step costs this much more
 
 
-def dump(board, a, z, out):
+def dump(board, a, z, out, partner=None):
     import pcbnew
     from pcbnew import ToMM
     b = pcbnew.LoadBoard(board)
@@ -47,7 +49,7 @@ def dump(board, a, z, out):
 
     def near(bx):
         return bx[2] > x0 - 1 and bx[0] < x1 + 1 and bx[3] > y0 - 1 and bx[1] < y1 + 1
-    obst = []
+    obst, follow = [], []
     for fp in b.GetFootprints():
         for p in fp.Pads():
             if p.GetNetname() == net and p.GetNetname():
@@ -64,6 +66,9 @@ def dump(board, a, z, out):
     for t in b.GetTracks():
         if t.GetNetname() == net:
             continue
+        if partner and t.GetNetname() == partner and t.GetClass() != "PCB_VIA":
+            follow.append({"layer": b.GetLayerName(t.GetLayer()),
+                           "a": [ToMM(t.GetStart().x), ToMM(t.GetStart().y)], "b": [ToMM(t.GetEnd().x), ToMM(t.GetEnd().y)]})
         if t.GetClass() == "PCB_VIA":
             c = [ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)]
             if not near([c[0], c[1], c[0], c[1]]):
@@ -76,9 +81,10 @@ def dump(board, a, z, out):
             if not near([min(s[0], e[0]), min(s[1], e[1]), max(s[0], e[0]), max(s[1], e[1])]):
                 continue
             layer = b.GetLayerName(t.GetLayer())
-            if layer in LAYERS:
-                obst.append({"kind": "seg", "a": s, "b": e, "w": ToMM(t.GetWidth()) / 2, "layers": [layer]})
-    json.dump({"net": net, "region": [x0, y0, x1, y1], "ends": ends, "obst": obst}, open(out, "w"))
+            # (a track on a layer not routed here still stands in a new via's way)
+            obst.append({"kind": "seg", "a": s, "b": e, "w": ToMM(t.GetWidth()) / 2,
+                         "layers": [layer] if layer in LAYERS else [], "via": True})
+    json.dump({"net": net, "region": [x0, y0, x1, y1], "ends": ends, "obst": obst, "follow": follow}, open(out, "w"))
     print("%s: %d obstacles round %s - %s" % (net, len(obst), a, z))
 
 
@@ -111,9 +117,20 @@ def route(inp, out):
         dd = dist(o)
         for layer in o["layers"]:
             tblock[L[layer]] |= dd < CLEAR + TRACK / 2
-        vblock |= dd < CLEAR + VIA_D / 2
+        vblock |= dd < CLEAR + VIA_D / 2            # (vias go through every layer)
         if o.get("hole"):                              # drill to drill
             vblock |= np.hypot(gx - o["c"][0], gy - o["c"][1]) < o["hole"] + VIA_DRILL / 2 + HOLE
+
+    # a pair's second half: a step costs FOLLOW_OFF times as much away from its partner (on the
+    # same layer, 0.3-0.6 mm off its centreline: coupled at about the pairs' pitch)
+    cost_x = np.ones((len(LAYERS), nx, ny))
+    if d.get("follow"):
+        near = np.zeros((len(LAYERS), nx, ny), bool)
+        for f in d["follow"]:
+            if f["layer"] in L:
+                dd = dist({"kind": "seg", "a": f["a"], "b": f["b"], "w": 0})
+                near[L[f["layer"]]] |= (dd > 0.3) & (dd < 0.6)
+        cost_x = np.where(near, 1.0, FOLLOW_OFF)
 
     def cells(e):
         bx = e["box"]
@@ -147,7 +164,7 @@ def route(inp, out):
         for (kk, ii, jj), w in nbrs:
             if not (0 <= ii < nx and 0 <= jj < ny) or tblock[kk, ii, jj]:
                 continue
-            ng = g + w
+            ng = g + w * (cost_x[kk, ii, jj] if kk == k else 1)
             if ng < cost.get((kk, ii, jj), 1e18):
                 cost[(kk, ii, jj)] = ng
                 came[(kk, ii, jj)] = cur
@@ -227,7 +244,7 @@ def apply(board, inp):
 if __name__ == "__main__":
     a = sys.argv[1:]
     if a[:1] == ["dump"]:
-        dump(*a[1:5])
+        dump(*a[1:6])
     elif a[:1] == ["route"]:
         route(a[1], a[2])
     elif a[:1] == ["apply"]:

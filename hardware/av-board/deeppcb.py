@@ -15,7 +15,9 @@ gen_pcb.py lays down) and does no placement. DeepPCB bills per minute of routing
 Before routing, the board is resubmitted in DeepPCB's own JSON with what a DSN cannot say: the
 board-edge clearance (DEEPPCB_EDGE_MM, 0.25) and the differential pairs (nets named X_P/X_N);
 DEEPPCB_TUNE=0 routes the DSN as it is. Then DeepPCB's own fanout runs on the components in
-DEEPPCB_FANOUT (U1, the BGA). These are the steps DeepPCB's assistant recommends for this board.
+DEEPPCB_FANOUT (U1, the BGA; empty for none). These are the steps DeepPCB's assistant recommends
+for this board. For a finishing run on a routed board: DEEPPCB_PROTECT=1 (all existing copper
+kept), DEEPPCB_PAIR_WIDTH_MM / DEEPPCB_PAIR_GAP_MM (the pairs' geometry), DEEPPCB_NOVIA=nets.
 
 gen_pcb.py takes the session with SES=out.ses python3 gen_pcb.py --route.
 """
@@ -149,7 +151,47 @@ def tune(board_id, out_json, pairs, edge_mm):
     for n in names:
         if n.endswith("_P") and n[:-2] + "_N" in names:
             found.append((n, n[:-2] + "_N"))
-    j["differentialPairs"] = [{"netId1": a_, "netId2": b_} for a_, b_ in (pairs or found)]
+    pw, pg = os.environ.get("DEEPPCB_PAIR_WIDTH_MM"), os.environ.get("DEEPPCB_PAIR_GAP_MM")
+    j["differentialPairs"] = [dict({"netId1": a_, "netId2": b_},
+                                   **({"trackWidth": int(round(float(pw) * per_mm))} if pw else {}),
+                                   **({"gap": int(round(float(pg) * per_mm))} if pg else {}))
+                              for a_, b_ in (pairs or found)]
+    # DEEPPCB_NOVIA=net,net: those nets avoid vias above all (the TMDS pairs on F.Cu)
+    novia = [n for n in os.environ.get("DEEPPCB_NOVIA", "").split(",") if n in names]
+    if novia:
+        j["netPreferences"] = [{"id": "novia", "nets": novia, "reduceViaCountPrioCoef": 50}]
+    # DEEPPCB_PROTECT=1: every wire and via already on the board is kept as it is (otherwise what
+    # the DSN marks fixed, KiCad's locked copper, is)
+    if os.environ.get("DEEPPCB_PROTECT") == "1":
+        for w in j.get("wires", []) + j.get("vias", []):
+            w["protected"] = True
+    elif os.environ.get("DEEPPCB_PROTECT_FILE"):
+        # only these (KiCad's locked copper: the fanout) stay; DeepPCB may move every other wire.
+        # The file: {"vias": [[x, y]], "segs": [[layer, x1, y1, x2, y2]]} in mm, board coordinates
+        lk = json.load(open(os.environ["DEEPPCB_PROTECT_FILE"]))
+        q = lambda x, y: (int(round(x * per_mm / 100)), int(round(-y * per_mm / 100)))     # 0.01 mm
+        vias = {q(x, y) for x, y in lk["vias"]}
+        segs = set()
+        for layer, x1, y1, x2, y2 in lk["segs"]:
+            a_, b_ = q(x1, y1), q(x2, y2)
+            segs.add((layer, min(a_, b_), max(a_, b_)))
+        r = lambda p: (int(round(p[0] / 100)), int(round(p[1] / 100)))
+        for v in j.get("vias", []):
+            v["protected"] = r(v["position"]) in vias
+        for w in j.get("wires", []):
+            a_, b_ = r(w["start"]), r(w["end"])
+            w["protected"] = (w["layer"], min(a_, b_), max(a_, b_)) in segs
+    print("protected: %d of %d wires, %d of %d vias" % (
+        sum(bool(w.get("protected")) for w in j.get("wires", [])), len(j.get("wires", [])),
+        sum(bool(v.get("protected")) for v in j.get("vias", [])), len(j.get("vias", []))))
+    # DEEPPCB_PLANE_KEEPOUT=net,net: no other net's wires across those planes (vias may pass), as
+    # the rule areas over them say in KiCad; DeepPCB lets anything cut a plane otherwise
+    keep = set(n for n in os.environ.get("DEEPPCB_PLANE_KEEPOUT", "").split(",") if n)
+    for pl in j.get("planes", []):
+        if pl.get("netId") in keep:
+            pl["keepoutRule"] = ["wire"]
+    if keep:
+        print("planes kept clear of other wires:", sorted(keep))
     with open(out_json, "w") as f:
         json.dump(j, f)
     print("boundary clearance %s (%.2f mm), %d differential pairs: %s" % (

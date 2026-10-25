@@ -251,17 +251,30 @@ inputs, never high.**
 
 ## Routing (2026-10-25)
 
-Six layers, Freerouting 1.9 (100 passes left 2-8 connections over a dozen runs on this
-placement; the board in the repository is a 60-pass run) and mazeroute.py for the rest (here
-C20's AVDD pad, round C54, and one pixel line, U1 L2 to RN5): DRC clean, no unconnected items,
-only silkscreen warnings. Checked after routing:
+Six layers, in three passes:
 
-- R_EXT (ADV7511 pin 28): only HPD and the ADV7511's own supplies within 1.5 mm, no clock or
-  audio line or via near it [HWG 7.6].
-- TMDS: intra-pair skew at most 2.4 mm (about 16 ps; HDMI allows about 100 ps at 1080p), but
-  Freerouting does not route pairs: the two halves run apart and change layer (0-3 vias each).
-  To do: lay the four pairs in by hand in the generator (coupled, 0.25/0.2 mm, F.Cu, matched)
-  before the autorouter, as HWG 6.3.2 asks.
+1. Freerouting 1.9 on the placement (it leaves 2-8 connections, a different few each run), then
+   mazeroute.py for those: every net connected, DRC clean.
+2. DeepPCB for the TMDS pairs (deeppcb.py run with DEEPPCB_PROTECT_FILE, the locked fanout
+   only, so it may move any routed track; DEEPPCB_PLANE_KEEPOUT, the rail planes kept clear of
+   other wires; pairs without forced geometry, which it cannot fit into the connector's pins
+   1 mm apart): it routed all else and D2, D0 as pairs; stitching vias left out, put back after.
+3. mazeroute.py for what DeepPCB left (CK and D1 from the ADV7511 to the ESD arrays), the N
+   line of each pair routed along its P line (the pair-follow cost).
+
+Result: DRC clean, only silkscreen warnings. TMDS (mm; coupled = P within 0.5 mm of N):
+
+| Pair | P | N | skew | vias | coupled |
+|---|---|---|---|---|---|
+| D2 | 19.2 | 19.8 | 0.6 | 2/2 | 81 % |
+| D1 | 14.4 | 17.6 | 3.2 | 2/2 | 52 % |
+| D0 | 17.6 | 18.2 | 0.6 | 2/2 | 79 % |
+| CK | 19.0 | 22.8 | 3.7 | 2/3 | 59 % |
+
+The worst skew, 3.7 mm, is about 25 ps; HDMI allows about 0.15 bit, 100 ps, at 1080p. R_EXT
+(pin 28): only +5V, HPD and the ADV7511's own supplies within 1.5 mm, nothing switching near it
+[HWG 7.6]. DeepPCB notes: it marks all existing copper protected unless told per item; planes
+it receives can be cut by any net unless their keepoutRule says otherwise.
 
 ## Review against the data sheets (2026-10-24)
 
