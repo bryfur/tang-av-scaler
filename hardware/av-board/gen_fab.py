@@ -14,10 +14,11 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 
 import pcbnew
-from pcbnew import ToMM
+from pcbnew import VECTOR2I, ToMM
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 NAME = "av-board"
@@ -32,12 +33,22 @@ def main():
     gdir = os.path.join(FAB, "gerbers")
     shutil.rmtree(gdir, ignore_errors=True)
     os.makedirs(gdir)
-    n = pcbnew.LoadBoard(PCB).GetCopperLayerCount()
+    # Gerbers, drills and CPL all from one origin, the board's lower-left corner: set as the
+    # drill/place origin on a copy of the board, the Gerbers and drills plotted from it (JLCPCB
+    # lays the CPL over the Gerbers' coordinates)
+    b = pcbnew.LoadBoard(PCB)
+    n = b.GetCopperLayerCount()
+    edge = b.GetBoardEdgesBoundingBox()
+    b.GetDesignSettings().SetAuxOrigin(VECTOR2I(edge.GetLeft(), edge.GetBottom()))
+    tmp = tempfile.mkdtemp()
+    src = os.path.join(tmp, NAME + ".kicad_pcb")
+    pcbnew.SaveBoard(src, b)
     subprocess.run(["kicad-cli", "pcb", "export", "gerbers", "-l", COPPER[n] + "," + OTHER, "--subtract-soldermask",
-                    "--use-drill-file-origin", "-o", gdir + "/", PCB], check=True, stdout=subprocess.DEVNULL)
+                    "--use-drill-file-origin", "-o", gdir + "/", src], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["kicad-cli", "pcb", "export", "drill", "--format", "excellon", "--excellon-separate-th",
-                    "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", PCB],
+                    "--drill-origin", "plot", "--generate-map", "--map-format", "gerberx2", "-o", gdir + "/", src],
                    check=True, stdout=subprocess.DEVNULL)
+    shutil.rmtree(tmp)
     z = os.path.join(FAB, NAME + "-gerbers.zip")
     with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as f:
         for n in sorted(os.listdir(gdir)):
