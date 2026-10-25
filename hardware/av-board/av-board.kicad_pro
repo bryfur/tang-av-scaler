@@ -316,55 +316,7 @@
     "netclass_patterns": [
       {
         "netclass": "POWER",
-        "pattern": "TX_AVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_CVDD"
-      },
-      {
-        "netclass": "POWER",
         "pattern": "5VA"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "SW_2V5"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "+5V"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "HDMI_5V"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_PLVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "2V5"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "3V3"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_AVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_TVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_DVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_VDD"
       },
       {
         "netclass": "POWER",
@@ -372,7 +324,23 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_PVDD"
+        "pattern": "AV_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "+5V"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_CVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "HDMI_5V"
       },
       {
         "netclass": "POWER",
@@ -383,24 +351,36 @@
         "pattern": "AV_DVDDIO"
       },
       {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D2_P"
+        "netclass": "POWER",
+        "pattern": "TX_DVDD"
       },
       {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D1_N"
+        "netclass": "POWER",
+        "pattern": "3V3"
       },
       {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D2_N"
+        "netclass": "POWER",
+        "pattern": "2V5"
       },
       {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D1_P"
+        "netclass": "POWER",
+        "pattern": "AV_TVDD"
       },
       {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D0_P"
+        "netclass": "POWER",
+        "pattern": "SW_2V5"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_VDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_PLVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_PVDD"
       },
       {
         "netclass": "TMDS",
@@ -412,7 +392,27 @@
       },
       {
         "netclass": "TMDS",
+        "pattern": "TMDS_D2_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D0_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D1_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D1_N"
+      },
+      {
+        "netclass": "TMDS",
         "pattern": "TMDS_D0_N"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D2_N"
       },
       {
         "netclass": "CLOCK",
@@ -420,11 +420,11 @@
       },
       {
         "netclass": "CLOCK",
-        "pattern": "OUT_CLK"
+        "pattern": "IN_LLC"
       },
       {
         "netclass": "CLOCK",
-        "pattern": "IN_LLC"
+        "pattern": "OUT_CLK"
       }
     ]
   },

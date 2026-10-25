@@ -249,6 +249,20 @@ inputs, never high.**
 - J10 pin 2 (FPGA P19) is also the FPGA's SSPI_CLK configuration pin; it carries C1, an input to
   the FPGA, which is harmless while the FPGA configures from flash.
 
+## Routing (2026-10-25)
+
+Six layers, Freerouting 1.9 (100 passes left 2-8 connections over a dozen runs on this
+placement; the board in the repository is a 60-pass run) and mazeroute.py for the rest (here
+C20's AVDD pad, round C54, and one pixel line, U1 L2 to RN5): DRC clean, no unconnected items,
+only silkscreen warnings. Checked after routing:
+
+- R_EXT (ADV7511 pin 28): only HPD and the ADV7511's own supplies within 1.5 mm, no clock or
+  audio line or via near it [HWG 7.6].
+- TMDS: intra-pair skew at most 2.4 mm (about 16 ps; HDMI allows about 100 ps at 1080p), but
+  Freerouting does not route pairs: the two halves run apart and change layer (0-3 vias each).
+  To do: lay the four pairs in by hand in the generator (coupled, 0.25/0.2 mm, F.Cu, matched)
+  before the autorouter, as HWG 6.3.2 asks.
+
 ## Review against the data sheets (2026-10-24)
 
 Every IC's connections checked pin by pin against its document:
