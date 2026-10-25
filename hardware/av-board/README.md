@@ -9,7 +9,7 @@ J10, HDMI out on J9. The Console's outline plus a 15 mm strip for the jacks, ove
 | Revision | Video in | Layers | Status |
 |---|---|---|---|
 | [rev-a](rev-a/) | ADV7842 (256-ball BGA) | 6 | Routed, DRC clean, fab files made (not ordered): about $400 at JLCPCB, the BGA and six layers the cost |
-| [rev-b](rev-b/) | ADV7181D (64-lead LFCSP) | 4 | In design: the same board with the cheaper, leaded decoder |
+| [rev-b](rev-b/) | ADV7181D (64-lead LFCSP) | 4 | Routed, DRC clean, fab files made (not ordered): the same board with the cheaper decoder, no BGA, four layers, 172 parts |
 
 Both carry the PCM1808 (audio ADC) and the ADV7511 (HDMI transmitter: the Console's own HDMI
 port is rated 1080p30 / 720p60 only, so 1080p60 needs it). Each revision's README and design.md

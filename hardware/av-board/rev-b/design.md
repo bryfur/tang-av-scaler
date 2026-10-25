@@ -143,3 +143,28 @@ first, the 1.8 V LDOs enabled about 30 ms later) holds.
   [HWG 7.3]'s 51 R, the crystal's caps 33 pF (above). The regulators' dividers keep TI's E96
   values: the TPS7A7001 wants R2 at 27-33 k [TI 8.1.3], and no basic pair gives 3.3 V or 1.8 V
   from there.
+
+## Routing (2026-10-25)
+
+1. gen_pcb.py --route: Freerouting 1.9 (100 passes) over the locked fanout (the ADV7181D's
+   exposed-pad and escape vias, the plane vias of every ground and decoupling pad): every net
+   connected, DRC clean, in about 20 minutes.
+2. The TMDS pairs again, as on rev A: Freerouting took two of them through In2, which on this
+   stack has no ground close under it, and left D1 8.7 mm apart. Ripped up and laid with
+   mazeroute.py at the class's 0.2 mm on F.Cu/B.Cu only, the N line of each pair along its P
+   line: ADV7511 to the ESD array (F/B, one via pair each), across the array's flow-through pads
+   and on to the connector (F.Cu).
+
+| Pair | P (U2 to ESD) | N | skew | vias |
+|---|---|---|---|---|
+| D2 | 6.8 mm | 9.8 mm | 3.0 mm | 2/2 |
+| D1 | 9.2 mm | 10.4 mm | 1.2 mm | 2/2 |
+| D0 | 11.5 mm | 16.6 mm | 5.1 mm (about 34 ps) | 2/2 |
+| CK | 17.7 mm | 19.9 mm | 2.2 mm | 2/2 |
+
+The ESD-to-connector part is 4.3 mm on each line. 5 mm is about 0.05 UI at 1080p60's 1.485 Gb/s,
+inside HDMI's 0.15 UI intra-pair skew budget at the source.
+
+The first routes left 11, 3 and 4 connections, all at pins of the ADV7181D boxed in between
+their neighbours' escapes; the escape vias and the series rows described above came out of
+those runs, and the last route connected everything.

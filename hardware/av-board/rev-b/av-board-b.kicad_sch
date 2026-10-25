@@ -1190,85 +1190,6 @@
             (effects
               (font (size 1.27 1.27))))))
       (embedded_fonts no))
-    (symbol "lcsc:RCJ-011"
-      (exclude_from_sim no)
-      (in_bom yes)
-      (on_board yes)
-      (property "Reference" "J"
-        (at 0 6.35 0)
-        (effects
-          (font (size 1.27 1.27))))
-      (property "Value" "RCJ-011"
-        (at 0 -8.89 0)
-        (effects
-          (font (size 1.27 1.27))))
-      (property "Footprint" "lcsc:CONN-TH_RCJ-011"
-        (at 0 -11.43 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (property "Datasheet" "https://www.lcsc.com/datasheet/C4992678.pdf"
-        (at 0 -13.97 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (property "Description" ""
-        (at 0 0 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (property "Manufacturer" "CUI"
-        (at 0 -16.51 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (property "MPN" "RCJ-011"
-        (at 0 -19.05 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (property "LCSC Part" "C4992678"
-        (at 0 -21.59 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (property "ki_keywords" "Audio Connectors"
-        (at 0 0 0)
-        (effects
-          (font (size 1.27 1.27))
-          (hide yes)))
-      (symbol "RCJ-011_0_1"
-        (polyline
-          (pts (xy -7.62 1.27) (xy -7.62 -1.27) (xy -6.35 -1.27) (xy -6.35 1.27) (xy -7.62 1.27))
-          (stroke (width 0) (type default))
-          (fill (type background)))
-        (polyline
-          (pts (xy -6.86 -1.27) (xy -6.86 -3.81) (xy 1.27 -3.81))
-          (stroke (width 0) (type default))
-          (fill (type none)))
-        (polyline
-          (pts (xy 1.27 1.27) (xy -2.54 1.27) (xy -3.81 0) (xy -5.08 1.27))
-          (stroke (width 0) (type default))
-          (fill (type none)))
-        (pin passive line
-          (at 6.35 1.27 180)
-          (length 5.08)
-          (name "2"
-            (effects
-              (font (size 1.27 1.27))))
-          (number "2"
-            (effects
-              (font (size 1.27 1.27)))))
-        (pin passive line
-          (at 6.35 -3.81 180)
-          (length 5.08)
-          (name "1"
-            (effects
-              (font (size 1.27 1.27))))
-          (number "1"
-            (effects
-              (font (size 1.27 1.27))))))
-      (embedded_fonts no))
     (symbol "lcsc:RCJ-014"
       (exclude_from_sim no)
       (in_bom yes)
@@ -8759,7 +8680,7 @@
       (justify left))
     (uuid "0053a14c-fd7c-5aab-ae46-35a4a3654e43"))
   (symbol
-    (lib_id "lcsc:RCJ-011")
+    (lib_id "lcsc:RCJ-014")
     (at 749.3 36.83 0)
     (unit 1)
     (exclude_from_sim no)
@@ -8786,12 +8707,12 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C4992678"
+    (property "LCSC" "C4991844"
       (at 749.3 36.83 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "Note" "black RCJ-01x"
+    (property "Note" "yellow RCJ-01x"
       (at 749.3 36.83 0)
       (effects
         (font (size 1.27 1.27))
@@ -8941,7 +8862,7 @@
       (justify left))
     (uuid "db6e47f2-4244-5bea-9bc7-5fdbd22114b0"))
   (symbol
-    (lib_id "lcsc:RCJ-011")
+    (lib_id "lcsc:RCJ-014")
     (at 821.69 36.83 0)
     (unit 1)
     (exclude_from_sim no)
@@ -8968,12 +8889,12 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C4992678"
+    (property "LCSC" "C4991844"
       (at 821.69 36.83 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "Note" "black RCJ-01x"
+    (property "Note" "yellow RCJ-01x"
       (at 821.69 36.83 0)
       (effects
         (font (size 1.27 1.27))
@@ -9495,7 +9416,7 @@
       (at 821.69 123.19 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "30p"
+    (property "Value" "33p"
       (at 821.69 138.43 0)
       (effects
         (font (size 1.27 1.27))))
@@ -9509,7 +9430,7 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C1570"
+    (property "LCSC" "C1562"
       (at 821.69 130.81 0)
       (effects
         (font (size 1.27 1.27))
@@ -9554,7 +9475,7 @@
       (at 843.28 123.19 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "30p"
+    (property "Value" "33p"
       (at 843.28 138.43 0)
       (effects
         (font (size 1.27 1.27))))
@@ -9568,7 +9489,7 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C1570"
+    (property "LCSC" "C1562"
       (at 843.28 130.81 0)
       (effects
         (font (size 1.27 1.27))
@@ -13702,7 +13623,7 @@
       (justify left))
     (uuid "d986e3c5-798a-5071-9f82-f52873591287"))
   (symbol
-    (lib_id "lcsc:RCJ-011")
+    (lib_id "lcsc:RCJ-014")
     (at 1009.65 71.12 0)
     (unit 1)
     (exclude_from_sim no)
@@ -13729,12 +13650,12 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C4992678"
+    (property "LCSC" "C4991844"
       (at 1009.65 71.12 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "Note" "black RCJ-01x"
+    (property "Note" "yellow RCJ-01x"
       (at 1009.65 71.12 0)
       (effects
         (font (size 1.27 1.27))
@@ -16296,7 +16217,7 @@
       (at 1155.7 173.99 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "51"
+    (property "Value" "49.9"
       (at 1155.7 189.23 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16310,7 +16231,7 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25125"
+    (property "LCSC" "C25120"
       (at 1155.7 181.61 0)
       (effects
         (font (size 1.27 1.27))
@@ -16355,7 +16276,7 @@
       (at 1186.18 173.99 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "51"
+    (property "Value" "49.9"
       (at 1186.18 189.23 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16369,7 +16290,7 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25125"
+    (property "LCSC" "C25120"
       (at 1186.18 181.61 0)
       (effects
         (font (size 1.27 1.27))
@@ -16414,7 +16335,7 @@
       (at 1219.2 173.99 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "51"
+    (property "Value" "49.9"
       (at 1219.2 189.23 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16428,7 +16349,7 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25125"
+    (property "LCSC" "C25120"
       (at 1219.2 181.61 0)
       (effects
         (font (size 1.27 1.27))
@@ -16473,7 +16394,7 @@
       (at 1250.95 173.99 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "51"
+    (property "Value" "49.9"
       (at 1250.95 189.23 0)
       (effects
         (font (size 1.27 1.27))))
@@ -16487,7 +16408,7 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C25125"
+    (property "LCSC" "C25120"
       (at 1250.95 181.61 0)
       (effects
         (font (size 1.27 1.27))
