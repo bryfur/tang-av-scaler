@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """A PNG of a board (top view), for looking at a placement or a routing.
 
-    python3 snap.py board.kicad_pcb out.png [--layers F.Cu,B.Cu,...] [--clip x0,y0,x1,y1]
+    python3 kit/snap.py board.kicad_pcb out.png [--layers F.Cu,B.Cu,...] [--clip x0,y0,x1,y1]
 
 Default layers F.Cu,B.Cu,F.Fab,B.Fab,Edge.Cuts; --clip zooms to a window in board mm (the whole
-board otherwise). Uses kicad-cli for the PDF and PyMuPDF (~/tools/eda-venv) for the raster.
+board otherwise). kicad-cli plots an SVG whose page is the board's outline, PyMuPDF
+(~/tools/eda-venv) rasterises it.
 """
 import os
 import subprocess
@@ -30,24 +31,20 @@ def main():
     layers = opt.get("--layers", "F.Cu,B.Cu,F.Fab,B.Fab,Edge.Cuts")
     clip = opt.get("--clip", "%s,%s,%s,%s" % (X0, Y0, X1, Y1))
     with tempfile.TemporaryDirectory() as tmp:
-        pdf, edge = os.path.join(tmp, "b.pdf"), os.path.join(tmp, "e.pdf")
-        for out_, layers_ in ((pdf, layers), (edge, "Edge.Cuts")):
-            subprocess.run(["kicad-cli", "pcb", "export", "pdf", "--layers", layers_, "--exclude-value",
-                            "--black-and-white", "--drill-shape-opt", "1", "-o", out_, src],
-                           check=True, stdout=subprocess.DEVNULL)
+        svg = os.path.join(tmp, "b.svg")
+        subprocess.run(["kicad-cli", "pcb", "export", "svg", "--layers", layers, "--black-and-white",
+                        "--page-size-mode", "2", "--exclude-drawing-sheet", "--drill-shape-opt", "1",
+                        "--mode-single", "-o", svg, src], check=True, stdout=subprocess.DEVNULL)
         subprocess.run([PY, "-c", """
 import sys, pymupdf
 d = pymupdf.open(sys.argv[1]); p = d[0]
 X0, Y0, X1, Y1, x0, y0, x1, y1 = [float(v) for v in sys.argv[3].split(",")]
-# the board outline (plotted alone, on the same page) maps board mm to page points
-r = None
-for dr in pymupdf.open(sys.argv[4])[0].get_drawings():
-    r = dr["rect"] if r is None else r | dr["rect"]
-k = r.width / (X1 - X0)
-c = pymupdf.Rect(r.x0 + (x0 - X0) * k, r.y0 + (y0 - Y0) * k, r.x0 + (x1 - X0) * k, r.y0 + (y1 - Y0) * k)
+# the page is the board's outline: board mm -> page points
+k = p.rect.width / (X1 - X0)
+c = pymupdf.Rect((x0 - X0) * k, (y0 - Y0) * k, (x1 - X0) * k, (y1 - Y0) * k) & p.rect
 zoom = 2400 / c.width
 p.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=c).save(sys.argv[2])
-""", pdf, out, "%s,%s,%s,%s,%s" % (X0, Y0, X1, Y1, clip), edge], check=True)
+""", svg, out, "%s,%s,%s,%s,%s" % (X0, Y0, X1, Y1, clip)], check=True)
     print(out)
 
 

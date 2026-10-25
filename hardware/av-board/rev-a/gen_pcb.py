@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), "kit"))
 import board  # noqa: E402
 import pcbkit  # noqa: E402
 import pcbnew  # noqa: E402
-from pcbkit import courtyard, inside, pad_pos  # noqa: E402
+from pcbkit import courtyard, fit_adv7511, fit_esd, inside, pad_pos  # noqa: E402
 from pcbnew import VECTOR2I, FromMM, ToMM  # noqa: E402
 
 # Copper layers: 6 (F.Cu / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu),
@@ -88,17 +88,6 @@ def fit_u1(fp, x, y):
     return a1[1] > y and a16[1] < y
 
 
-def fit_u2(fp, x, y):
-    """Data side (D8-D15, pins 81-88) up, towards J9; TMDS side down."""
-    return pad_pos(fp, "84")[1] < y - 5 and pad_pos(fp, "36")[1] > y + 5
-
-
-def fit_esd(fp, x, y):
-    """Lines enter on pads 1-5 (U2's side, left) and leave on 10-6; pad 1 at the top."""
-    p1, p10, p5 = pad_pos(fp, "1"), pad_pos(fp, "10"), pad_pos(fp, "5")
-    return p1[0] < p10[0] and p1[1] < p5[1]
-
-
 class RevA(pcbkit.Layout):
     LAYERS = LAYERS
     POWER_NETS = {"+5V", "3V3", "2V5", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_2V5", "AV_VDD", "AV_AVDD", "AV_CVDD",
@@ -162,7 +151,7 @@ class RevA(pcbkit.Layout):
 
     def __init__(self):
         super().__init__(board, HERE)
-        self.FIT = {"U1": fit_u1, "U2": fit_u2, "U9": fit_esd, "U10": fit_esd}
+        self.FIT = {"U1": fit_u1, "U2": fit_adv7511, "U9": fit_esd, "U10": fit_esd}
         self.FIT.update({r: self.fit_fl(r) for r in FL_PLANE})
         self.to_grid = None         # board mm -> U1's ball grid, once U1 is placed
         self.rr = {}                # decoupling round robin over a rail's balls
@@ -284,7 +273,7 @@ class RevA(pcbkit.Layout):
         for ref in ("J1", "J2", "J3", "J4", "J5"):
             bx = courtyard(fps[ref], 0)
             assert bx[0] < self.X0 + 1.5, (ref, bx)
-        assert fit_u2(fps["U2"], ToMM(fps["U2"].GetPosition().x), ToMM(fps["U2"].GetPosition().y)), "U2 rotation"
+        assert fit_adv7511(fps["U2"], ToMM(fps["U2"].GetPosition().x), ToMM(fps["U2"].GetPosition().y)), "U2 rotation"
         assert courtyard(fps["J6"], 0)[2] > self.X1 - 1.5, "HDMI not at the right edge"
 
     def fanout(self, b, fps):

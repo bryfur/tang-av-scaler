@@ -18,8 +18,12 @@ import rev  # noqa: E402
 def main():
     r, rest = rev.args(__doc__)
     lay = pcbkit.layout_of(rev.rev_dir(r))
-    a = [x for x in rest if not x.startswith("--")]
-    lim = float(sys.argv[sys.argv.index("--min") + 1]) if "--min" in sys.argv else 8.0
+    lim = 8.0
+    if "--min" in rest:
+        i = rest.index("--min")
+        lim = float(rest[i + 1])
+        del rest[i:i + 2]
+    a = rest
     b = pcbnew.LoadBoard(a[0] if a else lay.OUT)
     pads = {}
     for fp in b.GetFootprints():

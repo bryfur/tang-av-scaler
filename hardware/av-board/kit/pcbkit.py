@@ -95,6 +95,18 @@ def inside(poly, r, c):
     return hit
 
 
+def fit_adv7511(fp, x, y):
+    """ADV7511 (LQFP-100): data side (D8-D15, pins 81-88) up, towards J9; TMDS side down."""
+    return pad_pos(fp, "84")[1] < y - 5 and pad_pos(fp, "36")[1] > y + 5
+
+
+def fit_esd(fp, x, y):
+    """TPD4E05U06 (flow-through): lines enter on pads 1-5 (the ADV7511's side, left) and leave on
+    10-6; pad 1 at the top."""
+    p1, p10, p5 = pad_pos(fp, "1"), pad_pos(fp, "10"), pad_pos(fp, "5")
+    return p1[0] < p10[0] and p1[1] < p5[1]
+
+
 def seg_dist(px, py, ax, ay, bx, by):
     dx, dy = bx - ax, by - ay
     l2 = dx * dx + dy * dy

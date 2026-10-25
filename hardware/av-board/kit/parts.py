@@ -43,9 +43,10 @@ def part(ref, value, symbol, footprint, lcsc, pins, dnp=False, note=""):
 
 
 # Two-pin parts: kind -> (symbol, footprint).  Values -> LCSC numbers (JLCPCB stock, checked
-# 2026-10-24 with tools in the README; "basic" parts where one exists).
+# 2026-10-24/25 with tools in the README; "basic" parts where one exists).
 TWO = {
     "R0402": ("Device:R", "Resistor_SMD:R_0402_1005Metric"),
+    "R0603": ("Device:R", "Resistor_SMD:R_0603_1608Metric"),
     "C0402": ("Device:C", "Capacitor_SMD:C_0402_1005Metric"),
     "C0603": ("Device:C", "Capacitor_SMD:C_0603_1608Metric"),
     "C0805": ("Device:C", "Capacitor_SMD:C_0805_2012Metric"),
@@ -60,9 +61,11 @@ LCSC = {
     ("R0402", "499"): "C4125", ("R0402", "887"): "C55968414", ("R0402", "2k"): "C4109",
     ("R0402", "4.7k"): "C25900", ("R0402", "10k"): "C25744", ("R0402", "30.1k"): "C29402",
     ("R0402", "78.7k"): "C67239", ("R0402", "100k"): "C25741", ("R0402", "169k"): "C25758",
-    ("R0402", "316k"): "C25777", ("R0402", "390k"): "C2909352",
+    ("R0402", "316k"): "C25777", ("R0402", "390k"): "C2909352", ("R0402", "33"): "C25105",
+    ("R0402", "1M"): "C26083", ("R0402", "1.69k"): "C25870", ("R0603", "75"): "C4275",
     ("C0402", "6.8p"): "C1576", ("C0402", "30p"): "C1570", ("C0402", "220p"): "C1530",
-    ("C0402", "1n"): "C1523", ("C0402", "10n"): "C15195", ("C0402", "100n"): "C1525",
+    ("C0402", "1n"): "C1523", ("C0402", "10n"): "C15195", ("C0402", "82n"): "C277511",
+    ("C0402", "100n"): "C1525",
     ("C0603", "470n"): "C1623", ("C0603", "1u"): "C15849", ("C0603", "10u"): "C19702",
     ("C0805", "4.7u"): "C1779", ("C0805", "10u"): "C15850", ("C0805", "22u"): "C45783",
     ("FB0603", "600R"): "C1002", ("TANT_B", "33u"): "C7202", ("L4018", "10uH"): "C222882",
