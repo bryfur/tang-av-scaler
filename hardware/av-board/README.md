@@ -30,6 +30,21 @@ KiCad files. On a machine with KiCad 9 (here: the build host):
 `sexp.py` reads and writes KiCad's s-expression files; `fix_lib.py` makes the LCSC symbols'
 pins passive (their EasyEDA pin types are arbitrary).
 
+## Ordering at JLCPCB
+
+`fab/av-board-gerbers.zip` for the board, `fab/av-board-bom.csv` and `fab/av-board-cpl.csv` for
+assembly. Settings the files do not carry:
+
+- 6 layers, 1.6 mm, stack-up **JLC06161H-7628B** (the TMDS geometry assumes its 0.218 mm 7628
+  prepreg under the outer layers); impedance control on: the TMDS pairs are 0.2 mm with 0.15 mm
+  gap on the outer layers, about 100 R differential. Confirm in JLCPCB's impedance calculator.
+- Via 0.3 mm drill / 0.5 mm pad, minimum track and space 0.127 mm.
+- Assembly on both sides (83 of 229 parts are on the bottom), including the through-hole parts
+  (J9/J10 sockets on the bottom, RCA jacks, HDMI). The ADV7842 is a 1.0 mm-pitch BGA.
+- Check every part's rotation in JLCPCB's placement preview: its library sometimes turns a part
+  90 or 180 degrees from KiCad's.
+- TEST8's pull-down (DNP) is left out of the BOM on purpose (design.md).
+
 ## The host's headers (Sipeed's schematic Tang_138K_Console_V32001C, sheet FPGA_EXT_CONN)
 
 J9 ("SDRAM0") and J10 ("SDRAM1"): 2x20, 2.54 mm, SMD male headers, parallel, 49 mm apart (J9 along

@@ -259,19 +259,26 @@ Six layers, in three passes:
    only, so it may move any routed track; DEEPPCB_PLANE_KEEPOUT, the rail planes kept clear of
    other wires; pairs without forced geometry, which it cannot fit into the connector's pins
    1 mm apart): it routed all else and D2, D0 as pairs; stitching vias left out, put back after.
-3. mazeroute.py for what DeepPCB left (CK and D1 from the ADV7511 to the ESD arrays), the N
-   line of each pair routed along its P line (the pair-follow cost).
+3. mazeroute.py for what DeepPCB left (CK and D1 from the ADV7511 to the ESD arrays), at the
+   TMDS class's 0.2 mm on F.Cu/B.Cu only (MAZE_WIDTH, MAZE_LAYERS), the N line of each pair
+   routed along its P line (the pair-follow cost), each run pulled straight.
 
-Result: DRC clean, only silkscreen warnings. TMDS (mm; coupled = P within 0.5 mm of N):
+Result: DRC clean, only silkscreen warnings. TMDS, all 0.2 mm (mm; coupled = P within 0.5 mm of N):
 
-| Pair | P | N | skew | vias | coupled |
-|---|---|---|---|---|---|
-| D2 | 19.2 | 19.8 | 0.6 | 2/2 | 81 % |
-| D1 | 14.4 | 17.6 | 3.2 | 2/2 | 52 % |
-| D0 | 17.6 | 18.2 | 0.6 | 2/2 | 79 % |
-| CK | 19.0 | 22.8 | 3.7 | 2/3 | 59 % |
+| Pair | P | N | skew | vias | coupled | layers |
+|---|---|---|---|---|---|---|
+| D2 | 19.2 | 19.8 | 0.6 | 2/2 | 81 % | F, B |
+| D1 | 20.6 | 22.4 | 1.8 | 2/2 | 53 % | F, B |
+| D0 | 17.6 | 18.2 | 0.6 | 2/2 | 79 % | F, In3 |
+| CK | 19.5 | 24.7 | 5.2 | 2/2 | 31 % | F, B |
 
-The worst skew, 3.7 mm, is about 25 ps; HDMI allows about 0.15 bit, 100 ps, at 1080p. R_EXT
+Impedance, outer layers over the 0.218 mm 7628 prepreg (er 4.4) of JLC06161H-7628B: 0.2 mm
+is about 68 R single-ended, about 103 R differential at DeepPCB's 0.15 mm gap (IPC-2141 edge-
+coupled microstrip; solder mask takes a few ohm off): inside 100 R +-15 %. To confirm in
+JLCPCB's impedance calculator before ordering (outer layer, W 0.2, S 0.15, the stack above).
+CK carries the pixel clock (148.5 MHz), a tenth of the data rate: its looser coupling matters least.
+
+The worst skew, CK's 5.2 mm, is about 35 ps; HDMI allows about 0.15 bit, 100 ps, at 1080p. R_EXT
 (pin 28): only +5V, HPD and the ADV7511's own supplies within 1.5 mm, nothing switching near it
 [HWG 7.6]. DeepPCB notes: it marks all existing copper protected unless told per item; planes
 it receives can be cut by any net unless their keepoutRule says otherwise.

@@ -641,6 +641,7 @@ def main():
     assert courtyard(fps["J6"], 0)[2] > X1 - 1.5, "HDMI not at the right edge"
 
     rules(b)
+    silkscreen(b)
     fanout_u1(b, fps["U1"])
     fanout_planes(b, fps["U1"])
     planes(b, fps["U1"])
@@ -653,6 +654,97 @@ def main():
 # ---------------------------------------------------------------------------
 # Rules, fanout, planes, routing
 # ---------------------------------------------------------------------------
+
+# Silkscreen: designators only for the parts one finds by eye (ICs, connectors, filters,
+# inductors, crystal, buttons, fuse, ferrite, holes); the passives' stay on the fab layer (JLCPCB
+# places from the CPL, and 0402s leave no room). Labels by the inputs and outputs, and the board's.
+SILK_KEEP = {"U", "J", "SW", "Y", "FL", "L", "F", "FB", "H"}
+SILK_LABELS = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J4", "L"), ("J5", "R")]
+BOARD_LABEL = "tang-av-scaler AV board rev A"
+
+
+_removed = []
+
+
+def silkscreen(b):
+    silk = (pcbnew.F_SilkS, pcbnew.B_SilkS)
+    # copper a text must keep off, per side (through-hole pads on both)
+    pads = {pcbnew.F_SilkS: [], pcbnew.B_SilkS: []}
+    for fp in b.GetFootprints():
+        for pad in fp.Pads():
+            r = pad.GetBoundingBox()
+            box = (ToMM(r.GetLeft()) - 0.15, ToMM(r.GetTop()) - 0.15, ToMM(r.GetRight()) + 0.15, ToMM(r.GetBottom()) + 0.15)
+            th = pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH)
+            for side in ((pcbnew.F_SilkS, pcbnew.B_SilkS) if th else
+                         ((pcbnew.B_SilkS,) if fp.IsFlipped() else (pcbnew.F_SilkS,))):
+                pads[side].append(box)
+    placed = {pcbnew.F_SilkS: [], pcbnew.B_SilkS: []}
+
+    def hits(box, boxes):
+        return any(box[2] > q[0] and box[0] < q[2] and box[3] > q[1] and box[1] < q[3] for q in boxes)
+    for fp in b.GetFootprints():
+        prefix = "".join(ch for ch in fp.GetReference() if ch.isalpha())
+        ref = fp.Reference()
+        # the value and the other fields (the LCSC number) are for the BOM, not the silkscreen
+        for fld in fp.GetFields():
+            if not fld.IsReference() and fld.GetLayer() in silk:
+                fld.SetVisible(False)
+        if prefix not in SILK_KEEP:
+            ref.SetVisible(False)
+            continue
+        # the designator where it is clear of copper and of the texts placed so far: above, below,
+        # left or right of the part, or on its body; hidden if none is
+        side = ref.GetLayer()
+        ref.SetTextSize(VECTOR2I(FromMM(0.8), FromMM(0.8)))
+        ref.SetTextThickness(FromMM(0.15))
+        cy = courtyard(fp, 0.2)
+        cx_, cy_ = (cy[0] + cy[2]) / 2, (cy[1] + cy[3]) / 2
+        for x, y, ang in ((cx_, cy[1] - 0.6, 0), (cx_, cy[3] + 0.6, 0), (cy[0] - 0.6, cy_, 90),
+                          (cy[2] + 0.6, cy_, 90), (cx_, cy_, 0)):
+            ref.SetTextAngleDegrees(ang)
+            ref.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
+            r = ref.GetBoundingBox()
+            box = (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
+            if box[0] > X0 + 0.3 and box[2] < X1 - 0.3 and box[1] > Y0 + 0.3 and box[3] < Y1 - 0.3 \
+                    and not hits(box, pads[side]) and not hits(box, placed[side]):
+                ref.SetVisible(True)
+                placed[side].append(box)
+                break
+        else:
+            ref.SetVisible(False)
+    labels = {t for _, t in SILK_LABELS} | {"HDMI", BOARD_LABEL}
+    for item in list(b.GetDrawings()):                  # (again on a re-run: no duplicates)
+        if isinstance(item, pcbnew.PCB_TEXT) and item.GetText() in labels:
+            b.Remove(item)
+            _removed.append(item)       # (kept referenced: freed, they break pcbnew's later calls)
+
+    def text(s_, x, y, size, angle=0, spots=None):
+        """A label at (x, y), or at the first of spots [(x, y, angle)] clear of copper and texts."""
+        t = pcbnew.PCB_TEXT(b)
+        t.SetText(s_)
+        t.SetLayer(pcbnew.F_SilkS)
+        t.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
+        t.SetTextSize(VECTOR2I(FromMM(size), FromMM(size)))
+        t.SetTextThickness(FromMM(0.18 if size >= 1.2 else 0.15))
+        t.SetTextAngleDegrees(angle)
+        for x_, y_, a_ in spots or []:
+            t.SetPosition(VECTOR2I(FromMM(x_), FromMM(y_)))
+            t.SetTextAngleDegrees(a_)
+            r = t.GetBoundingBox()
+            box = (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
+            if not hits(box, pads[pcbnew.F_SilkS]) and not hits(box, placed[pcbnew.F_SilkS]):
+                placed[pcbnew.F_SilkS].append(box)
+                break
+        b.Add(t)
+    for ref, label in SILK_LABELS:                      # on the jack's body by the board edge
+        bb = b.FindFootprintByReference(ref).GetBoundingBox(False, False)
+        text(label, X0 + 1.6, ToMM(bb.GetCenter().y), 1.4, 90)
+    bb = b.FindFootprintByReference("J6").GetBoundingBox(False, False)
+    l_, t_, r_, b_ = ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetRight()), ToMM(bb.GetBottom())
+    text("HDMI", l_ + 3.5, t_ - 1.2, 1.2, spots=[(l_ + 3.5 + dx, t_ - 1.2 - dy, 0) for dy in (0, 0.8, 1.6, 2.4) for dx in (0, 1.5, -1.5)]
+         + [(l_ + 3.5, b_ + 1.0 + dy, 0) for dy in (0, 0.8)])
+    text(BOARD_LABEL, (X0 + X1) / 2 - 5, Y1 - 1.6, 1.2)
+
 
 def rules(b):
     # The ground layers are power layers, so Freerouting never routes on them; the rail planes'
@@ -681,10 +773,10 @@ def rules(b):
         c.SetViaDiameter(FromMM(VIA_D))
         c.SetViaDrill(FromMM(VIA_DRILL))
         if name == "TMDS":
-            # 100 R differential, edge-coupled on F.Cu over In1 (JLCPCB 4-layer JLC04161H-7628: 0.21 mm
-            # prepreg, er ~4.4; six layers: JLC06161H-7628B, 0.218 mm, er 4.4): 0.25 mm / 0.2 mm gives
-            # about 97 R by the usual microstrip formulas; check with JLCPCB's impedance calculator
-            # before ordering (a thin 2116 stack would want about 0.16 / 0.2 mm)
+            # 100 R differential, edge-coupled on F.Cu over In1 (JLC06161H-7628B: 0.218 mm prepreg,
+            # er 4.4): 0.25 mm / 0.2 mm gives about 97 R, the class's 0.2 mm at the 0.15 mm gap the
+            # routers keep about 103 R (IPC-2141); check in JLCPCB's impedance calculator before
+            # ordering (a thin 2116 stack would want about 0.16 / 0.2 mm)
             c.SetDiffPairWidth(FromMM(0.25))
             c.SetDiffPairGap(FromMM(0.2))
         ns.SetNetclass(name, c)
@@ -1187,5 +1279,9 @@ if __name__ == "__main__":
         finish()
     elif "--pour" in sys.argv:
         pour()
+    elif "--silk" in sys.argv:              # the silkscreen rules on a board as it is (routed)
+        b = pcbnew.LoadBoard(OUT)
+        silkscreen(b)
+        pcbnew.SaveBoard(OUT, b)
     else:
         main()

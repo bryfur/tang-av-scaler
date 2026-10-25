@@ -15,3 +15,6 @@ __pycache__/
 
 # 3D models from LCSC (60 MB): fetched by hardware/av-board/fetch_lib.sh
 hardware/*/lib/*.3dshapes/
+
+# fab outputs: the zip, BOM and CPL are kept; the loose Gerbers are in the zip
+hardware/*/fab/gerbers/

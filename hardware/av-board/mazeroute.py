@@ -15,10 +15,14 @@ Check the result with kicad-cli pcb drc.
 import heapq
 import json
 import math
+import os
 import sys
 
-LAYERS = ["F.Cu", "In2.Cu", "B.Cu"]
-TRACK, CLEAR, VIA_D, VIA_DRILL, HOLE = 0.127, 0.15, 0.5, 0.3, 0.25
+# MAZE_LAYERS / MAZE_WIDTH: the layers to route on and the track width (a TMDS line: F.Cu,B.Cu at
+# its class's 0.2 mm)
+LAYERS = os.environ.get("MAZE_LAYERS", "F.Cu,In2.Cu,B.Cu").split(",")
+TRACK = float(os.environ.get("MAZE_WIDTH", "0.127"))
+CLEAR, VIA_D, VIA_DRILL, HOLE = 0.15, 0.5, 0.3, 0.25
 RES = 0.025                                 # grid, mm
 MARGIN = 4.0                                # round the two pads, mm
 VIA_COST = 60                               # a via costs as much as 1.5 mm of track
@@ -175,22 +179,32 @@ def route(inp, out):
     while path[-1] in came:
         path.append(came[path[-1]])
     path.reverse()
-    # into tracks (straight runs merged) and vias
+    # into tracks and vias: each run on one layer pulled into the fewest straight segments that
+    # stay on free cells (line of sight over the grid), then a via where the layer changes
+    def clear_line(k, a_, b_):
+        n = max(abs(b_[0] - a_[0]), abs(b_[1] - a_[1]))
+        return all(not tblock[k, int(round(a_[0] + (b_[0] - a_[0]) * t / n)), int(round(a_[1] + (b_[1] - a_[1]) * t / n))]
+                   for t in range(1, n))
+
+    def straighten(run):
+        k = run[0][0]
+        pts, i = [run[0]], 0
+        while i < len(run) - 1:
+            j = len(run) - 1
+            while j > i + 1 and not clear_line(k, run[i][1:], run[j][1:]):
+                j -= 1
+            pts.append(run[j])
+            i = j
+        return pts
     parts, run = [], [path[0]]
     for p in path[1:]:
         if p[0] != run[-1][0]:
-            parts.append(("track", run))
+            parts.append(("track", straighten(run)))
             parts.append(("via", p))
             run = [p]
             continue
-        if len(run) >= 2:
-            d1 = (run[-1][1] - run[-2][1], run[-1][2] - run[-2][2])
-            d2 = (p[1] - run[-1][1], p[2] - run[-1][2])
-            if d1 == d2:
-                run[-1] = p
-                continue
         run.append(p)
-    parts.append(("track", run))
+    parts.append(("track", straighten(run)))
     res = {"net": d["net"], "tracks": [], "vias": []}
     # (from and to the pads' centres: a grid cell in a round pad's bounding box can lie off it)
     first = [p for p in parts if p[0] == "track"][0][1]
