@@ -3,10 +3,11 @@
 Rev A with the ADV7842 (256-ball BGA) replaced by the ADV7181D (64-lead LFCSP): component video
 into the ADV7181D, stereo audio into a PCM1808, HDMI out of an ADV7511. Four layers, no BGA.
 
-Status: routed, DRC clean (no errors, no unconnected items; silkscreen warnings only, the
-jacks' outlines over the board edge as on rev A), fab files made; not ordered.
+Status: reviewed against every part's data sheet (review.md), routed, DRC clean, fab files made;
+not ordered.
 
 - [design.md](design.md): what changed from rev A, and the ADV7181D's circuit with its sources
+- [review.md](review.md): every part checked against its data sheet, with the fixes
 - `board.py`, `gen_pcb.py`: the sources; made as in [../README.md](../README.md)
 
 ## Ordering at JLCPCB
@@ -20,10 +21,13 @@ jacks' outlines over the board edge as on rev A), fab files made; not ordered.
 
 Settings the files do not carry:
 
-- 4 layers, 1.6 mm, stack-up **JLC04161H-7628** (the TMDS geometry assumes its 7628 prepreg
-  under the outer layers); impedance control on: the TMDS pairs are 0.2 mm with 0.15 mm gap on
-  the outer layers, about 100 R differential. Confirm in JLCPCB's impedance calculator.
-- Via 0.3 mm drill / 0.5 mm pad, minimum track and space 0.127 mm.
+- 4 layers, 1.6 mm, stack-up **JLC04161H-7628**: F.Cu signal / In1 GND / In2 GND / B.Cu signal
+  (the TMDS geometry assumes the 0.21 mm 7628 prepreg under each outer layer). Impedance control
+  on: the TMDS pairs are 0.25 mm lines with a 0.25 mm gap on F.Cu, 103 R differential by
+  IPC-2141. Confirm in JLCPCB's impedance calculator (outer layer, W 0.25, S 0.25).
+- Vias 0.5/0.3 mm, and four 0.4/0.2 mm ones at the ESD arrays' GND pads (inside JLCPCB's
+  0.3/0.15 mm four-layer minimum; check the quote does not add a small-via charge). Minimum track
+  and space 0.127 mm.
 - Assembly: **top side only**: every SMT part is on the top. Underneath are only the J9/J10
   sockets (through-hole, soldered from the top). Through-hole parts: the two sockets, HDMI's
   shell, and the RCA jacks unless they are left for hand soldering.

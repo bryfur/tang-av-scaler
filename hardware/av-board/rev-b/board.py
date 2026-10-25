@@ -58,49 +58,61 @@ for k in (1, 2):
 # ---------------------------------------------------------------------------
 
 block("power")
-# 3V3: TPS7A7001 from +5 V; R1 169 k, R2 30.1 k [TI Table 2]; 10 uF in and out [TI 6.3]; the
-# 220 pF feed-forward across R1 [TI 8.1.2] as on rev A (its load: about 30 uF of ceramics)
-part("U5", "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", "C60719",
-     {"3": "+5V", "2": "+5V", "6": "3V3", "7": "FB_3V3", "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
+# The supply tree (design.md "Power", review.md): +5 V -> TLV62569 buck -> 3V6 -> TPS7A7001 3V3 ->
+# two TPS7A7001 1.8 V LDOs (1V8A: ADV7181D, 1V8B: ADV7511). Each LDO is enabled by its own input,
+# so a 1.8 V rail rises behind 3V3 and can never pass it, and once in regulation trails it by
+# 1.5 V: the ADV7181D's supply-to-supply limits (DVDDIO - PVDD and AVDD - DVDD within -0.3..+2 V
+# [DS Table 5]) hold at power-up by construction. Rev A started 3V3 30 ms before the 1.8 V rails,
+# a 3.3 V difference.
+
+# 3V6: TLV62569 buck [TI Fig. 5, 8.2.2]: R2 100 k, R1 499 k: 0.6 V x (1 + 4.99) = 3.594 V (Eq. 2);
+# 6.8 pF feed-forward for R2 = 100 k [TI 8.2.2.2]; 2.2 uH (Isat 2 A, 78 mR) with 10 uF out
+# [Table 4]; 10 uF in (TI's 4.7 uF, doubled: the 0805's 5 V DC bias leaves about 60 %). About
+# 0.6 A out
+part("U4", "TLV62569DBVR", "lcsc:TLV62569DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C141836",
+     {"1": "+5V", "2": "GND", "3": "SW_3V6", "4": "+5V", "5": "FB_3V6"})
 C("10u", "+5V", size="C0805")
+two(nxt("L"), "L3015", "2.2uH", "SW_3V6", "3V6")
+C("10u", "3V6", size="C0805")
+R("499k", "3V6", "FB_3V6")
+R("100k", "FB_3V6", "GND")
+C("6.8p", "3V6", "FB_3V6")
+
+# 3V3: TPS7A7001 from 3V6, EN tied to IN [TI 7.3.1]; R1 169 k / R2 30.1 k = 3.307 V [TI Table 2];
+# 10 uF in and out [TI 6.3]; 220 pF feed-forward across R1 [TI 8.1.2: more than 47 uF on the
+# output, here about 60 uF with the 1.8 V LDOs' inputs]. 0.3 V headroom against about 0.1 V
+# dropout at its 0.6 A [TI Fig. 3]; 0.18 W
+part("U5", "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", "C60719",
+     {"3": "3V6", "2": "3V6", "6": "3V3", "7": "FB_3V3", "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
+C("10u", "3V6", size="C0805")
 C("10u", "3V3", size="C0805")
 R("169k", "3V3", "FB_3V3")
 R("30.1k", "FB_3V3", "GND")
 C("220p", "3V3", "FB_3V3")
 
-# 2V5: TLV62569 buck [TI Fig. 5]: 4.7 uF in, 2.2 uH, 10 uF out, R1 316 k / R2 100 k (Eq. 2), 6.8 pF;
-# it feeds the two 1.8 V LDOs, which then drop 0.7 V instead of 3.2 V
-part("U4", "TLV62569DBVR", "lcsc:TLV62569DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C141836",
-     {"1": "+5V", "2": "GND", "3": "SW_2V5", "4": "+5V", "5": "FB_2V5"})
-C("4.7u", "+5V")
-two(nxt("L"), "L3015", "2.2uH", "SW_2V5", "2V5")
-C("10u", "2V5", size="C0805")
-R("316k", "2V5", "FB_2V5")
-R("100k", "FB_2V5", "GND")
-C("6.8p", "2V5", "FB_2V5")
-
-# 1.8 V enable through 100 k, 470 nF [PSU Fig. 2]: the 1.8 V rails come up about 30 ms after
-# 2V5, after 3V3 (ADV7181D: DVDDIO and AVDD may lead DVDD and PVDD by up to 2 V [DS Table 5]).
-# From 2V5, the LDOs' own input: EN must stay at or below VIN [TI 6.3]
-R("100k", "2V5", "EN_1V8")
-C("470n", "EN_1V8")
-
-# 1V8A (ADV7181D) and 1V8B (ADV7511): TPS7A7001 from 2V5, R1 78.7 k / R2 30.1 k [TI Table 2];
-# 10 uF out, 220 pF feed-forward as for 3V3 [TI 6.3, 8.1.2]
+# 1V8A (ADV7181D, about 0.13 A) and 1V8B (ADV7511, at most 0.18 A [HWG 6.8.2: 326 mW]): TPS7A7001
+# from 3V3, EN tied to IN; R1 78.7 k / R2 30.1 k = 1.807 V [TI Table 2]; 10 uF in and out, 220 pF
+# feed-forward as for 3V3. 0.2 and 0.27 W
 for u, out, fb, lc in (("U6", "1V8A", "FB_1V8A", "C60719"), ("U7", "1V8B", "FB_1V8B", "C60719")):
     part(u, "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", lc,
-         {"3": "2V5", "2": "EN_1V8", "6": out, "7": fb, "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
-    C("10u", "2V5", size="C0805")
+         {"3": "3V3", "2": "3V3", "6": out, "7": fb, "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
+    C("10u", "3V3", size="C0805")
     C("10u", out, size="C0805")
     R("78.7k", out, fb)
     R("30.1k", fb, "GND")
     C("220p", out, fb)
 
-# ADV7181D rails: a ferrite per supply, 10 uF after it [PSU: a ferrite per rail, LDOs, 10 uF bulk;
-# DS Fig. 9 draws the rails filtered off-sheet]. 600 R at 100 MHz 0603 beads (the PCM1808's) in
-# place of rev A's NFE61PT filters: these rails carry 0.2 A at most [DS Table 1]
+# Power-down: 3V3 carries the heavier load and may fall faster than 1V8A; a Schottky from 1V8A
+# to 3V3 holds 1V8A within its forward drop (about 0.25 V at a few mA) of 3V3, inside the
+# ADV7181D's -0.3 V [DS Table 5]. Reverse-biased (1.5 V) in operation
+part("D1", "B5819W", "Device:D_Schottky", "Diode_SMD:D_SOD-123", "C8598", {"1": "3V3", "2": "1V8A"})
+
+# ADV7181D rails: a ferrite per supply, 10 uF after it [PSU: a ferrite per rail, 10 uF bulk; DS
+# Fig. 9 draws the rails filtered off-sheet]. BLM18PG121SN1D: 120 R at 100 MHz, 2 A, 50 mR: AVDD's
+# 0.2 A drops 10 mV (the 0.2 A / 0.45 R bead first fitted dropped 90 mV and put AVDD under its
+# 3.15 V minimum at the 3V3 LDO's low limit)
 for src, rail in (("1V8A", "AV_DVDD"), ("1V8A", "AV_PVDD"), ("3V3", "AV_AVDD"), ("3V3", "AV_DVDDIO")):
-    two(nxt("FB"), "FB0603", "600R", src, rail)
+    two(nxt("FB"), "FB0603", "120R", src, rail)
     C("10u", rail)
 
 # ADV7511 rails: 10 uH + 10 uF per domain group [HWG Fig. 23, 7.1]
@@ -145,12 +157,19 @@ for jack, sig, ain, lc, colour in (("J1", "Y", "AIN10", RCA_YELLOW, "yellow"), (
     u1[pin(ain)] = "AIN_" + sig
 C("1n", "RCA_Y", "SYNC_Y")
 u1[pin("SOY")] = "SYNC_Y"
+# ESD on the three video inputs (DS Fig. 9 has none; the jacks are where a charged cable lands):
+# the TMDS lines' TPD4E05U06, 0.42-0.5 pF per line, 5.5 V stand-off [TI-ESD], flow-through, on the
+# lines between the jacks and the terminations; its fourth channel unused (pads 5/6 open)
+part("U11", "TPD4E05U06DQAR", "lcsc:TPD4E05U06DQAR_C138714", "lcsc:USON-10_L2.5-W1.0-P0.50-BL", "C138714",
+     {"1": "RCA_Y", "10": "RCA_Y", "2": "RCA_PB", "9": "RCA_PB", "4": "RCA_PR", "7": "RCA_PR", "3": "GND", "8": "GND"})
 
-# Crystal: 28.63636 MHz fundamental [DS Table 1, pin 21], 1 M across [DS Fig. 9]; load caps for
-# the 20 pF crystal as on rev A, C = 2 (CL - Cstray) - Cpg = 31 pF [AN-1260]: 33 pF C0G, the
-# nearest JLCPCB basic part (about -12 ppm; the crystal's +-20 ppm stays inside the decoder's
-# +-50 ppm). Fig. 9's 47 pF suit its own crystal
-part("Y1", "28.63636MHz 20pF", "lcsc:SMD-5032_2P28.63636M20pF", "lcsc:CRYSTAL-SMD_L5.0-W3.2", "C362486",
+# Crystal: 28.63636 MHz fundamental [DS Table 1, pin 21], 1 M across [DS Fig. 9]. YXC
+# X50322863636MSB2GI: 20 pF load, +-10 ppm at 25 C, +-20 ppm over temperature, 40 R ESR, 5032
+# two-pad (476 in stock; rev A's TXM part had 68). Load caps C = 2 (CL - Cstray) - Cpg = 31 pF
+# [AN-1260], 33 pF C0G the nearest JLCPCB basic part: about 1 pF over the load, about -9 ppm;
+# worst case -39 ppm against the decoder's +-50 ppm [DS Table 1]. Fig. 9's 47 pF suit its own
+# crystal
+part("Y1", "28.63636MHz 20pF", "lcsc:SMD-5032_2P28.63636M20pF", "lcsc:CRYSTAL-SMD_L5.0-W3.2", "C112564",
      {"1": "XTAL", "2": "XTAL1"})
 R("1M", "XTAL", "XTAL1")
 C("33p", "XTAL")
@@ -237,7 +256,7 @@ part("U3", "PCM1808PWR", "lcsc:PCM1808PWR", "lcsc:TSSOP-14_L5.0-W4.4-P0.65-LS6.4
 for pin in ("MD0", "MD1", "FMT"):
     R("10k", pin, "GND")                         # slave mode, I2S [TI 8.2.2.1]
 # VCC: ferrite from +5 V, at the PCM1808
-two(nxt("FB"), "FB0603", "600R", "+5V", "5VA")
+two(nxt("FB"), "FB0603", "120R", "+5V", "5VA")
 for rail in ("VREF", "5VA", "3V3"):
     C("100n", rail)
     C("10u", rail)

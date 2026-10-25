@@ -44,8 +44,18 @@ def fit_u1(fp, x, y):
 
 
 class RevB(pcbkit.Layout):
+    # F.Cu signal / In1 GND / In2 GND / B.Cu signal (JLC04161H-7628): each signal layer 0.21 mm over
+    # its own solid plane, so tracks on either side have the same controlled impedance and return
+    # path [HWG 7.2: a solid reference under the pixel clock; 6.3.2: 100 R TMDS pairs]
     LAYERS = 4
-    POWER_NETS = {"+5V", "3V3", "2V5", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_2V5", "TX_DVDD", "TX_AVDD", "TX_PLVDD"} | AV_RAILS
+    INNER_GND = True
+    # the TMDS pairs at the ADV7511's own 0.5 mm pin pitch: 0.25 mm lines, 0.25 mm gap, 103 R
+    # differential over 0.21 mm of 7628 (IPC-2141; confirm in JLCPCB's calculator)
+    TMDS_W, TMDS_PAIR = 0.25, (0.25, 0.25)
+    # (0.4/0.2 mm vias at the ESD arrays' GND pads, between the pairs; JLCPCB's four-layer minimum
+    # is 0.3/0.15)
+    MIN_VIA = (0.4, 0.2)
+    POWER_NETS = {"+5V", "3V6", "3V3", "1V8A", "1V8B", "5VA", "HDMI_5V", "SW_3V6", "TX_DVDD", "TX_AVDD", "TX_PLVDD"} | AV_RAILS
     CLOCK_NETS = {"OUT_CLK", "AV_LLC", "IN_LLC"}
     TMDS_NETS = {"TMDS_D2_P", "TMDS_D2_N", "TMDS_D1_P", "TMDS_D1_N", "TMDS_D0_P", "TMDS_D0_N", "TMDS_CK_P", "TMDS_CK_N"}
     # Rev A's outline: the Console's, plus 15 mm past its left edge for the jacks
@@ -66,9 +76,11 @@ class RevB(pcbkit.Layout):
         # ADV7511 below J9's data end, data side up, TMDS side down towards the HDMI connector; the
         # band between it and J9 is its bus's (see board.J9_NET)
         "U2": (148.0, 47.0, None, "F"),
-        # the supplies under it, clear of both buses and of the TMDS lines (rev A's places)
-        "U7": (142.5, 63.0, 0, "F"), "U6": (142.5, 71.0, 0, "F"),
-        "U5": (149.0, 65.0, 0, "F"), "U4": (148.5, 74.0, 0, "F"),
+        # the supplies in a row below the TMDS corridor, above J10: 1V8A nearest the ADV7181D,
+        # 1V8B under the ADV7511, 3V3, and the buck furthest right, away from the analog side and
+        # the TMDS lines
+        "U6": (137.0, 68.5, 0, "F"), "U7": (143.5, 68.5, 0, "F"),
+        "U5": (150.0, 68.5, 0, "F"), "U4": (156.5, 70.0, 0, "F"),
         "J6": (163.6, 62.0, 90, "F"),
         # TMDS ESD, in line before the HDMI pads (pins 1-12 at x 160.2, y 57.5-63)
         "U9": (156.3, 58.75, None, "F"), "U10": (156.3, 61.75, None, "F"),
@@ -77,14 +89,16 @@ class RevB(pcbkit.Layout):
     }
     # room kept free of small parts for routing, both sides: the J10 bus's fan-out, from under the
     # ADV7181D's series resistors to J10's pins 1-26
-    RESERVED = [(103.8, 72.4, 136.6, 76.9)]
+    # and the TMDS corridor, from under the ADV7511's TMDS pins to the HDMI connector (the pairs are
+    # laid there before routing, see tmds())
+    RESERVED = [(103.8, 72.4, 136.6, 76.9), (144.55, 55.4, 158.9, 63.6)]
     KEEP = {"U1": 0.5}
     BOTH_SIDES = {"U1", "U2"}       # (under U1: its exposed pad's vias)
     # the loop filter, the ADC references' caps, the bias resistor and the regulators' feedback
     # dividers, placed before the decoupling takes their room: short traces [DS Fig. 8, Fig. 9;
     # HWG 7.6; TI TPS7A70, TLV62569 layout]
     BIAS_NETS = {"ELPF", "ELPF_RC", "CAPY1", "CAPY2", "CAPC2", "REFOUT", "CML", "R_EXT",
-                 "FB_3V3", "FB_2V5", "FB_1V8A", "FB_1V8B"}
+                 "FB_3V3", "FB_3V6", "FB_1V8A", "FB_1V8B"}
     BUSES = [("J10", "U1"), ("J9", "U2")]
     SILK_LABELS = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J4", "L"), ("J5", "R")]
     SILK_NEAR = [("J6", "HDMI")]
@@ -300,6 +314,8 @@ class RevB(pcbkit.Layout):
             q.SetPosition(VECTOR2I(FromMM(ex + dx), FromMM(ey + dy)))
 
     def anchor_special(self, p, ic_pads, fps):
+        if p.ref == "D1":                   # (the 1V8A-to-3V3 clamp: at the 1V8A LDO's output)
+            return [(x, y) for x, y, r in ic_pads["1V8A"] if r == "U6"][0], "F"
         nets_ = [n for n in p.pins.values() if n != "GND"]
         if not nets_ or not all(n in AV_RAILS for n in nets_) and not (
                 p.ref.startswith("FB") and nets_[-1] in AV_RAILS):
@@ -318,6 +334,8 @@ class RevB(pcbkit.Layout):
         return self.rail_spots[rail][0], "F"
 
     def rank_special(self, p, ic_pads):
+        if p.ref == "D1":
+            return 0
         nets_ = set(p.pins.values()) - {"GND"}
         if nets_ and nets_ <= AV_RAILS and p.ref.startswith("C") and p.value == "100n":
             return -1               # (each supply pin's 100 nF before everything, nearest its via)
@@ -336,7 +354,7 @@ class RevB(pcbkit.Layout):
         assert fit_adv7511(fps["U2"], ToMM(fps["U2"].GetPosition().x), ToMM(fps["U2"].GetPosition().y)), "U2 rotation"
         assert courtyard(fps["J6"], 0)[2] > self.X1 - 1.5, "HDMI not at the right edge"
 
-    def fanout(self, b, fps):
+    def fanout_u1(self, b, fps):
         """The exposed pad's ground vias, and the four GND pins joined to the pad on F.Cu."""
         u1 = fps["U1"]
         ep = [p for p in u1.Pads() if p.GetNumber() == "65"][0]
@@ -359,39 +377,77 @@ class RevB(pcbkit.Layout):
             self.via(b, vx, vy, p.GetNet())
         print("U1 fanout: %d exposed-pad vias, %d pin escape vias" % (len(self.EP_VIAS), len(self.rail_vias)))
 
-    # The TMDS pairs, laid again after routing (Freerouting takes some through In2, which has no
-    # close ground on this stack, and leaves their halves apart): pair, the ADV7511's P and N pins,
-    # the ESD array and its P and N pads in and out (flow-through), the connector's P and N pins
+    # The TMDS pairs: pair, the ADV7511's P and N pins, the ESD array and its P and N pads in and
+    # out (flow-through), the connector's P and N pins
     TMDS = [("D2", "43", "42", "U9", "1", "10", "2", "9", "1", "3"),
             ("D1", "40", "39", "U9", "4", "7", "5", "6", "4", "6"),
             ("D0", "36", "35", "U10", "1", "10", "2", "9", "7", "9"),
             ("CK", "33", "32", "U10", "4", "7", "5", "6", "10", "12")]
+    # the ADV7511 pins between the pairs: out inwards, under the package, to a via each
+    # (pin: via's distance in from the pad's centre); the ESD arrays' GND pads (between the
+    # pairs): a small via beside each
+    U2_INWARD = {"34": 1.7, "37": 1.7, "38": 2.4, "41": 1.7}
+    SMALL_VIA = (0.4, 0.2)
 
-    def post_route(self):
-        """Rip the TMDS copper up and lay each pair with mazeroute.py at the class's 0.2 mm: the P
-        line, then the N line along it (its pair-follow cost); the ADV7511 to the ESD array on the
-        outer layers, across the array and on to the connector on F.Cu."""
-        b = pcbnew.LoadBoard(self.OUT)
-        gone = [t for t in b.GetTracks() if t.GetNetname().startswith("TMDS_") and not t.IsLocked()]
-        for t in gone:
-            b.Remove(t)
-        pcbnew.SaveBoard(self.OUT, b)
-        print("TMDS ripped up: %d tracks and vias" % len(gone))
-        del b
+    def tmds(self, b, fps):
+        """The TMDS pairs, locked, on F.Cu (over In1), at the class's 0.25 mm: straight out of the
+        ADV7511's pads, a 45-degree corner, straight on to the ESD array, across its flow-through
+        pads, then to the connector. The lines nest (the pair nearest the array turns first);
+        each corner is cut so that the spacing to the line inside it stays what it is on the
+        straight parts, so a pair stays coupled through the bend."""
+        def pos(ref, num):
+            return pad_pos(fps[ref], num)
+        lines = []
         for pr, up, un, u, pi, po, ni, no, jp, jn in self.TMDS:
-            partner = "TMDS_%s_P" % pr
-            for a, z, f, layers in (("U2." + up, u + "." + pi, None, "F.Cu,B.Cu"), ("U2." + un, u + "." + ni, partner, "F.Cu,B.Cu"),
-                                    (u + "." + pi, u + "." + po, None, "F.Cu"), (u + "." + ni, u + "." + no, partner, "F.Cu"),
-                                    (u + "." + po, "J6." + jp, None, "F.Cu"), (u + "." + no, "J6." + jn, partner, "F.Cu")):
-                self.mazeroute(a, z, f, layers, 0.2)
-        self.prune(self.OUT)
-        b = pcbnew.LoadBoard(self.OUT)
-        b.BuildConnectivity()
-        pcbnew.ZONE_FILLER(b).Fill(b.Zones())
-        pcbnew.SaveBoard(self.OUT, b)
+            for s_, upin, ein, eout, jpin in (("P", up, pi, po, jp), ("N", un, ni, no, jn)):
+                lines.append(("TMDS_%s_%s" % (pr, s_), pos("U2", upin), pos(u, ein), pos(u, eout), pos("J6", jpin)))
+        lines.sort(key=lambda ln: -ln[1][0])            # the innermost (rightmost on the ADV7511) first
+        c_prev, prev = None, None
+        w = self.TMDS_W
+        for name, (x0, y0), (xi, yi), (xo, yo), (xj, yj) in lines:
+            if prev is None:
+                d = 0.6
+                c = x0 - yi + d
+            else:
+                sp = ((prev[0] - x0) + (yi - prev[1])) / 2      # its spacing to the line inside it
+                c = c_prev - math.sqrt(2) * sp
+                d = c - x0 + yi
+            assert 0 < d < min(yi - y0, xi - x0), (name, d)
+            net = b.FindNet(name)
+            pts = [(x0, y0), (x0, yi - d), (x0 + d, yi), (xi, yi), (xo, yo)]
+            # to the connector: straight on, then 45 degrees onto its pin's line
+            dy = yj - yo
+            xk = xj - 1.4 - abs(dy)
+            pts += [(xk, yo), (xk + abs(dy), yj), (xj, yj)]
+            for a_, z_ in zip(pts, pts[1:]):
+                if abs(a_[0] - z_[0]) + abs(a_[1] - z_[1]) > 1e-6:
+                    self.track(b, a_, z_, w, pcbnew.F_Cu, net)
+            c_prev, prev = c, (x0, yi)
+        print("TMDS: %d lines laid" % len(lines))
+
+    def fanout(self, b, fps):
+        self.fanout_u1(b, fps)
+        u2 = fps["U2"]
+        cy2 = ToMM(u2.GetPosition().y)
+        for num, dist in self.U2_INWARD.items():
+            p = [q for q in u2.Pads() if q.GetNumber() == num][0]
+            x, y = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
+            v = (x, y - dist if y > cy2 else y + dist)
+            self.track(b, (x, y), v, 0.25 if p.GetNetname() != "OUT_PD" else self.TRACK, pcbnew.F_Cu, p.GetNet())
+            self.via(b, v[0], v[1], p.GetNet())
+        for u in ("U9", "U10"):
+            fp = fps[u]
+            cx_ = ToMM(fp.GetPosition().x)
+            for num in ("3", "8"):
+                p = [q for q in fp.Pads() if q.GetNumber() == num][0]
+                x, y = ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)
+                v = (x + (0.55 if x > cx_ else -0.55), y)
+                self.track(b, (x, y), v, 0.25, pcbnew.F_Cu, p.GetNet())
+                self.via(b, v[0], v[1], p.GetNet(), *self.SMALL_VIA)
+        self.tmds(b, fps)
 
     def fanout_skip(self):
-        return {"U1"}
+        return {"U1", "U2.37", "U9.3", "U9.8", "U10.3", "U10.8"}
 
 
 LAYOUT = RevB()

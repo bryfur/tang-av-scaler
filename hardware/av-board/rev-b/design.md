@@ -106,8 +106,8 @@ Bring-up: the 720p and 1080i component modes need ADI's recommended register scr
 "Package thermal performance"]; they are with the ADV7181D design support files on EngineerZone.
 
 Supplies [DS Table 1; PSU]: DVDD and PVDD 1.8 V from 1V8A, AVDD and DVDDIO 3.3 V from 3V3, each
-through its own 600 R (100 MHz) 0603 ferrite with 10 uF after it (rev A's NFE61PT filters were
-for the ADV7842's larger currents); per pin as [DS Fig. 9]:
+through its own ferrite (BLM18PG121SN1D: 120 R at 100 MHz, 2 A, 50 mR) with 10 uF after it (rev A's
+NFE61PT filters were for the ADV7842's larger currents); per pin as [DS Fig. 9]:
 
 | Rail | Pins | 0.1 uF | 10 nF | Typical current [DS Table 1] |
 |---|---|---|---|---|
@@ -116,19 +116,49 @@ for the ADV7842's larger currents); per pin as [DS Fig. 9]:
 | PVDD 1.8 | 31 | 1 | 1 | 11-12 mA |
 | AVDD 3.3 | 41 | 1 | 1 | 99-200 mA |
 
-DVDDIO and AVDD may lead DVDD and PVDD by up to 2 V [DS Table 5]: rev A's sequencing (3.3 V
-first, the 1.8 V LDOs enabled about 30 ms later) holds.
+DVDDIO and AVDD may lead DVDD and PVDD by at most 2 V, and trail them by at most 0.3 V [DS Table
+5]. Rev A's sequencing (3.3 V first, the 1.8 V LDOs enabled 30 ms later) broke the first limit;
+see "Power" below.
+
+## Power
+
+```
++5 V (J9.11, J10.11) -> TLV62569 buck -> 3V6 -> TPS7A7001 -> 3V3 -> TPS7A7001 -> 1V8A (ADV7181D)
+                                                               \-> TPS7A7001 -> 1V8B (ADV7511)
++5 V -> ferrite -> PCM1808 VCC;  +5 V -> 0.2 A PTC -> HDMI +5 V
+```
+
+- The buck makes 3.6 V (R1 499 k / R2 100 k, 6.8 pF, 2.2 uH, 10 uF in and out [TI-BUCK]); the 3V3
+  LDO runs from it with 0.3 V headroom (0.17 W instead of 0.94 W from 5 V); the 1.8 V LDOs run
+  from 3V3 (0.2 and 0.27 W).
+- Each LDO's EN is tied to its own input. A 1.8 V rail therefore follows 3V3 up, never above it,
+  and once in regulation sits 1.5 V under it: the ADV7181D's supply-to-supply limits hold at
+  power-up by construction. At power-down a B5819W Schottky from 1V8A to 3V3 keeps 1V8A within
+  about 0.25 V of a falling 3V3 (3V3 has the heavier load).
+- Loads: 3V3 about 0.55 A (AVDD 0.2, DVDDIO 0.04, the 1.8 V LDOs 0.31, the rest small); 1V8A
+  0.13 A; 1V8B at most 0.18 A [HWG 6.8.2].
+- review.md has every check with its source.
 
 ## What else changed from rev A
 
 - Power: the six NFE61PT filters and their 33 uF tantalums and 220 pF plane caps are gone (the
-  four ferrites above take their place); the 1.8 V LDO now feeding the decoder (1V8A) carries
-  about 0.13 A instead of 0.5 A.
+  four ferrites above take their place); the supply tree above.
 - J10's pin map (above): the new chip's pin order.
-- The board: four layers (JLC04161H-7628: F.Cu signal / In1 ground / In2 signal / B.Cu
-  signal), no rail planes. The TMDS pairs keep 0.2 mm / 0.15 mm on the outer layers over In1:
-  the 7628 prepreg under the outer layers is 0.2104 mm thick in this stack (rev A's 0.218 mm),
-  so about 100 R differential still; confirm in JLCPCB's impedance calculator.
+- The board: four layers (JLC04161H-7628): F.Cu signal / In1 ground / In2 ground / B.Cu
+  signal. Each signal layer sits 0.21 mm over its own solid plane (the 7628 prepreg), so a track
+  on either side has the same controlled impedance and a return path under it [HWG 7.2]; power
+  runs as tracks. (A first route used In2 for signals: B.Cu then had no plane closer than In1,
+  1.3 mm away.)
+- The TMDS pairs are laid by gen_pcb.py before routing, locked, on F.Cu: at the ADV7511's own
+  0.5 mm pin pitch, 0.25 mm lines with a 0.25 mm gap, 103 R differential (IPC-2141 over 0.21 mm
+  of 7628; confirm in JLCPCB's calculator). Straight out of the pins, one 45-degree corner each
+  (cut so the spacing to the line inside stays the same through the bend), straight to the ESD
+  arrays, across their flow-through pads, on to the connector. A corridor from the pins to the
+  connector is kept free of other parts. The four ADV7511 pins between the pairs (AVDD 34 and
+  41, GND 37, PD 38) leave inwards, under the package, to a via each; the ESD arrays' GND pads
+  take a 0.4/0.2 mm via beside them, between the pairs.
+- R_EXT's 887 R sits at pin 28 [HWG 7.6].
+- A TPD4E05U06 protects the three video inputs (review.md).
 - The exposed pad: a 3 x 3 grid of 1.6 mm paste windows (about half the pad; a full 7.1 mm
   aperture lifts the part) and 12 ground vias in the lanes between them; the four GND pins join
   the pad on F.Cu.
@@ -158,28 +188,20 @@ first, the 1.8 V LDOs enabled about 30 ms later) holds.
 
 `gen_pcb.py --route` does all of it:
 
-1. Freerouting 1.9 (100 passes) over the locked fanout (the ADV7181D's exposed-pad and escape
-   vias, the plane vias of every ground and decoupling pad), about 20 minutes.
-2. The TMDS pairs again (post_route): Freerouting takes some through In2, which on this stack has
-   no ground close under it, and leaves their halves apart. Ripped up and laid with
-   mazeroute.py at the class's 0.2 mm on F.Cu/B.Cu only, the N line of each pair along its P
-   line: ADV7511 to the ESD array (F/B), across the array's flow-through pads and on to the
-   connector (F.Cu).
+1. Before routing (fanout): the ADV7181D's exposed-pad and escape vias, the ADV7511's inward
+   escapes, the ESD arrays' GND vias, the TMDS pairs (laid, see above), the plane vias of every
+   ground and decoupling pad. All locked.
+2. Freerouting 1.9 (100 passes) on F.Cu and B.Cu, about 20 minutes.
 3. What is still unconnected (Freerouting leaves a few, a different few each run), by
-   mazeroute.py (pcbkit finish_unconnected): here four, 3V3, TX_DVDD, TX_AVDD and R_EXT at the
-   ADV7511.
+   mazeroute.py (pcbkit finish_unconnected).
 
-| Pair | P | N | skew | vias P/N |
+| Pair | P | N | skew | vias |
 |---|---|---|---|---|
-| D2 | 13.0 mm | 17.0 mm | 4.0 mm | 2/2 |
-| D1 | 14.3 mm | 17.1 mm | 2.8 mm | 2/2 |
-| D0 | 16.4 mm | 17.3 mm | 0.8 mm | 2/2 |
-| CK | 21.8 mm | 27.7 mm | 6.0 mm (about 40 ps) | 2/4 |
+| D2 | 12.67 mm | 13.50 mm | 0.83 mm | 0 |
+| D1 | 15.16 mm | 15.99 mm | 0.83 mm | 0 |
+| D0 | 18.06 mm | 18.89 mm | 0.83 mm | 0 |
+| CK | 20.54 mm | 21.37 mm | 0.83 mm | 0 |
 
-6 mm is about 0.06 UI at 1080p60's 1.485 Gb/s, inside HDMI's 0.15 UI intra-pair skew budget at
-the source. R_EXT's trace is 5.2 mm, nothing switching beside it.
-
-The first routes left 11, 3 and 4 connections, all at pins of the ADV7181D boxed in between
-their neighbours' escapes; the escape vias and the series rows described above came out of
-those runs. DRC: no errors, no unconnected items (warnings: the jacks' and HDMI's silkscreen
-over the board edge and over copper, as on rev A).
+All on F.Cu over In1, coupled from pin to connector; the 0.83 mm is the outer line's longer path
+through the one bend (6 ps). Pixel clock to the ADV7511 18.9 mm with no via; R_EXT 2.2 mm. DRC: no
+errors, no unconnected items. review.md has the checks.

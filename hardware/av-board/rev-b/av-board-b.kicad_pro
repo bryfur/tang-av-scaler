@@ -129,10 +129,10 @@
         "min_silk_clearance": 0.0,
         "min_text_height": 0.8,
         "min_text_thickness": 0.08,
-        "min_through_hole_diameter": 0.3,
+        "min_through_hole_diameter": 0.2,
         "min_track_width": 0.1,
         "min_via_annular_width": 0.1,
-        "min_via_diameter": 0.45,
+        "min_via_diameter": 0.4,
         "solder_mask_to_copper_clearance": 0.0,
         "use_height_for_length_calcs": true
       },
@@ -292,7 +292,7 @@
       {
         "bus_width": 12,
         "clearance": 0.15,
-        "diff_pair_gap": 0.2,
+        "diff_pair_gap": 0.25,
         "diff_pair_via_gap": 0.25,
         "diff_pair_width": 0.25,
         "line_style": 0,
@@ -302,7 +302,7 @@
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": -1,
         "schematic_color": "rgba(0, 0, 0, 0.000)",
-        "track_width": 0.2,
+        "track_width": 0.25,
         "via_diameter": 0.5,
         "via_drill": 0.3,
         "wire_width": 6
@@ -316,15 +316,31 @@
     "netclass_patterns": [
       {
         "netclass": "POWER",
-        "pattern": "2V5"
+        "pattern": "HDMI_5V"
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_DVDD"
+        "pattern": "5VA"
       },
       {
         "netclass": "POWER",
         "pattern": "1V8A"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_PLVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_DVDDIO"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_DVDD"
       },
       {
         "netclass": "POWER",
@@ -336,11 +352,11 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "HDMI_5V"
+        "pattern": "+5V"
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_AVDD"
+        "pattern": "AV_DVDD"
       },
       {
         "netclass": "POWER",
@@ -348,51 +364,15 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "SW_2V5"
+        "pattern": "AV_AVDD"
       },
       {
         "netclass": "POWER",
-        "pattern": "TX_PLVDD"
+        "pattern": "SW_3V6"
       },
       {
         "netclass": "POWER",
-        "pattern": "5VA"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_DVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_DVDDIO"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "+5V"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_AVDD"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D1_N"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D1_P"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D0_N"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_CK_N"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_CK_P"
+        "pattern": "3V6"
       },
       {
         "netclass": "TMDS",
@@ -400,11 +380,31 @@
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_D2_P"
+        "pattern": "TMDS_D0_N"
       },
       {
         "netclass": "TMDS",
         "pattern": "TMDS_D0_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_CK_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D2_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_CK_N"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D1_P"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D1_N"
       },
       {
         "netclass": "CLOCK",
@@ -412,11 +412,11 @@
       },
       {
         "netclass": "CLOCK",
-        "pattern": "OUT_CLK"
+        "pattern": "IN_LLC"
       },
       {
         "netclass": "CLOCK",
-        "pattern": "IN_LLC"
+        "pattern": "OUT_CLK"
       }
     ]
   },

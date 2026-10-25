@@ -199,11 +199,16 @@ class Layout:
     # Copper layers: 4 (F.Cu signal / In1 ground / In2 rail planes + signal / B.Cu signal) or 6
     # (F.Cu / In1 ground / In2 signal / In3 rail planes + signal / In4 ground / B.Cu)
     LAYERS = 4
+    # four layers: In2 a second ground plane (signals on F.Cu and B.Cu only, each over its own
+    # plane) instead of a signal layer with the rail planes
+    INNER_GND = False
     # Rules (JLCPCB standard: 0.09 mm track/space, 0.3 mm drill; we stay well above)
     TRACK, CLEAR, VIA_D, VIA_DRILL = 0.127, 0.127, 0.5, 0.3
     POWER_NETS = set()
     CLOCK_NETS = set()
     TMDS_NETS = set()
+    TMDS_W, TMDS_PAIR = 0.2, (0.25, 0.2)    # the TMDS class's track width; a pair's width and gap
+    MIN_VIA = (0.45, 0.3)                   # the smallest via (diameter, drill) the rules allow
     # Board outline (x0, y0, x1, y1), a window cut out of it (none: outside the board), notches,
     # standoff holes, the Console's buttons left reachable through holes
     X0, Y0, X1, Y1 = 74.2, 20.6, 168.8, 90.0
@@ -238,6 +243,13 @@ class Layout:
     def PLANE_LAYER(self):
         return pcbnew.In2_Cu if self.LAYERS == 4 else pcbnew.In3_Cu
 
+    @property
+    def ROUTE_LAYERS(self):
+        """The layers tracks may use (mazeroute.py's MAZE_LAYERS)."""
+        if self.LAYERS == 4 and self.INNER_GND:
+            return "F.Cu,B.Cu"
+        return "F.Cu,In2.Cu,B.Cu"
+
     # --- hooks --------------------------------------------------------------
 
     def after_hand(self, ref, fp, fps, occ):
@@ -262,7 +274,7 @@ class Layout:
         """Locked fanout copper laid before routing (a BGA's dogbones)."""
 
     def fanout_skip(self):
-        """Parts fanout_planes leaves alone (fanned out by fanout())."""
+        """Parts (REF) or pads (REF.PAD) fanout_planes leaves alone (fanned out by fanout())."""
         return set()
 
     def on_plane(self, net, x, y):
@@ -622,7 +634,7 @@ class Layout:
         if self.LAYERS == 6:
             b.SetLayerType(pcbnew.In2_Cu, pcbnew.LT_SIGNAL)
             b.SetLayerType(pcbnew.In4_Cu, pcbnew.LT_POWER)
-        b.SetLayerType(self.PLANE_LAYER, pcbnew.LT_MIXED)
+        b.SetLayerType(self.PLANE_LAYER, pcbnew.LT_POWER if self.INNER_GND else pcbnew.LT_MIXED)
         ds = b.GetDesignSettings()
         ns = ds.m_NetSettings
         nc = ns.GetDefaultNetclass()
@@ -634,7 +646,7 @@ class Layout:
         # big currents run in planes or are short
         # the pixel clocks keep other lines further off [HWG 7.2: nothing near the CLK trace]: 0.19 mm,
         # what the 0.2 mm gaps between their 0.5 mm-pitch pads (ADV7511 pin 79, a 0402 array) allow
-        for name, width, clear, nets in (("POWER", 0.25, 0.15, self.POWER_NETS), ("TMDS", 0.2, 0.15, self.TMDS_NETS),
+        for name, width, clear, nets in (("POWER", 0.25, 0.15, self.POWER_NETS), ("TMDS", self.TMDS_W, 0.15, self.TMDS_NETS),
                                          ("CLOCK", self.TRACK, 0.19, self.CLOCK_NETS)):
             c = pcbnew.NETCLASS(name)
             c.SetTrackWidth(FromMM(width))
@@ -645,16 +657,16 @@ class Layout:
                 # 100 R differential, edge-coupled on the outer layers over In1 (0.2 mm at the 0.15 mm
                 # gap the routers keep: about 103 R over 7628 prepreg, IPC-2141); check in JLCPCB's
                 # impedance calculator before ordering
-                c.SetDiffPairWidth(FromMM(0.25))
-                c.SetDiffPairGap(FromMM(0.2))
+                c.SetDiffPairWidth(FromMM(self.TMDS_PAIR[0]))
+                c.SetDiffPairGap(FromMM(self.TMDS_PAIR[1]))
             ns.SetNetclass(name, c)
             for n in nets:
                 ns.SetNetclassPatternAssignment(n, name)
         ns.RecomputeEffectiveNetclasses()
         ds.m_MinClearance = FromMM(self.CLEAR)
         ds.m_TrackMinWidth = FromMM(0.1)
-        ds.m_ViasMinSize = FromMM(0.45)
-        ds.m_MinThroughDrill = FromMM(0.3)
+        ds.m_ViasMinSize = FromMM(self.MIN_VIA[0])
+        ds.m_MinThroughDrill = FromMM(self.MIN_VIA[1])
         ds.m_CopperEdgeClearance = FromMM(0.3)
         ds.m_HoleClearance = FromMM(0.2)        # JLCPCB multilayer: 0.2 mm hole to copper
         ds.m_MinResolvedSpokes = 1              # pads on the outer pours have their own vias too
@@ -670,13 +682,13 @@ class Layout:
         t.SetNet(net)
         b.Add(t)
 
-    def via(self, b, x, y, net):
+    def via(self, b, x, y, net, d=None, drill=None):
         v = pcbnew.PCB_VIA(b)
         v.SetLocked(True)
         v.SetViaType(pcbnew.VIATYPE_THROUGH)
         v.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
-        v.SetWidth(FromMM(self.VIA_D))
-        v.SetDrill(FromMM(self.VIA_DRILL))
+        v.SetWidth(FromMM(d or self.VIA_D))
+        v.SetDrill(FromMM(drill or self.VIA_DRILL))
         v.SetNet(net)
         b.Add(v)
 
@@ -727,7 +739,8 @@ class Layout:
                 continue
             for pad in fp.Pads():
                 net = pad.GetNetname()
-                if pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD or not net:
+                if pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD or not net or \
+                        "%s.%s" % (fp.GetReference(), pad.GetNumber()) in skip_refs:
                     continue
                 px, py = ToMM(pad.GetPosition().x), ToMM(pad.GetPosition().y)
                 if net != "GND" and not self.on_plane(net, px, py):
@@ -820,6 +833,8 @@ class Layout:
         self.zone(b, "GND", pcbnew.In1_Cu, self.full())
         if self.LAYERS == 6:
             self.zone(b, "GND", pcbnew.In4_Cu, self.full())
+        if self.INNER_GND:
+            self.zone(b, "GND", self.PLANE_LAYER, self.full())
         self.rail_planes(b, fps)
 
     def stitch(self, b, pitch=2.5, gap=0.3):
@@ -922,7 +937,8 @@ class Layout:
         for t in copper:
             if t.IsLocked():
                 if t.GetClass() == "PCB_VIA":
-                    fixed.append(("via", ToMM(t.GetPosition().x), ToMM(t.GetPosition().y), t.GetNetname()))
+                    fixed.append(("via", ToMM(t.GetPosition().x), ToMM(t.GetPosition().y), t.GetNetname(),
+                                  ToMM(t.GetWidth(pcbnew.F_Cu)), ToMM(t.GetDrillValue())))
                 else:
                     fixed.append(("track", ToMM(t.GetStart().x), ToMM(t.GetStart().y), ToMM(t.GetEnd().x),
                                   ToMM(t.GetEnd().y), ToMM(t.GetWidth()), t.GetLayer(), t.GetNetname()))
@@ -937,13 +953,17 @@ class Layout:
         if not pcbnew.ImportSpecctraSES(b, ses):
             raise SystemExit("SES import failed")
         have = {copper_key(t) for t in b.GetTracks()}
-        vias_now = [(ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)) for t in b.GetTracks() if t.GetClass() == "PCB_VIA"]
+        vias_now = [t for t in b.GetTracks() if t.GetClass() == "PCB_VIA"]
         back = 0
         for f in fixed:
             if f[0] == "via":
-                if not any(abs(x - f[1]) < 0.02 and abs(y - f[2]) < 0.02 for x, y in vias_now):
-                    self.via(b, f[1], f[2], b.FindNet(f[3]))
+                same = [t for t in vias_now if abs(ToMM(t.GetPosition().x) - f[1]) < 0.02 and abs(ToMM(t.GetPosition().y) - f[2]) < 0.02]
+                if not same:
+                    self.via(b, f[1], f[2], b.FindNet(f[3]), f[4], f[5])
                     back += 1
+                for t in same:              # (the import gives every via the default size)
+                    t.SetWidth(FromMM(f[4]))
+                    t.SetDrill(FromMM(f[5]))
             else:
                 a, z = (round(f[1], 2), round(f[2], 2)), (round(f[3], 2), round(f[4], 2))
                 if ("track", f[6]) + min(a, z) + max(a, z) not in have:
@@ -1017,9 +1037,9 @@ class Layout:
     def post_route(self):
         """A revision's own pass on the routed, poured board (route()'s last step)."""
 
-    def mazeroute(self, a, z, partner=None, layers="F.Cu,In2.Cu,B.Cu", width=None):
+    def mazeroute(self, a, z, partner=None, layers=None, width=None):
         """One connection by kit/mazeroute.py (pad REF.PAD to pad), each step in a process of its own."""
-        env = dict(os.environ, MAZE_LAYERS=layers, MAZE_WIDTH=str(width or self.TRACK))
+        env = dict(os.environ, MAZE_LAYERS=layers or self.ROUTE_LAYERS, MAZE_WIDTH=str(width or self.TRACK))
         tmp = os.path.splitext(self.OUT)[0]
         mz = os.path.join(KIT, "mazeroute.py")
         subprocess.run([sys.executable, mz, "dump", self.OUT, a, z, tmp + "-m.json"] + ([partner] if partner else []),
@@ -1065,7 +1085,7 @@ class Layout:
                 for margin in ("4", "8"):
                     os.environ["MAZE_MARGIN"] = margin
                     try:
-                        self.mazeroute(a, z, None, "F.Cu,In2.Cu,B.Cu", w)
+                        self.mazeroute(a, z, None, None, w)
                         break
                     except SystemExit as e:
                         print(e)
