@@ -19,8 +19,7 @@ PS2 component (YPbPr) + stereo audio
 Status: rev A (ADV7842, six layers) is routed and ready to order but costs about $400 at
 JLCPCB. Rev B (ADV7181D, four layers, a hat on the Console) and rev C-A / C-B (the SOM on a carrier
 of its own: 1080p60 through an ADV7511, or 4K60 from the FPGA's transceivers) are reviewed against
-every data sheet; rev B and C-B are routed, DRC clean, with fab files; C-A is being routed. Nothing
-has been built or ordered.
+every data sheet, routed, DRC clean, with fab files. Nothing has been built or ordered.
 
 ## The boards
 

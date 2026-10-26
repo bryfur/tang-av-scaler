@@ -74,13 +74,14 @@ digital and clock lines by the router, the ESD parts at their connectors, rip-up
 
 | Check | C-B | C-A |
 |---|---|---|
-| DRC | no errors, no unconnected items (warnings: silkscreen, which JLCPCB clips; footprints changed from the library on purpose) | follows |
+| DRC | no errors, no unconnected items (warnings: silkscreen, which JLCPCB clips; footprints changed from the library on purpose) | the same |
 | ERC, netlist | clean; schematic = board.py, 1006 pins | clean; 1063 pins |
 | SOM receptacles | 280 of 280 pads at the Console's place and number (check_som_fp.py) | the same footprints |
-| ADV7181D to the SOM | LLC 25.4 mm (two vias); data 23.3-72.3 mm (74.25 MHz at most: about 0.3 ns spread in 13.5 ns; the FPGA's input delays can trim it) | follows |
-| TMDS | DP159 to the receptacle 59.6-67.9 mm, no vias (TI: 2-3 inches); the FPGA's lanes to the DP159 3-22 mm, AC coupled | follows |
-| Video inputs | Y 34.2, Pb 22.6, Pr 31.1, SCART sync 49.7 mm; VGA R 56.9, G 103.2 (AIN2, past the references), B 53.1 mm | follows |
-| Interference | nothing digital within 0.5 mm of an analog line but XTAL1 beside LLC along the pins' own pitch (0.36 mm, 2.2 + 1.7 mm); the VGA port's DDC lines (static while video runs) 0.47-0.70 mm from some inputs | follows |
-| Vias | 90 at 0.4/0.2 mm (SOM ground pads, ESD arrays, references), 1411 at 0.5/0.3 | follows |
+| ADV7181D to the SOM | LLC 25.4 mm (two vias); data 23.3-72.3 mm (74.25 MHz at most: about 0.3 ns spread in 13.5 ns; the FPGA's input delays can trim it) | LLC 28.5 mm (two vias); data 21.1-44.0 mm |
+| TMDS | DP159 to the receptacle 59.6-67.9 mm, no vias (TI: 2-3 inches); the FPGA's lanes to the DP159 3-22 mm, AC coupled | ADV7511 to the receptacle 74.9-83.6 mm, no vias, laid on F.Cu; 0.8-0.9 mm (6 ps) within a pair, 8.7 mm (55 ps) between pairs, against 101 ps and 1.35 ns at 1080p60 (1.485 Gb/s); about 1 dB of loss |
+| SOM to the ADV7511 | | pixel clock 11.7 mm, no via; RGB 10.3-63.8 mm (about 0.35 ns spread in 6.7 ns at 148.5 MHz; the FPGA's output delays can trim it) |
+| Video inputs | Y 34.2, Pb 22.6, Pr 31.1, SCART sync 49.7 mm; VGA R 56.9, G 103.2 (AIN2, past the references), B 53.1 mm | Y 32.5, Pb 27.6, Pr 35.6, SCART sync 46.0 mm; VGA R 52.1, G 90.6, B 51.1 mm |
+| Interference | nothing digital within 0.5 mm of an analog line but XTAL1 beside LLC along the pins' own pitch (0.36 mm, 2.2 + 1.7 mm); the VGA port's DDC lines (static while video runs) 0.47-0.70 mm from some inputs | the same, and the PCM1808's 4.5 V supply (an LDO's output, decoupled) 0.47 mm from its 12 MHz system clock for 2.3 mm |
+| Vias | 90 at 0.4/0.2 mm (SOM ground pads, ESD arrays, references), 1411 at 0.5/0.3 | 78 at 0.4/0.2 mm, 1407 at 0.5/0.3 |
 | Assembly | every part on the top | the same |
 

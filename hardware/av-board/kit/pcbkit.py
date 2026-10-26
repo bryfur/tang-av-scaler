@@ -20,6 +20,7 @@ PCB=path puts a trial board elsewhere.
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -1035,26 +1036,37 @@ class Layout:
 
     def prune(self, path, rounds=5):
         """Remove the vias and track ends KiCad's DRC reports as dangling (fanout the router did not
-        use, stubs it left), round after round, refilling the zones each time."""
+        use, stubs it left), round after round, refilling the zones each time: each round in a
+        process of its own (gen_pcb.py --prune-round), as pcbnew, once it has filled zones, hands
+        back the next board it loads without its type."""
         removed = 0
         for _ in range(rounds):
-            with tempfile.TemporaryDirectory() as tmp:
-                rpt = os.path.join(tmp, "drc.json")
-                subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", rpt, path],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                dead = {it["uuid"] for v in json.load(open(rpt))["violations"]
-                        if v["type"] in ("via_dangling", "track_dangling") for it in v["items"]}
-            if not dead:
+            r = subprocess.run([sys.executable, os.path.join(self.DIR, "gen_pcb.py"), "--prune-round"],
+                               env=dict(os.environ, PCB=path), capture_output=True, text=True, check=True)
+            n = int(re.search(r"pruned (\d+)", r.stdout).group(1))
+            removed += n
+            if not n:
                 break
+        print("dangling vias and stubs removed:", removed)
+
+    def prune_round(self, path):
+        """One round of prune(): the dangling items DRC lists taken out, the zones filled again."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rpt = os.path.join(tmp, "drc.json")
+            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", rpt, path],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            dead = {it["uuid"] for v in json.load(open(rpt))["violations"]
+                    if v["type"] in ("via_dangling", "track_dangling") for it in v["items"]}
+        gone = []
+        if dead:
             b = pcbnew.LoadBoard(path)
             gone = [t for t in list(b.GetTracks()) if t.m_Uuid.AsString() in dead]
             for t in gone:
                 b.Remove(t)
-            removed += len(gone)
             b.BuildConnectivity()
             pcbnew.ZONE_FILLER(b).Fill(b.Zones())
             pcbnew.SaveBoard(path, b)
-        print("dangling vias and stubs removed:", removed)
+        print("pruned %d" % len(gone))
 
     @staticmethod
     def freerouting(dsn, ses):
@@ -1448,14 +1460,12 @@ class Layout:
             self.pre_route()
         elif "--post" in argv:
             self.post_route()
-        elif "--complete" in argv:          # the last connections, then the zones again
-            left = self.finish_unconnected()
+        elif "--complete" in argv:          # the last connections, then the stubs (mazeroute.py's
+            left = self.finish_unconnected()    # apply has filled the zones after each)
             self.prune(self.OUT)
-            b = pcbnew.LoadBoard(self.OUT)
-            b.BuildConnectivity()
-            pcbnew.ZONE_FILLER(b).Fill(b.Zones())
-            pcbnew.SaveBoard(self.OUT, b)
             print("routed: %s, %d connections left" % (self.OUT, left))
+        elif "--prune-round" in argv:
+            self.prune_round(self.OUT)
         elif "--finish" in argv:            # route()'s steps, each in a process of its own
             self.finish()
         elif "--pour" in argv:

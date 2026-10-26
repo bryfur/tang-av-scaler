@@ -9,8 +9,8 @@ describes both.
 ![Rev C-A, top](img/av-board-ca-top.png)
 
 Status: designed, reviewed against the data sheets ([../rev-c/review.md](../rev-c/review.md) for
-the parts rev C adds; rev B's circuits, shared, in [../rev-b/review.md](../rev-b/review.md)), placed;
-being routed again after the second review (its board and fab files follow); not ordered.
+the parts rev C adds; rev B's circuits, shared, in [../rev-b/review.md](../rev-b/review.md)), placed
+and routed: DRC clean, no unconnected items, fab files made; not ordered.
 
 - `board.py`: the parts and nets (the shared circuit in ../rev-c/carrier.py and ../kit/circuits.py)
 - `gen_pcb.py`: the PCB (../rev-c/layout.py, kit/)
