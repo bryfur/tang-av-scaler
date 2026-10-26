@@ -212,11 +212,15 @@ def main():
           [["sheet_instances", ["path", q("/"), ["page", q("1")]]], ["embedded_fonts", "no"]]
     with open(os.path.join(HERE, NAME + ".kicad_sch"), "w") as f:
         f.write(dump(sch) + "\n")
+    # (KiCad's own libraries the board uses, after Device and power)
+    more = sorted({i.split(":")[0] for i in lib_ids} - {"lcsc", "Device", "power"})
     with open(os.path.join(HERE, "sym-lib-table"), "w") as f:
         f.write('(sym_lib_table\n  (version 7)\n'
                 '  (lib (name "lcsc")(type "KiCad")(uri "${KIPRJMOD}/../lib/lcsc.kicad_sym")(options "")(descr "LCSC parts (easyeda2kicad)"))\n'
                 '  (lib (name "Device")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Device.kicad_sym")(options "")(descr ""))\n'
-                '  (lib (name "power")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/power.kicad_sym")(options "")(descr ""))\n)\n')
+                '  (lib (name "power")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/power.kicad_sym")(options "")(descr ""))\n' +
+                "".join('  (lib (name "%s")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/%s.kicad_sym")(options "")(descr ""))\n' % (m, m)
+                        for m in more) + ')\n')
     with open(os.path.join(HERE, "fp-lib-table"), "w") as f:
         f.write('(fp_lib_table\n  (version 7)\n  (lib (name "lcsc")(type "KiCad")(uri "${KIPRJMOD}/../lib/lcsc.pretty")(options "")(descr "LCSC parts (easyeda2kicad)"))\n)\n')
     pro = os.path.join(HERE, NAME + ".kicad_pro")

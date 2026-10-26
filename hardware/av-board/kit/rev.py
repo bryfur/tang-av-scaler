@@ -28,6 +28,17 @@ def board(arg):
     return b
 
 
+def layout(arg):
+    """The revision's gen_pcb.py's LAYOUT (its pcbkit.Layout), imported."""
+    import importlib.util
+    d = rev_dir(arg)
+    board(arg)
+    spec = importlib.util.spec_from_file_location("gen_pcb", os.path.join(d, "gen_pcb.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m.LAYOUT
+
+
 def args(usage):
     """sys.argv without the revision, after checking one is given."""
     if len(sys.argv) < 2 or sys.argv[1].startswith("-"):

@@ -14,10 +14,23 @@ PS2 component (YPbPr) + stereo audio
 
 | Directory | What |
 |---|---|
-| `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. Revisions in `rev-a/`, `rev-b/`, their shared generators in `kit/`. |
+| `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. Revisions in `rev-a/`, `rev-b/` (hats on the Console), `rev-ca/`, `rev-cb/` (the SOM on its own carrier, shared parts in `rev-c/`), their shared generators in `kit/`. |
 
 Status: rev A (ADV7842, six layers) is routed and ready to order but costs about $400 at
-JLCPCB; rev B (ADV7181D, four layers) is in design. Nothing has been built.
+JLCPCB. Rev B (ADV7181D, four layers, a hat on the Console) and rev C-A / C-B (the SOM on a carrier
+of its own: 1080p60 through an ADV7511, or 4K60 from the FPGA's transceivers) are reviewed against
+every data sheet; rev B and C-B are routed, DRC clean, with fab files; C-A is being routed. Nothing
+has been built or ordered.
+
+## The boards
+
+Rendered from the generated KiCad boards (`hardware/av-board/kit/render.py`); none built yet.
+
+| Rev B: a hat on the Tang Console | Rev C-B: the SOM on its own carrier, 4K60 HDMI |
+|---|---|
+| ![rev B](hardware/av-board/rev-b/img/av-board-b-3d.png) | ![rev C-B](hardware/av-board/rev-cb/img/av-board-cb-3d.png) |
+
+Every revision, top and 3D views: [hardware/av-board/README.md](hardware/av-board/README.md#pictures).
 
 ## The host board
 

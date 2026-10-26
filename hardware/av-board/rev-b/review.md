@@ -3,7 +3,7 @@
 Every part checked against its own document, for being inside the limits with margin, not just
 inside them. Sources as in design.md: [DS] ADV7181D data sheet Rev C, [HWG] ADV7511 hardware
 user's guide Rev D, [TI-LDO] TPS7A7001 (SBVS134F), [TI-BUCK] TLV62569 (SLVSD87), [TI-ESD]
-TPD4E05U06, [TI-ADC] PCM1808 (SLES177), [AN-1260], [PSU] ADI's HDMI RX supply note, and JLCPCB's
+TPD1E05U06/TPD4E05U06 (SLVSBO7O), [TI-ADC] PCM1808 (SLES177), [AN-1260], [PSU] ADI's HDMI RX supply note, and JLCPCB's
 part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this review changed.
 
 ## Supplies and sequencing
@@ -27,15 +27,16 @@ part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this r
 | Check | Requirement | Board | Verdict |
 |---|---|---|---|
 | Component inputs | Y AIN10, Pb AIN8, Pr AIN6 (manual mux) [DS Table 8, 9]; 75 R + 0.1 uF, Y 1 nF to SOY [Fig. 9] | as required; 75 R 1 % 0603 at the jack side of the coupling cap | OK |
-| ESD at the jacks | none in Fig. 9 | was none | **Fixed**: a TPD4E05U06 (0.5 pF/line, 5.5 V) on Y/Pb/Pr between the jacks and the terminations |
+| ESD at the jacks | none in Fig. 9; "as close to the connector as possible" [TI-ESD] | was none; then one TPD4E05U06 for Y, Pb, Pr and the SCART sync, which sat by the Pb jack: Y's line ran 18 mm to it and back, the sync's 25 mm | **Fixed**: a TPD1E05U06 (the same family's single line: 0.42-0.5 pF, 5.5 V, unidirectional) at each connector's signal pin, about 3 mm from it, the 75 R termination beside it |
 | Crystal | 28.63636 MHz fundamental, +-50 ppm [DS Table 1] | was TXM (68 in stock); now YXC X50322863636MSB2GI: +-10 ppm, +-20 ppm over temperature, 40 R ESR; 33 pF loads (31 pF computed [AN-1260]), about -9 ppm: worst -39 ppm | **Fixed** (stock) |
-| PLL loop filter | 1.69 k + 82 nF, 10 nF to PVDD, close to ELPF [DS Fig. 8] | as required, placed first, at pin 30 | OK |
+| PLL loop filter | 1.69 k + 82 nF, 10 nF to PVDD, "as close to the pin as possible" [DS Fig. 8] | was placed first by anchor but landed 6-10 mm away, above the corner | **Fixed**: laid out beside pins 30/31, the 10 nF across them, all within 1-6 mm (kit/adv7181d_layout.py pll()) |
 | ADC references | CAPY1/CAPY2/CAPC2 network, REFOUT/CML 10 uF + 0.1 uF [Fig. 9] | as required, placed before decoupling, at pins 39-44 | OK |
 | Output port | 16-bit SDR, 33 R series at the chip [Table 11, Fig. 9] | 3 arrays in line with their pins + 8 singles; LLC on the FPGA's clock pin | OK |
 | LLC | 12.825-75 MHz [DS pin 20] | 1080i at 74.25 MHz | OK (1.0 % margin, ADI's own limit) |
 | Control | ALSB, PWRDWN, INT pull-ups; RESET low >= 5 ms [DS Table 7] | ALSB/PWRDWN/INT 4.7 k to DVDDIO; RESET held low by 4.7 k until the FPGA drives it (FPGA configuration takes far longer than 5 ms after the supplies) | OK |
 | I2C | 400 kHz max [DS pin 54] | 4.7 k to 3V3, a few cm: rise about 0.1 us | OK |
-| Unused pins | FB, HS_IN, VS_IN inputs; AIN1-5/7/9, SOG | FB/HS_IN/VS_IN 10 k to GND; analog inputs float | OK |
+| Unused pins | FB input; AIN1, 3, 4, 5 [DS Table 7] | FB 10 k to GND; the unused analog inputs float; HS_IN/VS_IN driven by the VGA sync buffer (10 k at its inputs) | OK |
+| SOG (SCART sync on J7) | as SOY: 75 R termination, 1 nF [DS Fig. 9] | as required; its own TPD1E05U06 at J7 | OK |
 | Exposed pad | must be GND [DS] | 12 vias to both ground planes, paste grid | OK |
 | Thermal | TJ = 85 C + 20.3 C/W x P [DS] | about 0.9 W in component mode: +18 C | OK |
 | Decoupling | 0.1 uF + 10 nF per pin group [Fig. 9] | all on the top, 2.7-4.3 mm (100 nF) from the pins through the supply-pin vias | Acceptable: closer needs the bottom side (two-sided assembly) |
@@ -54,18 +55,75 @@ part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this r
 | Video data | match lengths [HWG 7.2] | J9 to the ADV7511: 18.1-28.7 mm (70 ps spread in a 6.7 ns period, SDR); the FPGA's output delays can trim it | OK |
 | R_EXT | 887 R 1 %, short, nothing switching near [HWG 7.6] | 887 R 1 %, 2.2 mm of trace (was 5.2 mm) | OK |
 | DDC | 1.5-2 k to HDMI 5 V; < 50 pF [HWG 6.3.3] | 2 k 1 %; TPD4E05U06 0.5 pF | OK |
+| DDC/HPD/CEC ESD (U8) | as close to the connector as possible [TI-ESD] | was 14-18 mm from J6: the placer put parts by the IC on their signal nets, the ADV7511 | **Fixed**: every ESD part is placed first, at its connector, 2.5 mm towards where its lines go (kit/pcbkit.py): U8 5.5-8.3 mm from J6's pins 13-19, the TMDS corridor and the buck holding the nearer room |
 | HPD | 10 k +-10 % to GND [HWG 6.1.4] | 10 k 1 % | OK |
-| HDMI +5 V | >= 55 mA; 4.8-5.3 V at the source | 200 mA PTC (0.5-1.5 R: 30-80 mV at 55 mA) from the Console's 5 V | OK if the Console's 5 V is >= 4.9 V; note |
+| HDMI +5 V | >= 55 mA; 4.8-5.3 V at the source | 200 mA PTC (0.5-1.5 R: 30-80 mV at 55 mA) from the Console's 5 V; no ESD channel (it gave it to CEC): a supply behind its PTC and 100 nF | OK if the Console's 5 V is >= 4.9 V; note |
+| CEC | 27 k to 3.3 V through a diode with < 1.8 uA leakage; CEC_CLK 3-100 MHz +-2 % [HWG 7.7, Fig. 26] | was 27 k straight to 3V3: with the board off, 3V3 sits near 0 V and the 27 k pulled the TV's CEC bus down (about 60 uA) | **Fixed**: 27 k 1 % through a 1N4148WS (nA reverse leakage; high level 3.3 V less 0.6 V = 2.7 V, over CEC's 2.5 V); ESD on the DDC array's fourth channel; CEC_CLK from the FPGA (J9 pin 31) |
 | Supply filters | 10 uH + 10 uF per group, 0.1 uF per pin [HWG 7.1, Fig. 23] | NRS4018 10 uH (1.2 A, 150 mR): < 15 mV drop | OK |
+
+## Interference (analog against everything else)
+
+Measured on the routed board (every analog net's segments against every digital net's, same
+layer, closer than 1 mm; tracks on the other outer layer are shielded by both ground planes).
+
+| Check | Result | Verdict |
+|---|---|---|
+| Router spacing | the analog lines and ADC references kept from digital and clock lines | was the classes' 0.25 mm alone: one route ran the VGA syncs 0.25 mm beside the Y and SCART sync inputs for 10-12 mm | **Fixed**: 0.5 mm for the router (Freerouting class-to-class rules, kit/pcbkit.py CLASS_CLASS); the classes keep 0.25 mm for the chip's pins |
+| Video path (RCA_Y/PB/PR, AIN_*, SYNC_Y) | nothing digital within 0.5 mm; within 1 mm only the VGA port's own DDC lines (0.50-0.73 mm, static while video runs) and 1.1 mm of its V sync at 0.89 mm | OK |
+| Audio path (RCA_L/R, AUD_*, VREF, 5VA) | nothing digital within 1 mm | OK |
+| ADC references, PLL filter (CAPY*, CAPC2, REFOUT, CML, ELPF) | nothing digital within 1 mm; AVDD's supply line 0.34 mm from the VGA DDC clock for 0.8 mm (static in operation) | OK |
+| Crystal | was 15 and 24 mm of line running 0.27-0.4 mm beside LLC and pixel lines for up to 12.6 mm (the crystal had landed behind the series row) | **Fixed**: a laid block in the lane straight out of pins 21/22: 1 M, crystal and load caps in line, about 7 mm of line, a 0.25 mm clearance class; LLC beside XTAL1 only along the pins' own 0.5 mm pitch to the array (0.36 mm, 2.2 mm before the array and 1.7 mm after it), everything else 0.86 mm or more |
+| Buck (switching node, inductor) | 40 mm from the ADV7181D, 70 mm from the jacks and the PCM1808 | OK |
+| PCM1808 supply | VCC was the Console's 5 V through a ferrite (transparent in the audio band); VREF = VCC / 2 is the ADC's reference | **Fixed**: TPS7A2045 LDO for VCC alone (4.5 V, 92 dB PSRR at 1 kHz, 10 uVrms); the input divider's top resistor 12 k so a 2 Vrms line still has 1.2 dB headroom at the lower full scale |
+| ADV7181D supplies | AVDD: LDO, then its own 2 A ferrite and 10 uF; DVDDIO (the output drivers) on a separate ferrite | OK |
+| Reference / decoupling caps | scattered by the placer (a CAPY1 cap on the far side of CAPC2), 2-7 mm from their pins; the band never routed closed | **Fixed**: laid out (band()): a ladder of CAPC2/CAPY2/CAPY1 lanes on the top with their caps between (10 nF at 2.1 mm, 0.1 uF at 3.1, 10 uF at 4.1), REFOUT/CML/AVDD to their caps at the band's sides by small vias and the bottom layer; the 10 uF in 0402; the bottom side would put them at 1-2 mm |
 
 ## PCM1808
 
 | Check | Requirement | Board | Verdict |
 |---|---|---|---|
-| Full scale | 3 Vp-p at VCC = 5 V [TI-ADC 6.3] | 2 Vrms source through 10 k into 10 k // 60 k: 2.6 Vp-p (1.2 dB headroom); at VCC = 4.75 V, 2.85 Vp-p | OK |
+| Full scale | 0.6 VCC [TI-ADC 6.3]: 2.7 Vp-p at the 4.5 V LDO | 2 Vrms source through 12 k into 10 k // 60 k: 2.36 Vp-p (1.2 dB headroom), independent of the Console's 5 V | OK |
 | Inputs | 1 uF coupling, 60 k input [TI-ADC] | 1 uF X5R 50 V: 2.4 Hz | OK |
 | VREF, VCC, VDD | 0.1 uF + 10 uF each | as required | OK |
 | Clock / mode | SCKI 256/384/512 fs, slave I2S: MD0 = MD1 = FMT = 0 | 10 k pull-downs; SCKI from the FPGA | OK |
+
+## XIAO sockets, LED, S/PDIF
+
+| Check | Requirement | Board | Verdict |
+|---|---|---|---|
+| XIAO supply | 5 V pin: 5 V in (the module's own LDO makes 3.3 V); ESP32-S3 Wi-Fi bursts up to about 0.5 A | +5 V through a B5819W (1 A, about 0.4 V at 0.5 A: 4.6 V at the pin), 10 uF there; the Schottky stops a USB cable in the XIAO from feeding the Console's 5 V | OK; the Console's 5 V budget takes the XIAO's 0.1-0.5 A on top |
+| XIAO I/O | 3.3 V, like the FPGA's bank 2 | through SN74LVC8T245 (the XIAO's three outputs) and SN74AVC4T245 (the FPGA's two, each through 470 R to its XIAO pin), A sides on the XIAO's 3.3 V, B sides on the board's; DIR and OE tied (referenced to VCCA [TI]); unused inputs to GND | OK |
+| Back-powering | an unpowered FPGA bank's pins must not be driven | XIAO on USB, board off: VCCB = 0 puts both ports at high impedance [TI: VCC isolation]; the XIAO's lines reach no FPGA pin (the 470 R first fitted only limited it to 6 mA a pin) | OK |
+| Floating inputs | translator inputs must not float [TI] | 10 k on each: XIAO side (it boots with its pins as inputs) CS and SCK up, MOSI down; FPGA side (unconfigured; MISO undriven between transfers) MISO/IRQ up, CS up for an empty socket | OK |
+| SPI framing | a chip select | D4 to J9 32 (was the UART's: the Console's USB carries the FPGA's UART); D5 an interrupt from the FPGA, J9 33 | OK |
+| ESP32-C3 straps | GPIO9 (D9) high at reset, or the C3 boots to download; GPIO8 (D8) high for its download boot (BOOT held: GPIO9 low); GPIO2 (D0) pulled up [ESP32-C3 DS Table 3-3] | D9: MISO undriven with CS high, 10 k up on the FPGA side, U23 drives the XIAO's side high; but its BOOT button grounds D9, which shorted U23's output, and SCK's pull held D8 low | **Fixed**: 470 R between U23 and each XIAO pin (7 mA into the button); SCK pulled up at the XIAO (CS is high meanwhile, the FPGA ignores it); D0 unused here |
+| Mechanics | module 21 x 17.8 mm, 8.5 mm up; USB-C plug about 11 mm up | only SMT parts under it; USB-C pointing right, 44 mm of low parts to the edge, 3 mm clear of the HDMI plug's outline; J7 3 mm past its other end | OK |
+| LED | KT-0603R, 20 mA max, Vf 1.8-2.4 V | 470 R from 3.3 V I/O: 1.9-3.2 mA | OK |
+| S/PDIF coax level | 0.2-0.6 Vp-p into 75 R [IEC 60958-3] | 75 R 1 %; LVC1GU04 self-biased by 1 M (open-loop gain about 10-20 at 3.3 V): 0.2 Vp-p swings it past both thresholds; LVC1G04 squares it | OK |
+| S/PDIF timing | 48 kHz: 6.144 Mb/s, shortest cell 81 ns; 96 kHz 40 ns | LVC stages 3-4 ns each; 33 R into the FPGA pin | OK to 96 kHz |
+| S/PDIF optical module | TTL/CMOS out at 3.3-5 V | LVC1G04 input 5.5 V tolerant at VCC 3.3 V; 100 k pull-down | OK |
+| S/PDIF ESD | at the connector [TI-ESD] | was one TPD4E05U06 for both inputs, 11-16 mm from J13 (by the slicer) | **Fixed**: a TPD1E05U06 at each input's pin (rev C's two connectors are 25 mm apart: one array cannot be at both) |
+| Module supply | 5 V, a few mA (receivers 3-10 mA) | +5 V through a 0.2 A PTC, 100 nF | OK |
+| ADV7511 SPDIF input | 3.3 V logic, no MCLK [HWG] | from the FPGA through 49.9 R (as the I2S lines) | OK |
+
+## VGA
+
+| Check | Requirement | Board | Verdict |
+|---|---|---|---|
+| RGB inputs | 0.7 Vp-p into 75 R; the ADC's nominal range 1.6 V [DS Table 1] | 75 R 1 %, 100 nF, as the component inputs; AIN7/2/9 reach ADC2/0/1 by manual muxing [DS Table 9], away from the reference pins | OK |
+| Resolution | CP graphics up to XGA at 70 Hz, 75 MHz sampling [DS p. 1, 4]; LLC up to 75 MHz | VGA to XGA; 720p at 74.25 MHz | OK |
+| Sync levels | HS_IN/VS_IN: VIH 2 V, 3.3 V inputs [DS Table 1]; VGA sync TTL up to 5 V | SN74LVC2G17 at 3.3 V, inputs 5.5 V tolerant, Schmitt; 10 k pull-downs | OK |
+| DDC | 5 V open-drain I2C from the source (its pull-ups); a powered-off sink must not hold it | 2N7002 shifters, gate at 3.3 V: off with the board off; 47 k to the source's 5 V | OK |
+| ESD | at the connector, the video lines kept from the digital ones | TPD4E05U06 on R, G, B (U19) and on H, V, SDA, SCL (U20); was H sync on R/G/B's array, its line 0.27 mm beside R's for 10 mm | **Fixed** |
+| ESD placement | lines straight into the array [TI-ESD] | U19 sat right under J8's pins 1-2 with R on its outer channel: R crossed G there and one of the three never routed | **Fixed**: its channels in the header's order (G on one side of the ground pads, R and B on the other) and placed beside the pins, turned so the lines pass straight through it |
+
+## The Console's headers
+
+| Check | Requirement | Board | Verdict |
+|---|---|---|---|
+| Pins | +5 V on 11, GND on 12, FPGA I/O on the rest (SDRAM0 and SDRAM1 connectors) [Console schematic p. 8] | as modelled (kit/parts.py header()); LLC on SDRAM1_CLK (J10 20, a clock pin) | OK |
+| Pins 29/30 (SDRAMx_EXIO0/1) | FPGA pins through 0 R (R25/R27, R29/R31); places for 0 R to 3.3 V and GND instead (R26/R28, R30/R32, not fitted: MiSTer's SDRAM modules take their supply there) | J10's carried the optical S/PDIF (U15's output) and VGA DDC data: a Console fitted for MiSTer would put 3.3 V on U15's output | **Fixed**: J10 29/30 open, those lines on 35/36. J9's carry I2S clocks into the ADV7511 through 49.9 R (inputs): harmless either way |
+| Grounded FPGA pins | | J10 37-40 tied to GND as extra returns beside pin 12 | Note: a bitstream must drive them low or leave them inputs (design.md); another core that drives them high fights the ground |
 
 ## Passives
 
@@ -81,11 +139,14 @@ part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this r
 | Check | Result |
 |---|---|
 | Signal layers | F.Cu and B.Cu only; In1 and In2 solid ground |
-| DRC | no errors, no unconnected items (warnings: silkscreen over the board edge and copper, one copper sliver in a pour) |
-| ERC, netlist | clean; schematic = board.py, 652 pins |
-| ADV7181D to J10 | LLC 19.0 mm (one via); data 12.3-26.4 mm (74.25 MHz at most: 95 ps spread in 13.5 ns) |
-| Small vias | 0.4/0.2 mm at the ESD arrays' GND pads only (JLCPCB's four-layer minimum is 0.3/0.15 mm); everything else 0.5/0.3 |
-| Assembly | 161 parts on the top, J9/J10 (through-hole) underneath |
+| DRC | no errors, no unconnected items (warnings: silkscreen overlapping, over copper and by the edge, which JLCPCB clips; footprints changed from the library on purpose: local clearances, the sockets renumbered) |
+| ERC, netlist | clean; schematic = board.py, 858 pins |
+| ADV7181D to J10 | LLC 16.7 mm (one via); data 9.8-23.8 mm, at most two vias (74.25 MHz at most: about 90 ps spread in 13.5 ns) |
+| J9 to the ADV7511 | pixel clock 22.5 mm (three vias, each beside the ground planes' stitching); data 16.9-28.7 mm |
+| TMDS | 12.7-21.4 mm, no vias, laid (above) |
+| Video inputs | Y 38.2, Pb 40.4, Pr 64.3, SCART sync 39.8 mm, one via each; VGA R 61.8, G 79.7 (five vias: AIN2 is past the references), B 25.0 mm |
+| Small vias | 22 at 0.4/0.2 mm (the ESD arrays' GND, REFOUT, CML, AVDD; JLCPCB's four-layer minimum is 0.3/0.15 mm); 605 at 0.5/0.3 |
+| Assembly | 228 parts on the top, J9/J10 (through-hole) underneath |
 
 Tooling found on the way: KiCad's session import gives every via the default size (the 0.4 mm
 vias came back 0.5 mm and broke clearance to the TMDS lines); pcbkit's session() now restores

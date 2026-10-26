@@ -20,8 +20,10 @@ PCB=path puts a trial board elsewhere.
 import json
 import math
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 
 import pcbnew
 from pcbnew import VECTOR2I, FromMM, ToMM
@@ -117,11 +119,33 @@ def seg_dist(px, py, ax, ay, bx, by):
 def crossings(hdr, ic, fps):
     """How many pairs of an IC's lines to a header must cross: each line's near end (the pad on
     its net nearest the header pin, within reach of the IC) in order round the IC, cut on the side
-    away from the header, against the order of the header pins (pins in one column do not count)."""
+    away from the header, against the order of the header pins along the header (pins side by side
+    across its rows do not count). Any header orientation (rev C's SOM receptacles stand upright).
+    On a fine-pitch header (rev C's: 0.4 mm) only pairs from one row count: a line from the inner
+    row cannot pass between the outer row's pads, so it leaves on the other layer."""
     cx, cy = ToMM(ic.GetPosition().x), ToMM(ic.GetPosition().y)
     bx = courtyard(ic, 0)
     reach = math.hypot(bx[2] - bx[0], bx[3] - bx[1]) / 2 + 6
-    above = ToMM(hdr.GetPosition().y) < cy
+    hp = [(ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)) for p in hdr.Pads()]
+    upright = max(y for _, y in hp) - min(y for _, y in hp) > max(x for x, _ in hp) - min(x for x, _ in hp)
+
+    def along(x, y):
+        return round(y if upright else x, 2)
+
+    def across(x, y):
+        return round(x if upright else y, 1)
+    steps = sorted({along(*q) for q in hp})
+    fine = min(b - a for a, b in zip(steps, steps[1:])) < 1.0
+    # the cut: square away from the header, a little to the left (lines from right under the IC go
+    # round its right); the order round the IC runs the way the header's pins do
+    hx0, hy0 = ToMM(hdr.GetPosition().x), ToMM(hdr.GetPosition().y)
+    away = (0.0 if hx0 < cx else math.pi) if upright else (math.pi / 2 if hy0 < cy else -math.pi / 2)
+    cut = away + 0.4
+
+    def rel(x, y):
+        return (math.atan2(y - cy, x - cx) - cut) % (2 * math.pi)
+    lo, hi = min(hp, key=lambda q: along(*q)), max(hp, key=lambda q: along(*q))
+    sign = 1 if rel(*hi) > rel(*lo) else -1
     pads = {}
     for fp in fps.values():
         if fp is not hdr:
@@ -131,19 +155,15 @@ def crossings(hdr, ic, fps):
     lines = []
     for pad in hdr.Pads():
         n = pad.GetNetname()
-        if n in ("GND", "+5V") or n not in pads:
+        if not n or n in ("GND", "+5V") or n not in pads:
             continue
         hx, hy = ToMM(pad.GetPosition().x), ToMM(pad.GetPosition().y)
         sx, sy = min(pads[n], key=lambda q: math.hypot(q[0] - hx, q[1] - hy))
         if math.hypot(sx - cx, sy - cy) > reach:
             continue
-        # (the cut a little to the left of straight away from the header: lines from right under
-        # the IC go round its right)
-        t = math.atan2(sy - cy, sx - cx)
-        key = (t - math.pi / 2 - 0.4) % (2 * math.pi) if above else -((t + math.pi / 2 - 0.4) % (2 * math.pi))
-        lines.append((round(hx, 2), key))
+        lines.append((along(hx, hy), sign * rel(sx, sy), across(hx, hy) if fine else 0))
     return sum(1 for i, a in enumerate(lines) for b in lines[i + 1:]
-               if a[0] != b[0] and (a[0] < b[0]) != (a[1] < b[1]))
+               if a[0] != b[0] and a[2] == b[2] and (a[0] < b[0]) != (a[1] < b[1]))
 
 
 def copper_key(t):
@@ -209,6 +229,8 @@ class Layout:
     TMDS_NETS = set()
     TMDS_W, TMDS_PAIR = 0.2, (0.25, 0.2)    # the TMDS class's track width; a pair's width and gap
     MIN_VIA = (0.45, 0.3)                   # the smallest via (diameter, drill) the rules allow
+    MIN_CLEAR = None                        # the board's minimum clearance, if below CLEAR (a part's own pads)
+    CLASSES = []                            # a revision's own net classes: (name, width, clearance, nets)
     # Board outline (x0, y0, x1, y1), a window cut out of it (none: outside the board), notches,
     # standoff holes, the Console's buttons left reachable through holes
     X0, Y0, X1, Y1 = 74.2, 20.6, 168.8, 90.0
@@ -224,11 +246,15 @@ class Layout:
     BOTH_SIDES = set()      # hand-placed parts whose margin is kept on the other side too
     BIAS_NETS = set()       # nets whose parts are placed first, nearest their pins
     BUSES = []              # (header, IC): crossings reported after placement
+    FPGA_HEADERS = ("J9", "J10")    # the FPGA's side: a series resistor on a line it drives sits there
     # Silkscreen: designators only for the parts one finds by eye; labels by the jacks (on the
-    # jack's body by the left edge), near parts (ref, text), and the board's name
+    # jack's body by the left edge), near parts (ref, text), a header's pins (ref, {pad: text}, under
+    # each pad; the header's designator then hidden), and the board's name (TITLE_AT: its centre, else near the bottom edge's middle)
     SILK_KEEP = {"U", "J", "SW", "Y", "FL", "L", "F", "FB", "H"}
     SILK_LABELS = []
     SILK_NEAR = []
+    SILK_PINS = []
+    TITLE_AT = None
 
     def __init__(self, board, here):
         self.board = board
@@ -262,6 +288,17 @@ class Layout:
     def rank_special(self, p, ic_pads):
         """A revision's own placing order for a small part (0 first .. 4 last), or None."""
         return None
+
+    def bias_rank(self, p):
+        """The order among the first-placed parts (bias, references, filters): 0, or a little later."""
+        return 0
+
+    # ESD parts, by value: TI's TPDxE05U06 diodes and arrays, the SMF TVS diodes
+    ESD_VALUES = ("TPD", "SMF")
+
+    def esd(self, p):
+        """Is p an ESD part (placed first, at its connector)?"""
+        return p.value.startswith(self.ESD_VALUES)
 
     def where_for(self, p, fps):
         """A test box -> bool a small part's spot must pass (a rail cap over its plane), or None."""
@@ -438,7 +475,8 @@ class Layout:
                 if len(hit) != 1:
                     raise SystemExit("%s pad at (%.2f, %.2f) is on no header pin" % (ref, x, y))
                 pad.SetNumber(str(hit[0]))
-                pad.SetNet(net(p.pins[str(hit[0])]))
+                if str(hit[0]) in p.pins:           # (a pin left open has no net)
+                    pad.SetNet(net(p.pins[str(hit[0])]))
 
         # --- small parts next to their anchors
         # pads already placed, by net: the hand-placed parts now, each small part as it is placed
@@ -458,6 +496,29 @@ class Layout:
             if special is not None:
                 return special
             nets_ = [n for n in p.pins.values() if n != "GND"]
+            # an ESD part at its connector [TI-ESD: as close to the connector as possible]: from the
+            # middle of the pins it guards there (on the connector with most of them) 2.5 mm towards
+            # where its lines go (the middle of their pads placed so far), so it sits on their way
+            # with room for them and its ground via to reach it (right under a header's pins, rev B's
+            # VGA array left one of its three lines no way in). By the signal rule below an array
+            # went to the chip at the lines' other end (the HDMI DDC/CEC array 50-60 mm from its
+            # connector on rev C)
+            if self.esd(p):
+                pins_ = {}
+                for n in nets_:
+                    for x, y, r in ic_pads.get(n, []):
+                        if r.startswith("J"):
+                            pins_.setdefault(r, []).append((x, y))
+                if pins_:
+                    pts = max(pins_.values(), key=len)
+                    cx, cy = sum(x for x, _ in pts) / len(pts), sum(y for _, y in pts) / len(pts)
+                    far = [(x, y) for n in nets_ for x, y, r in ic_pads.get(n, []) if not r.startswith("J") and r != p.ref]
+                    if far:
+                        fx, fy = sum(x for x, _ in far) / len(far), sum(y for _, y in far) / len(far)
+                        d = math.hypot(fx - cx, fy - cy)
+                        if d > 2.5:
+                            cx, cy = cx + 2.5 * (fx - cx) / d, cy + 2.5 * (fy - cy) / d
+                    return (cx, cy), "F"
             # a part on a signal (a pull-up, a termination, a series resistor, a divider) goes where
             # that signal is: at the IC pin it serves, else beside the part it hangs on (a
             # termination's 51 R by its coupling cap), else at the connector pin. Its supply net does
@@ -467,7 +528,7 @@ class Layout:
             # the source end, the header [HWG 7.3]
             drive = [n for n in sig if n.startswith("OUT_")]
             if p.ref.startswith("R") and len(sig) == 2 and drive:
-                return [(x, y) for x, y, r in ic_pads[drive[0]] if r == "J9"][0], "F"
+                return [(x, y) for x, y, r in ic_pads[drive[0]] if r in self.FPGA_HEADERS][0], "F"
             if sig:
                 for kind in (lambda r: r.startswith("U"), lambda r: r not in HAND, lambda r: True):
                     for n in sig:
@@ -500,8 +561,10 @@ class Layout:
             parts first, then the revision's own ranks, then whatever serves an IC pin (in board.py
             order), then the rest."""
             nets_ = set(p.pins.values())
+            if self.esd(p):
+                return 0                # (before anything else takes the room at its connector)
             if p.ref.startswith(("FL", "L", "Y")) or nets_ & self.BIAS_NETS:
-                return 0
+                return self.bias_rank(p)
             s = self.rank_special(p, ic_pads)
             if s is not None:
                 return s
@@ -567,7 +630,8 @@ class Layout:
             for fld in fp.GetFields():
                 if not fld.IsReference() and fld.GetLayer() in silk:
                     fld.SetVisible(False)
-            if prefix not in self.SILK_KEEP:
+            # (a header with labelled pins: its labels and name say what it is)
+            if prefix not in self.SILK_KEEP or fp.GetReference() in {r for r, _ in self.SILK_PINS}:
                 ref.SetVisible(False)
                 continue
             # the designator where it is clear of copper and of the texts placed so far: above, below,
@@ -590,7 +654,8 @@ class Layout:
                     break
             else:
                 ref.SetVisible(False)
-        labels = {t for _, t in self.SILK_LABELS} | {t for _, t in self.SILK_NEAR} | {self.BOARD_LABEL}
+        labels = {t for _, t in self.SILK_LABELS} | {t for _, t in self.SILK_NEAR} | {self.BOARD_LABEL} | \
+            {t for _, names in self.SILK_PINS for t in names.values()}
         for item in list(b.GetDrawings()):                  # (again on a re-run: no duplicates)
             if isinstance(item, pcbnew.PCB_TEXT) and item.GetText() in labels:
                 b.Remove(item)
@@ -614,6 +679,16 @@ class Layout:
                     placed[pcbnew.F_SilkS].append(box)
                     break
             b.Add(t)
+        # the board's name first, so the labels below keep off it
+        tx, ty = self.TITLE_AT or ((X0 + X1) / 2 - 5, Y1 - 1.6)
+        text(self.BOARD_LABEL, tx, ty, 1.2, spots=[(tx, ty, 0)])
+        for ref, names in self.SILK_PINS:                   # under each pin, below the part's body
+            fp = b.FindFootprintByReference(ref)
+            y = ToMM(fp.GetBoundingBox(False, False).GetBottom()) + 0.75
+            for pad in fp.Pads():
+                if pad.GetNumber() in names:
+                    x = ToMM(pad.GetPosition().x)
+                    text(names[pad.GetNumber()], x, y, 0.9, spots=[(x, y, 0)])
         for ref, label in self.SILK_LABELS:                 # on the jack's body by the board edge
             bb = b.FindFootprintByReference(ref).GetBoundingBox(False, False)
             text(label, X0 + 1.6, ToMM(bb.GetCenter().y), 1.4, 90)
@@ -623,7 +698,6 @@ class Layout:
             text(label, l_ + 3.5, t_ - 1.2, 1.2, spots=[(l_ + 3.5 + dx, t_ - 1.2 - dy, 0) for dy in (0, 0.8, 1.6, 2.4)
                                                        for dx in (0, 1.5, -1.5)]
                  + [(l_ + 3.5, b_ + 1.0 + dy, 0) for dy in (0, 0.8)])
-        text(self.BOARD_LABEL, (X0 + X1) / 2 - 5, Y1 - 1.6, 1.2)
 
     # --- rules, fanout, planes ----------------------------------------------
 
@@ -646,8 +720,10 @@ class Layout:
         # big currents run in planes or are short
         # the pixel clocks keep other lines further off [HWG 7.2: nothing near the CLK trace]: 0.19 mm,
         # what the 0.2 mm gaps between their 0.5 mm-pitch pads (ADV7511 pin 79, a 0402 array) allow
-        for name, width, clear, nets in (("POWER", 0.25, 0.15, self.POWER_NETS), ("TMDS", self.TMDS_W, 0.15, self.TMDS_NETS),
-                                         ("CLOCK", self.TRACK, 0.19, self.CLOCK_NETS)):
+        for entry in (("POWER", 0.25, 0.15, self.POWER_NETS), ("TMDS", self.TMDS_W, 0.15, self.TMDS_NETS),
+                      ("CLOCK", self.TRACK, 0.19, self.CLOCK_NETS)) + tuple(self.CLASSES):
+            # (a revision's class may give its pairs' width and gap: (name, width, clearance, nets, (w, gap)))
+            name, width, clear, nets = entry[:4]
             c = pcbnew.NETCLASS(name)
             c.SetTrackWidth(FromMM(width))
             c.SetClearance(FromMM(clear))
@@ -659,11 +735,14 @@ class Layout:
                 # impedance calculator before ordering
                 c.SetDiffPairWidth(FromMM(self.TMDS_PAIR[0]))
                 c.SetDiffPairGap(FromMM(self.TMDS_PAIR[1]))
+            elif len(entry) > 4:
+                c.SetDiffPairWidth(FromMM(entry[4][0]))
+                c.SetDiffPairGap(FromMM(entry[4][1]))
             ns.SetNetclass(name, c)
             for n in nets:
                 ns.SetNetclassPatternAssignment(n, name)
         ns.RecomputeEffectiveNetclasses()
-        ds.m_MinClearance = FromMM(self.CLEAR)
+        ds.m_MinClearance = FromMM(self.MIN_CLEAR or self.CLEAR)
         ds.m_TrackMinWidth = FromMM(0.1)
         ds.m_ViasMinSize = FromMM(self.MIN_VIA[0])
         ds.m_MinThroughDrill = FromMM(self.MIN_VIA[1])
@@ -695,45 +774,110 @@ class Layout:
     def fanout_planes(self, b):
         """A via next to every surface pad on a plane net (ground; a rail where its plane reaches):
         the router then only routes signals. Each via goes on the first spot, walking out from the
-        pad, that clears every other pad, track, via and edge."""
+        pad, that clears every other pad, track, via and edge; where the standard via finds none,
+        the smallest the rules allow (MIN_VIA) on a 0.2 mm track (a ground pad mid-row in a 0.5 mm
+        pitch part, its neighbours' lines either side)."""
         VIA_D = self.VIA_D
-        obst = []                       # (x0, y0, x1, y1, net, is_hole) boxes
+        obst = []                       # (x0, y0, x1, y1, net, is_hole, is_smd_pad) boxes
         for fp in b.GetFootprints():
             for pad in fp.Pads():
                 r = pad.GetBoundingBox()
+                smd = pad.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
                 obst.append((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()),
-                             pad.GetNetname(), pad.GetAttribute() != pcbnew.PAD_ATTRIB_SMD))
+                             pad.GetNetname(), not smd, smd))
         for t in b.GetTracks():
             r = t.GetBoundingBox()
             obst.append((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()),
-                         t.GetNetname(), t.GetClass() == "PCB_VIA"))
+                         t.GetNetname(), t.GetClass() == "PCB_VIA", False))
         gap = 0.2
+        # (a net in a class with a wider clearance keeps the vias that much further off)
+        extra = {}
+        for c_ in self.CLASSES:
+            for n_ in c_[3]:
+                extra[n_] = max(extra.get(n_, 0.0), c_[2] - gap)
 
         def clear(x, y, net, skip, rv, hole):
             """Is a circle of radius rv at (x, y) clear of everything but its own net (and, for a
-            hole, of other holes too)?"""
+            hole, of other holes and of its own net's surface pads too: a via in a pad, which this
+            board's vias are not filled for, wicks the pad's solder away)?"""
             if x - rv < self.X0 + 0.5 or x + rv > self.X1 - 0.5 or y - rv < self.Y0 + 0.5 or y + rv > self.Y1 - 0.5:
                 return False
             wx0, wy0, wx1, wy1 = self.WIN
             if x + rv > wx0 - 0.3 and x - rv < wx1 + 0.3 and y + rv > wy0 - 0.3 and y - rv < wy1 + 0.3:
                 return False
-            for k, (x0, y0, x1, y1, n, ishole) in enumerate(obst):
+            for k, (x0, y0, x1, y1, n, ishole, smd) in enumerate(obst):
                 if k == skip:
                     continue
-                if x + rv > x0 and x - rv < x1 and y + rv > y0 and y - rv < y1:
-                    if n == net and n and not (hole and ishole):
+                # (the circle's distance to the box: a box test would see a via a gap from a pad's
+                # side clash with its row neighbour's corner)
+                if math.hypot(max(x0 - x, 0.0, x - x1), max(y0 - y, 0.0, y - y1)) < rv + extra.get(n, 0.0):
+                    if n == net and n and not (hole and (ishole or smd)):
                         continue
                     return False
             return True
 
-        def path_clear(px, py, x, y, net, skip):
+        def path_clear(px, py, x, y, net, skip, vd, tw):
             for t in [i / 20 for i in range(1, 20)]:
-                if not clear(px + (x - px) * t, py + (y - py) * t, net, skip, 0.125 + gap, False):
+                if not clear(px + (x - px) * t, py + (y - py) * t, net, skip, tw / 2 + gap, False):
                     return False
-            return clear(x, y, net, skip, VIA_D / 2 + gap, True)
+            return clear(x, y, net, skip, vd / 2 + gap, True)
+
+        def at(q):
+            return ToMM(q.GetPosition().x), ToMM(q.GetPosition().y)
+
+        def self_index(px, py):
+            k = [i for i, o in enumerate(obst) if abs((o[0] + o[2]) / 2 - px) < 1e-3 and abs((o[1] + o[3]) / 2 - py) < 1e-3]
+            return k[0] if k else -1
 
         n = 0
         skip_refs = self.fanout_skip()
+        # An ESD array first: its two ground pads (facing each other across the package) joined
+        # through it, one via straight out of the pad farther from its connector [TI-ESD Fig. 7-11:
+        # the ground runs straight through, between the lines]. The lines come in from the
+        # connector's side, where a via sits in their way at the pads' 0.5 mm pitch (rev C-A's VGA
+        # array left one of its lines no way in). Where that spot is taken, the pads are left to the
+        # search below
+        conn = {}
+        for fp in b.GetFootprints():
+            if fp.GetReference().startswith("J"):
+                for q in fp.Pads():
+                    conn.setdefault(q.GetNetname(), []).append(at(q))
+        for p in self.board.PARTS:
+            fp = b.FindFootprintByReference(p.ref)
+            g = [q for q in fp.Pads() if q.GetNetname() == "GND"] if self.esd(p) and p.ref not in skip_refs else []
+            if len(g) != 2 or any("%s.%s" % (p.ref, q.GetNumber()) in skip_refs for q in g):
+                continue
+            pins = [xy for q in fp.Pads() if q.GetNetname() not in ("GND", "") for xy in conn.get(q.GetNetname(), [])]
+            if not pins:
+                continue
+            jx, jy = sum(x for x, _ in pins) / len(pins), sum(y for _, y in pins) / len(pins)
+            near, far = sorted(g, key=lambda q: math.hypot(at(q)[0] - jx, at(q)[1] - jy))
+            (nx, ny), (fx, fy) = at(near), at(far)
+            ln = math.hypot(fx - nx, fy - ny)
+            ux, uy = (fx - nx) / ln, (fy - ny) / ln
+            r = far.GetBoundingBox()
+            ext = abs(ux) * ToMM(r.GetWidth()) / 2 + abs(uy) * ToMM(r.GetHeight()) / 2
+            k_far = self_index(fx, fy)
+            spot = None
+            if path_clear(nx, ny, fx, fy, "GND", k_far, 0.0, 0.2):
+                for vd, drill, tw in ((VIA_D, self.VIA_DRILL, 0.25), self.MIN_VIA + (0.2,)):
+                    for d in (0.0, 0.3, 0.6, 1.0):
+                        x, y = fx + ux * (ext + vd / 2 + gap + d), fy + uy * (ext + vd / 2 + gap + d)
+                        if path_clear(fx, fy, x, y, "GND", k_far, vd, tw):
+                            spot = (x, y, vd, drill, tw)
+                            break
+                    if spot:
+                        break
+            if not spot:
+                continue
+            x, y, vd, drill, tw = spot
+            self.track(b, (nx, ny), (fx, fy), 0.2, pcbnew.F_Cu, far.GetNet())
+            self.track(b, (fx, fy), (x, y), tw, pcbnew.F_Cu, far.GetNet())
+            self.via(b, x, y, far.GetNet(), vd, drill)
+            obst.append((x - vd / 2, y - vd / 2, x + vd / 2, y + vd / 2, "GND", True, False))
+            obst.append((min(fx, x) - tw / 2, min(fy, y) - tw / 2, max(fx, x) + tw / 2, max(fy, y) + tw / 2, "GND", False, False))
+            skip_refs = skip_refs | {"%s.%s" % (p.ref, q.GetNumber()) for q in g}
+            n += 1
         for fp in b.GetFootprints():
             if fp.GetReference() in skip_refs:
                 continue
@@ -750,28 +894,32 @@ class Layout:
                 r = pad.GetBoundingBox()
                 hw, hh = ToMM(r.GetWidth()) / 2, ToMM(r.GetHeight()) / 2
                 spot = None
-                for d in (0.0, 0.3, 0.6, 1.0, 1.5, 2.0, 2.5):
-                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1),
-                                   (1, 0.5), (-1, 0.5), (1, -0.5), (-1, -0.5), (0.5, 1), (-0.5, 1), (0.5, -1), (-0.5, -1)):
-                        x = px + dx * (hw + VIA_D / 2 + gap + d)
-                        y = py + dy * (hh + VIA_D / 2 + gap + d)
-                        # (a rail pad's via must land on its plane too, or it connects nothing)
-                        on_plane = net == "GND" or all(self.on_plane(net, x + ex, y + ey)
-                                                       for ex in (-0.35, 0.35) for ey in (-0.35, 0.35))
-                        if on_plane and path_clear(px, py, x, y, net, k_self[0] if k_self else -1):
-                            spot = (x, y)
+                for vd, drill, tw in ((VIA_D, self.VIA_DRILL, 0.25), self.MIN_VIA + (0.2,)):
+                    for d in (0.0, 0.3, 0.6, 1.0, 1.5, 2.0, 2.5):
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1),
+                                       (1, 0.5), (-1, 0.5), (1, -0.5), (-1, -0.5), (0.5, 1), (-0.5, 1), (0.5, -1), (-0.5, -1)):
+                            x = px + dx * (hw + vd / 2 + gap + d)
+                            y = py + dy * (hh + vd / 2 + gap + d)
+                            # (a rail pad's via must land on its plane too, or it connects nothing)
+                            on_plane = net == "GND" or all(self.on_plane(net, x + ex, y + ey)
+                                                           for ex in (-0.35, 0.35) for ey in (-0.35, 0.35))
+                            if on_plane and path_clear(px, py, x, y, net, k_self[0] if k_self else -1, vd, tw):
+                                spot = (x, y)
+                                break
+                        if spot:
                             break
                     if spot:
                         break
                 if not spot:
-                    if net != "GND":            # (a ground pad has the outer pours as well)
-                        print("note: no plane via for %s pad %s (%s)" % (fp.GetReference(), pad.GetNumber(), net))
+                    # (a ground pad may still meet an outer pour; one boxed in by other nets' pads
+                    # will not, and stays unconnected)
+                    print("note: no plane via for %s pad %s (%s)" % (fp.GetReference(), pad.GetNumber(), net))
                     continue
                 x, y = spot
-                self.track(b, (px, py), (x, y), 0.25, pcbnew.F_Cu if onf else pcbnew.B_Cu, pad.GetNet())
-                self.via(b, x, y, pad.GetNet())
-                obst.append((x - VIA_D / 2, y - VIA_D / 2, x + VIA_D / 2, y + VIA_D / 2, net, True))
-                obst.append((min(px, x) - 0.125, min(py, y) - 0.125, max(px, x) + 0.125, max(py, y) + 0.125, net, False))
+                self.track(b, (px, py), (x, y), tw, pcbnew.F_Cu if onf else pcbnew.B_Cu, pad.GetNet())
+                self.via(b, x, y, pad.GetNet(), vd, drill)
+                obst.append((x - vd / 2, y - vd / 2, x + vd / 2, y + vd / 2, net, True, False))
+                obst.append((min(px, x) - tw / 2, min(py, y) - tw / 2, max(px, x) + tw / 2, max(py, y) + tw / 2, net, False, False))
                 n += 1
         print("plane fanout: %d vias" % n)
 
@@ -888,15 +1036,14 @@ class Layout:
     def prune(self, path, rounds=5):
         """Remove the vias and track ends KiCad's DRC reports as dangling (fanout the router did not
         use, stubs it left), round after round, refilling the zones each time."""
-        import tempfile
         removed = 0
         for _ in range(rounds):
-            rpt = tempfile.mktemp(suffix=".json")
-            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", rpt, path],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            dead = {it["uuid"] for v in json.load(open(rpt))["violations"]
-                    if v["type"] in ("via_dangling", "track_dangling") for it in v["items"]}
-            os.unlink(rpt)
+            with tempfile.TemporaryDirectory() as tmp:
+                rpt = os.path.join(tmp, "drc.json")
+                subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", rpt, path],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                dead = {it["uuid"] for v in json.load(open(rpt))["violations"]
+                        if v["type"] in ("via_dangling", "track_dangling") for it in v["items"]}
             if not dead:
                 break
             b = pcbnew.LoadBoard(path)
@@ -945,6 +1092,7 @@ class Layout:
         dsn = os.path.splitext(self.OUT)[0] + ".dsn"    # (named after the board: trials can run side by side)
         if not pcbnew.ExportSpecctraDSN(b, dsn):
             raise SystemExit("DSN export failed")
+        self.dsn_class_rules(dsn)
         ses = ses_for(dsn)
         # start from no copper: some sessions carry the locked copper (DeepPCB), some leave part of it
         # out (Freerouting)
@@ -971,13 +1119,43 @@ class Layout:
                     back += 1
         return back
 
+    # spacing between two net classes for the router only: [(class, class, mm)], as Freerouting's
+    # class_class rules (the DSN's names: KiCad's Default class is kicad_default). KiCad's DRC keeps
+    # the classes' own clearances, which pins at a fine pitch need
+    CLASS_CLASS = []
+
+    def dsn_class_rules(self, dsn):
+        """Write CLASS_CLASS into an exported DSN's network scope (KiCad's export has no way to)."""
+        if not self.CLASS_CLASS:
+            return
+        s = open(dsn).read()
+        i = s.index("(network")
+        depth, quoted, j = 0, False, i
+        while True:                             # (the scope's own closing paren; quoted names, such
+            c = s[j]                            # as KiCad's "unconnected-(U1-Pad9)", hold parens)
+            if c == '"':
+                quoted = not quoted
+            elif not quoted and c == "(":
+                depth += 1
+            elif not quoted and c == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        add = "".join("    (class_class (classes %s %s) (rule (clearance %d)))\n" % (a, z, round(mm * 1000))
+                      for a, z, mm in self.CLASS_CLASS)
+        open(dsn, "w").write(s[:j] + add + "  " + s[j:])
+        print("router spacing between classes:", ", ".join("%s/%s %.2f mm" % c for c in self.CLASS_CLASS))
+
     def route(self):
         """Route the saved board (Freerouting, DeepPCB or a given session), finish what another router
         left with Freerouting, then the ground pours on the outer layers, filled. Each step runs in a
         process of its own: after a DSN export, pcbnew can no longer list a board's tracks, nor load
         one."""
-        b = pcbnew.LoadBoard(self.OUT)
         me = os.path.join(self.DIR, "gen_pcb.py")
+        if self.PRE_ROUTE:
+            subprocess.run([sys.executable, me, "--pre"], check=True)
+        b = pcbnew.LoadBoard(self.OUT)
 
         def first(dsn):
             if os.environ.get("SES"):
@@ -1037,33 +1215,143 @@ class Layout:
     def post_route(self):
         """A revision's own pass on the routed, poured board (route()'s last step)."""
 
-    def mazeroute(self, a, z, partner=None, layers=None, width=None):
-        """One connection by kit/mazeroute.py (pad REF.PAD to pad), each step in a process of its own."""
-        env = dict(os.environ, MAZE_LAYERS=layers or self.ROUTE_LAYERS, MAZE_WIDTH=str(width or self.TRACK))
-        tmp = os.path.splitext(self.OUT)[0]
+    def mazeroute(self, a, z, partner=None, layers=None, width=None, cost="", lock=False, margin=None):
+        """One connection by kit/mazeroute.py (pad REF.PAD to pad), each step in a process of its own;
+        cost: MAZE_COST, e.g. "F.Cu:20" to keep the path off F.Cu but at its ends; lock: the copper
+        locked (a pre-route the router keeps); margin: MAZE_MARGIN, the window round the two pads.
+        Its files in a temporary directory, gone whatever happens."""
+        env = dict(os.environ, MAZE_LAYERS=layers or self.ROUTE_LAYERS, MAZE_WIDTH=str(width or self.TRACK),
+                   MAZE_COST=cost, MAZE_LOCK="1" if lock else "")
+        if margin:
+            env["MAZE_MARGIN"] = str(margin)
         mz = os.path.join(KIT, "mazeroute.py")
-        subprocess.run([sys.executable, mz, "dump", self.OUT, a, z, tmp + "-m.json"] + ([partner] if partner else []),
-                       check=True, env=env, stdout=subprocess.DEVNULL)
-        r = subprocess.run([os.path.expanduser("~/tools/eda-venv/bin/python"), mz, "route", tmp + "-m.json", tmp + "-p.json"],
-                           env=env, capture_output=True, text=True)
-        print((r.stdout + r.stderr).strip().splitlines()[-1])
-        if r.returncode:
-            raise SystemExit("mazeroute: no path %s - %s" % (a, z))
-        subprocess.run([sys.executable, mz, "apply", self.OUT, tmp + "-p.json"], check=True, env=env, stdout=subprocess.DEVNULL)
-        for f in (tmp + "-m.json", tmp + "-p.json"):
-            os.remove(f)
+        with tempfile.TemporaryDirectory() as tmp:
+            m, p, before_pcb = (os.path.join(tmp, f) for f in ("m.json", "p.json", "before.kicad_pcb"))
+            subprocess.run([sys.executable, mz, "dump", self.OUT, a, z, m] + ([partner] if partner else []),
+                           check=True, env=env, stdout=subprocess.DEVNULL)
+            r = subprocess.run([os.path.expanduser("~/tools/eda-venv/bin/python"), mz, "route", m, p],
+                               env=env, capture_output=True, text=True)
+            print((r.stdout + r.stderr).strip().splitlines()[-1])
+            if r.returncode:
+                raise SystemExit("mazeroute: no path %s - %s" % (a, z))
+            # (a guard: a path that adds a short or a clearance error is taken back. One run, on rev B,
+            # once laid a track over another net's; the same connection routed again came out clean)
+            shutil.copy(self.OUT, before_pcb)
+            before = self.copper_errors()
+            subprocess.run([sys.executable, mz, "apply", self.OUT, p], check=True, env=env, stdout=subprocess.DEVNULL)
+            after = self.copper_errors()
+            if after > before:
+                shutil.copy(before_pcb, self.OUT)
+                raise SystemExit("mazeroute: %s - %s added %d copper errors: taken back" % (a, z, after - before))
 
-    def finish_unconnected(self, rounds=3):
-        """Whatever DRC still reports unconnected, by mazeroute.py: for each gap, the pads on its
-        two sides (a pad named, or the pads of the copper island a named track belongs to), the
-        nearest pair routed; once more over a wider window if the first try finds no path."""
-        import tempfile
-        for _ in range(rounds):
-            rpt = tempfile.mktemp(suffix=".json")
+    def copper_errors(self):
+        """Shorts and copper clearance errors on the board as saved (kicad-cli DRC)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rpt = os.path.join(tmp, "drc.json")
+            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-error", "-o", rpt, self.OUT],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            v = json.load(open(rpt))["violations"]
+        return sum(1 for x in v if x["type"] in ("shorting_items", "clearance", "tracks_crossing", "hole_clearance"))
+
+    PRE_ROUTE = []      # before the router: [(nets, width, layers, MAZE_COST)], laid by mazeroute, locked
+
+    @staticmethod
+    def tree(b, net, root_ref=None):
+        """A net's pads joined nearest first (Prim's tree), from a pad on root_ref if it has one:
+        [(REF.PAD, REF.PAD)]."""
+        pads = [("%s.%s" % (fp.GetReference(), p.GetNumber()), ToMM(p.GetPosition().x), ToMM(p.GetPosition().y))
+                for fp in b.GetFootprints() for p in fp.Pads() if p.GetNetname() == net and p.GetNumber()]
+        if len(pads) < 2:
+            return []
+        start = [p for p in pads if p[0].split(".")[0] == root_ref] or pads[:1]
+        done, rest, edges = [start[0]], [p for p in pads if p is not start[0]], []
+        while rest:
+            d, a, z = min((math.hypot(a[1] - z[1], a[2] - z[2]), a, z) for a in done for z in rest)
+            edges.append((a[0], z[0]))
+            done.append(z)
+            rest.remove(z)
+        return edges
+
+    def route_nets(self, nets, width, layers, cost, lock, rip=False):
+        """Each net's tree by mazeroute.py (a wider window when the first finds no path); with rip,
+        the net's unlocked copper taken up first. width, layers, cost: one for all, or {net: value}.
+        What finds no path is left to the finishing step."""
+        def of(v, n):
+            return v.get(n) if isinstance(v, dict) else v
+        b = pcbnew.LoadBoard(self.OUT)
+        if rip:
+            gone = [t for t in b.GetTracks() if t.GetNetname() in nets and not t.IsLocked()]
+            for t in gone:
+                b.Remove(t)
+            pcbnew.SaveBoard(self.OUT, b)
+            print("ripped up %s: %d tracks and vias" % (sorted(nets), len(gone)))
+        jobs = [(n, e) for n in sorted(nets) for e in self.tree(b, n, "U1")]
+        # each net's way out of the chip first, in the order of the pins round it (so that no line
+        # fences its neighbour in), then the rest of each tree
+        u1 = b.FindFootprintByReference("U1")
+        cx, cy = (ToMM(u1.GetPosition().x), ToMM(u1.GetPosition().y)) if u1 else (0, 0)
+
+        def around(job):
+            a = job[1][0]
+            if not a.startswith("U1."):
+                return (1, 0)
+            p = [q for q in u1.Pads() if q.GetNumber() == a.split(".")[1]][0]
+            return (0, math.atan2(ToMM(p.GetPosition().y) - cy, ToMM(p.GetPosition().x) - cx))
+        jobs.sort(key=around)
+        del b
+        for n, (a, z) in jobs:
+            for margin in (4, 8):
+                try:
+                    self.mazeroute(a, z, None, of(layers, n), of(width, n), of(cost, n), lock, margin)
+                    break
+                except SystemExit as e:
+                    print(e)
+
+    def pre_route(self):
+        """All PRE_ROUTE groups in one pass (their pins' ways out first, see route_nets), each net
+        with its group's width, layers and cost."""
+        groups = {n: g for g in self.PRE_ROUTE for n in g[0]}
+        self.route_nets(set(groups), {n: g[1] for n, g in groups.items()}, {n: g[2] for n, g in groups.items()},
+                        {n: g[3] for n, g in groups.items()}, True)
+
+    def unconnected(self):
+        """DRC's unconnected items on the board as saved (kicad-cli)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            rpt = os.path.join(tmp, "drc.json")
             subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rpt, self.OUT],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            gaps = json.load(open(rpt))["unconnected_items"]
-            os.unlink(rpt)
+            return json.load(open(rpt))["unconnected_items"]
+
+    def maze_try(self, a, z, w, env):
+        """mazeroute with these MAZE_* settings: True if it laid a path."""
+        os.environ.update(env)
+        try:
+            self.mazeroute(a, z, None, None, w)
+            return True
+        except SystemExit as e:
+            print(e)
+            return False
+        finally:
+            for k in env:
+                os.environ.pop(k, None)
+
+    def finish_unconnected(self, rounds=6, rip=True):
+        """Whatever DRC still reports unconnected, by mazeroute.py: for each gap, the pads on its
+        two sides (a pad named, or the pads of the copper island a named track belongs to), the
+        nearest pair routed; once more over a wider window if the first try finds no path; then
+        by rip-up (mazeroute.py MAZE_SOFT: through other signal nets' unlocked copper, which is
+        taken up), what it took up joined again at once, and all of it taken back unless fewer
+        gaps are left: a gap walled in by other nets' tracks stayed open otherwise (rev B's
+        left-side pixel lines, round after round), and rip-up let loose in a crowded corner only
+        moved the gaps around, more of them each round."""
+        given_up = set()                        # (the gaps whose rip-up was taken back: not again)
+        keep = self.OUT + ".before-rip"         # (beside the board: a run stopped mid rip-up is undone
+        if rip and os.path.exists(keep):        # at the next start, its nets not left in pieces)
+            shutil.copy(keep, self.OUT)
+            os.remove(keep)
+            print("a rip-up left unfinished taken back")
+        for _ in range(rounds):
+            gaps = self.unconnected()
             if not gaps:
                 return 0
             b = pcbnew.LoadBoard(self.OUT)
@@ -1082,20 +1370,28 @@ class Layout:
             del b
             for net, (_, a, z) in pairs:
                 w = 0.25 if net in self.POWER_NETS else self.TRACK
-                for margin in ("4", "8"):
-                    os.environ["MAZE_MARGIN"] = margin
-                    try:
-                        self.mazeroute(a, z, None, None, w)
-                        break
-                    except SystemExit as e:
-                        print(e)
-                os.environ.pop("MAZE_MARGIN", None)
-        rpt = tempfile.mktemp(suffix=".json")
-        subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rpt, self.OUT],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        left = len(json.load(open(rpt))["unconnected_items"])
-        os.unlink(rpt)
-        return left
+                if self.maze_try(a, z, w, {"MAZE_MARGIN": "4"}) or self.maze_try(a, z, w, {"MAZE_MARGIN": "8"}):
+                    continue
+                if not rip or net in self.POWER_NETS | {"GND"} or (a, z) in given_up:
+                    continue
+                kept = False
+                shutil.copy(self.OUT, keep)
+                before = len(self.unconnected())
+                if self.maze_try(a, z, w, {"MAZE_MARGIN": "8", "MAZE_SOFT": "1",
+                                           "MAZE_HARD": ",".join(sorted(self.POWER_NETS | {"GND"}))}):
+                    self.finish_unconnected(rounds=2, rip=False)
+                    after = len(self.unconnected())
+                    kept = after < before
+                    if not kept:
+                        shutil.copy(keep, self.OUT)
+                    print("rip-up for %s - %s %s: %d gaps after it, %d before" % (
+                        a, z, "kept" if kept else "taken back", after, before))
+                os.remove(keep)
+                if not kept:
+                    given_up.add((a, z))
+                if kept:
+                    break                       # (the gaps listed this round have moved: list them again)
+        return len(self.unconnected())
 
     @staticmethod
     def islands(b, net):
@@ -1148,7 +1444,9 @@ class Layout:
         return list(groups.values())
 
     def cli(self, argv):
-        if "--post" in argv:
+        if "--pre" in argv:
+            self.pre_route()
+        elif "--post" in argv:
             self.post_route()
         elif "--complete" in argv:          # the last connections, then the zones again
             left = self.finish_unconnected()

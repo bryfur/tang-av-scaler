@@ -3,6 +3,10 @@
 The ADV7842 board: component video into an ADV7842 (256-ball BGA, 1.0 mm pitch), stereo audio
 into a PCM1808, HDMI out of an ADV7511. Six layers.
 
+![Rev A, 3D](img/av-board-a-3d.png)
+
+![Rev A, top](img/av-board-a-top.png)
+
 Status: routed (Freerouting, mazeroute.py, the TMDS pairs refined on DeepPCB), DRC clean, fab
 files made; not ordered. JLCPCB quoted about $400 for it, most of that the BGA (and the six
 layers its escape needs: four did not route). Rev B replaces the ADV7842 with the ADV7181D.

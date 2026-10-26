@@ -11,6 +11,11 @@ Tracks go on F.Cu, In2.Cu and B.Cu (In3 holds the rail planes), 0.127 mm wide, C
 other net's copper; a via (0.5/0.3 mm) needs CLEAR round it on those layers and HOLE between
 its drill and every other drill. Pads are taken as their bounding boxes (on the safe side).
 Check the result with kicad-cli pcb drc.
+
+Rip-up (MAZE_SOFT=1): another signal net's unlocked copper does not block but costs SOFT_COST
+more a step; what the new copper then touches is taken up by apply (its net is left in pieces,
+for the next finishing round to join again). Pads, locked copper and the nets in MAZE_HARD
+(ground, the supplies) block as ever.
 """
 import heapq
 import json
@@ -21,6 +26,10 @@ import sys
 # MAZE_LAYERS / MAZE_WIDTH: the layers to route on and the track width (a TMDS line: F.Cu,B.Cu at
 # its class's 0.2 mm)
 LAYERS = os.environ.get("MAZE_LAYERS", "F.Cu,In2.Cu,B.Cu").split(",")
+LOCK = os.environ.get("MAZE_LOCK") == "1"      # apply: the new copper locked (a pre-route)
+# MAZE_COST="F.Cu:20": a step on that layer costs that much more (a path that should stay off a
+# layer but must start and end on it, at pads there)
+LAYER_COST = {k: float(v) for k, v in (e.split(":") for e in os.environ.get("MAZE_COST", "").split(",") if e)}
 TRACK = float(os.environ.get("MAZE_WIDTH", "0.127"))
 CLEAR, VIA_D, VIA_DRILL, HOLE = 0.15, 0.5, 0.3, 0.25
 RES = 0.025                                 # grid, mm
@@ -28,6 +37,9 @@ SLACK = 0.01                                # (a straightened run passes up to a
 MARGIN = float(os.environ.get("MAZE_MARGIN", "4.0"))   # round the two pads, mm
 VIA_COST = 60                               # a via costs as much as 1.5 mm of track
 FOLLOW_OFF = 3.0                            # off a pair partner's side, a step costs this much more
+SOFT = os.environ.get("MAZE_SOFT") == "1"   # rip-up (above)
+HARD = set(os.environ.get("MAZE_HARD", "GND").split(","))
+SOFT_COST = 40                              # a step through soft copper: a 1 mm crossing as 40 mm of track
 
 
 def dump(board, a, z, out, partner=None):
@@ -47,6 +59,11 @@ def dump(board, a, z, out, partner=None):
                      "box": [ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom())],
                      "c": [ToMM(p.GetPosition().x), ToMM(p.GetPosition().y)]})
     net = find(a)[1].GetNetname()
+    try:                                        # the net's own class clearance
+        own = ToMM(b.GetDesignSettings().m_NetSettings.GetEffectiveNetClass(net).GetClearance())
+    except Exception:
+        own = CLEAR
+    own = max(own, CLEAR)
     x0 = min(e["box"][0] for e in ends) - MARGIN
     y0 = min(e["box"][1] for e in ends) - MARGIN
     x1 = max(e["box"][2] for e in ends) + MARGIN
@@ -67,7 +84,8 @@ def dump(board, a, z, out, partner=None):
             layers = LAYERS if tht else ["B.Cu" if fp.IsFlipped() else "F.Cu"]
             hole = ToMM(p.GetDrillSize().x) / 2 if tht else 0
             obst.append({"kind": "box", "box": bx, "layers": layers, "hole": hole,
-                         "c": [(bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2]})
+                         "c": [(bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2],
+                         "clear": max(own, ToMM(p.GetOwnClearance(pcbnew.B_Cu if fp.IsFlipped() else pcbnew.F_Cu)))})
     for t in b.GetTracks():
         if t.GetNetname() == net:
             if t.GetClass() == "PCB_VIA":         # (its own net's vias: only their drills count)
@@ -79,12 +97,14 @@ def dump(board, a, z, out, partner=None):
         if partner and t.GetNetname() == partner and t.GetClass() != "PCB_VIA":
             follow.append({"layer": b.GetLayerName(t.GetLayer()),
                            "a": [ToMM(t.GetStart().x), ToMM(t.GetStart().y)], "b": [ToMM(t.GetEnd().x), ToMM(t.GetEnd().y)]})
+        soft = SOFT and not t.IsLocked() and t.GetNetname() not in HARD and t.GetNetname() != partner
         if t.GetClass() == "PCB_VIA":
             c = [ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)]
             if not near([c[0], c[1], c[0], c[1]]):
                 continue
-            obst.append({"kind": "via", "c": c, "r": ToMM(t.GetWidth()) / 2, "hole": ToMM(t.GetDrillValue()) / 2,
-                         "layers": LAYERS})
+            obst.append({"kind": "via", "c": c, "r": ToMM(t.GetWidth(pcbnew.F_Cu)) / 2, "hole": ToMM(t.GetDrillValue()) / 2,
+                         "layers": LAYERS, "clear": max(own, ToMM(t.GetOwnClearance(pcbnew.F_Cu))),
+                         "soft": soft, "net": t.GetNetname()})
         else:
             s = [ToMM(t.GetStart().x), ToMM(t.GetStart().y)]
             e = [ToMM(t.GetEnd().x), ToMM(t.GetEnd().y)]
@@ -93,7 +113,21 @@ def dump(board, a, z, out, partner=None):
             layer = b.GetLayerName(t.GetLayer())
             # (a track on a layer not routed here still stands in a new via's way)
             obst.append({"kind": "seg", "a": s, "b": e, "w": ToMM(t.GetWidth()) / 2,
-                         "layers": [layer] if layer in LAYERS else [], "via": True})
+                         "layers": [layer] if layer in LAYERS else [], "via": True,
+                         "clear": max(own, ToMM(t.GetOwnClearance(t.GetLayer()))),
+                         "soft": soft, "net": t.GetNetname(), "layer": layer})
+    # rule areas (keepouts): no track (and, if so set, no via) inside
+    for zn in b.Zones():
+        if not (zn.GetIsRuleArea() and zn.GetDoNotAllowTracks()):
+            continue
+        ol = zn.Outline().COutline(0)
+        pts = [[ToMM(ol.CPoint(i).x), ToMM(ol.CPoint(i).y)] for i in range(ol.PointCount())]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        if not near([min(xs), min(ys), max(xs), max(ys)]):
+            continue
+        lay = [n for n in LAYERS if zn.GetLayerSet().Contains(b.GetLayerID(n))]
+        obst.append({"kind": "poly", "pts": pts, "layers": lay, "novia": bool(zn.GetDoNotAllowVias()),
+                     "box": [min(xs), min(ys), max(xs), max(ys)], "clear": 0.0})
     json.dump({"net": net, "region": [x0, y0, x1, y1], "ends": ends, "obst": obst, "follow": follow}, open(out, "w"))
     print("%s: %d obstacles round %s - %s" % (net, len(obst), a, z))
 
@@ -111,8 +145,21 @@ def route(inp, out):
     L = {name: k for k, name in enumerate(LAYERS)}
     tblock = np.zeros((len(LAYERS), nx, ny), bool)     # no track centre here
     vblock = np.zeros((nx, ny), bool)                  # no via centre here
+    tsoft = np.zeros((len(LAYERS), nx, ny), bool)      # rip-up: only soft copper here
+    vsoft = np.zeros((nx, ny), bool)
 
     def dist(o):
+        if o["kind"] == "poly":                 # 0 inside, distance to the outline outside
+            pts = o["pts"]
+            inside = np.zeros_like(gx, bool)
+            dmin = np.full_like(gx, 1e9)
+            for (ax, ay), (bx_, by) in zip(pts, pts[1:] + pts[:1]):
+                inside ^= ((ay > gy) != (by > gy)) & (gx < (bx_ - ax) * (gy - ay) / ((by - ay) or 1e-12) + ax)
+                vx, vy = bx_ - ax, by - ay
+                ll = vx * vx + vy * vy or 1e-12
+                t = np.clip(((gx - ax) * vx + (gy - ay) * vy) / ll, 0, 1)
+                dmin = np.minimum(dmin, np.hypot(gx - (ax + t * vx), gy - (ay + t * vy)))
+            return np.where(inside, 0.0, dmin)
         if o["kind"] == "box":
             bx = o["box"]
             dx = np.maximum(np.maximum(bx[0] - gx, gx - bx[2]), 0)
@@ -127,15 +174,24 @@ def route(inp, out):
         return np.maximum(np.hypot(gx - (ax + t * vx), gy - (ay + t * vy)) - o["w"], 0)
     for o in d["obst"]:
         dd = dist(o)
+        cl = o.get("clear", CLEAR)
+        tb, vb = (tsoft, vsoft) if o.get("soft") else (tblock, vblock)
         for layer in o["layers"]:
-            tblock[L[layer]] |= dd < CLEAR + SLACK + TRACK / 2
+            tb[L[layer]] |= dd < cl + SLACK + TRACK / 2
+        if o["kind"] == "poly":
+            if o["novia"]:
+                vblock |= dd < SLACK + VIA_D / 2
+            continue
         if not o.get("samenet"):
-            vblock |= dd < CLEAR + SLACK + VIA_D / 2    # (vias go through every layer)
+            vb |= dd < cl + SLACK + VIA_D / 2          # (vias go through every layer)
         if o.get("hole"):                              # drill to drill
-            vblock |= np.hypot(gx - o["c"][0], gy - o["c"][1]) < o["hole"] + VIA_DRILL / 2 + HOLE
+            vb |= np.hypot(gx - o["c"][0], gy - o["c"][1]) < o["hole"] + VIA_DRILL / 2 + HOLE
+    tsoft &= ~tblock
+    vsoft &= ~vblock
 
     # a pair's second half: a step costs FOLLOW_OFF times as much away from its partner (on the
     # same layer, 0.3-0.6 mm off its centreline: coupled at about the pairs' pitch)
+    LCOST = [LAYER_COST.get(name, 1.0) for name in LAYERS]
     cost_x = np.ones((len(LAYERS), nx, ny))
     if d.get("follow"):
         near = np.zeros((len(LAYERS), nx, ny), bool)
@@ -173,11 +229,11 @@ def route(inp, out):
         k, i, j = cur
         nbrs = [((k, i + di, j + dj), w) for di, dj, w in steps]
         if not vblock[i, j]:
-            nbrs += [((kk, i, j), VIA_COST) for kk in range(len(LAYERS)) if kk != k]
+            nbrs += [((kk, i, j), VIA_COST + (SOFT_COST * 20 if vsoft[i, j] else 0)) for kk in range(len(LAYERS)) if kk != k]
         for (kk, ii, jj), w in nbrs:
             if not (0 <= ii < nx and 0 <= jj < ny) or tblock[kk, ii, jj]:
                 continue
-            ng = g + w * (cost_x[kk, ii, jj] if kk == k else 1)
+            ng = g + w * (cost_x[kk, ii, jj] * LCOST[kk] + (SOFT_COST if tsoft[kk, ii, jj] else 0) if kk == k else 1)
             if ng < cost.get((kk, ii, jj), 1e18):
                 cost[(kk, ii, jj)] = ng
                 came[(kk, ii, jj)] = cur
@@ -227,10 +283,42 @@ def route(inp, out):
         elif len(data) > 1:
             res["tracks"].append({"layer": LAYERS[data[0][0]],
                                   "pts": [[float(X[i]), float(Y[j])] for _, i, j in data]})
+    # rip-up: the soft copper the new tracks and vias come too near, measured on the final shapes
+    # (straightening can cut across soft cells the grid path went round)
+    res["rip"] = []
+    soft = [o for o in d["obst"] if o.get("soft")]
+    if soft:
+        def near_pt(o, px, py):
+            if o["kind"] == "via":
+                return max(math.hypot(px - o["c"][0], py - o["c"][1]) - o["r"], 0.0)
+            (ax, ay), (bx_, by) = o["a"], o["b"]
+            vx, vy = bx_ - ax, by - ay
+            ll = vx * vx + vy * vy or 1e-12
+            t = max(0.0, min(1.0, ((px - ax) * vx + (py - ay) * vy) / ll))
+            return max(math.hypot(px - ax - t * vx, py - ay - t * vy) - o["w"], 0.0)
+        samples = []                                   # (layer or None for a via, x, y)
+        for t in res["tracks"]:
+            for (ax, ay), (bx_, by) in zip(t["pts"], t["pts"][1:]):
+                n = max(1, int(math.hypot(bx_ - ax, by - ay) / 0.02))
+                samples += [(t["layer"], ax + (bx_ - ax) * s / n, ay + (by - ay) * s / n) for s in range(n + 1)]
+        samples += [(None, x, y) for x, y in res["vias"]]
+        for o in soft:
+            cl = o.get("clear", CLEAR)
+            for lay, px, py in samples:
+                if lay is None:
+                    hit = near_pt(o, px, py) < cl + VIA_D / 2 or (o.get("hole") and math.hypot(
+                        px - o["c"][0], py - o["c"][1]) < o["hole"] + VIA_DRILL / 2 + HOLE)
+                else:
+                    hit = lay in o["layers"] and near_pt(o, px, py) < cl + TRACK / 2
+                if hit:
+                    res["rip"].append(o)
+                    break
     json.dump(res, open(out, "w"))
     length = sum(math.hypot(a[0] - b_[0], a[1] - b_[1]) for t in res["tracks"] for a, b_ in zip(t["pts"], t["pts"][1:]))
-    print("%s: %.1f mm, %d vias, layers %s" % (d["net"], length, len(res["vias"]),
-                                                 sorted({t["layer"] for t in res["tracks"]})))
+    print("%s: %.1f mm, %d vias, layers %s%s" % (d["net"], length, len(res["vias"]),
+                                                   sorted({t["layer"] for t in res["tracks"]}),
+                                                   ", ripping up %d pieces of %s" % (len(res["rip"]), sorted({o["net"] for o in res["rip"]}))
+                                                   if res["rip"] else ""))
 
 
 def apply(board, inp):
@@ -239,6 +327,27 @@ def apply(board, inp):
     r = json.load(open(inp))
     b = pcbnew.LoadBoard(board)
     n = b.FindNet(r["net"])
+    if r.get("rip"):
+        def at(v):
+            return pcbnew.ToMM(v.x), pcbnew.ToMM(v.y)
+
+        def same(p, q):
+            return abs(p[0] - q[0]) < 1e-3 and abs(p[1] - q[1]) < 1e-3
+        gone = []
+        for t in list(b.GetTracks()):
+            if t.IsLocked():
+                continue
+            for o in r["rip"]:
+                if t.GetNetname() != o["net"]:
+                    continue
+                if o["kind"] == "via" and t.GetClass() == "PCB_VIA" and same(at(t.GetPosition()), o["c"]) or \
+                        o["kind"] == "seg" and t.GetClass() != "PCB_VIA" and b.GetLayerName(t.GetLayer()) == o["layer"] and \
+                        same(at(t.GetStart()), o["a"]) and same(at(t.GetEnd()), o["b"]):
+                    gone.append(t)
+                    break
+        for t in gone:
+            b.Remove(t)
+        print("ripped up %d of %s" % (len(gone), sorted({o["net"] for o in r["rip"]})))
     for x, y in r["vias"]:
         v = pcbnew.PCB_VIA(b)
         v.SetViaType(pcbnew.VIATYPE_THROUGH)
@@ -246,6 +355,7 @@ def apply(board, inp):
         v.SetWidth(FromMM(VIA_D))
         v.SetDrill(FromMM(VIA_DRILL))
         v.SetNet(n)
+        v.SetLocked(LOCK)
         b.Add(v)
     for t in r["tracks"]:
         for a, z in zip(t["pts"], t["pts"][1:]):
@@ -255,6 +365,7 @@ def apply(board, inp):
             s.SetWidth(FromMM(TRACK))
             s.SetLayer(b.GetLayerID(t["layer"]))
             s.SetNet(n)
+            s.SetLocked(LOCK)
             b.Add(s)
     pcbnew.SaveBoard(board, b)
     b = pcbnew.LoadBoard(board)
