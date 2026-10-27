@@ -26,6 +26,9 @@ class Part:
     dnp: bool = False
     block: str = ""
     note: str = ""
+    # "REF.PAD": the one pad this part serves (a supply pin's decoupling capacitor, a regulator's
+    # input or output capacitor): the placer puts it there before anything else
+    at: str = ""
 
 
 PARTS = []
@@ -36,8 +39,8 @@ def block(name):
     _block[0] = name
 
 
-def part(ref, value, symbol, footprint, lcsc, pins, dnp=False, note=""):
-    p = Part(ref, value, symbol, footprint, lcsc, dict(pins), dnp, _block[0], note)
+def part(ref, value, symbol, footprint, lcsc, pins, dnp=False, note="", at=""):
+    p = Part(ref, value, symbol, footprint, lcsc, dict(pins), dnp, _block[0], note, at)
     PARTS.append(p)
     return p
 
@@ -81,9 +84,9 @@ LCSC = {
 POLAR = {"TANT_B"}           # pin 1 is + (the band side of the footprint)
 
 
-def two(ref, kind, value, a, b, dnp=False, note=""):
+def two(ref, kind, value, a, b, dnp=False, note="", at=""):
     sym, fp = TWO[kind]
-    return part(ref, value, sym, fp, LCSC[(kind, value)], {"1": a, "2": b}, dnp, note)
+    return part(ref, value, sym, fp, LCSC[(kind, value)], {"1": a, "2": b}, dnp, note, at)
 
 
 _n = {}

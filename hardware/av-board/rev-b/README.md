@@ -8,7 +8,8 @@ into the ADV7181D, stereo audio into a PCM1808, HDMI out of an ADV7511. Four lay
 ![Rev B, top](img/av-board-b-top.png)
 
 Status: reviewed against every part's data sheet (review.md), routed, DRC clean, fab files made;
-not ordered.
+not ordered. The routed board predates the placement fixes now in the generator (review.md,
+Status).
 
 - [design.md](design.md): what changed from rev A, and the ADV7181D's circuit with its sources
 - [review.md](review.md): every part checked against its data sheet, with the fixes

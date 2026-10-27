@@ -1,7 +1,9 @@
 # AV board rev C-B
 
 The Tang Mega 138K SOM on its own carrier, HDMI 2.0 from the FPGA's transceivers through a TI
-SN65DP159 retimer, up to 4K60. Everything else is shared with rev C-A:
+SN65DP159 retimer, up to 4K60; S/PDIF (coax and optical) on rev B's 5-pin header instead of a
+jack, so the HDMI receptacle sits by the audio jacks and the board is 100 x 100 mm, 30 mm
+narrower than C-A. Everything else is shared with rev C-A:
 [../rev-c/design.md](../rev-c/design.md) describes both.
 
 ![Rev C-B, 3D](img/av-board-cb-3d.png)
@@ -19,7 +21,7 @@ and routed; not ordered.
 ## Ordering at JLCPCB
 
 As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers and the BOM/CPL, and a
-`hand-jacks` BOM/CPL leaves the six RCA jacks for hand soldering. Settings the files do not carry:
+`hand-jacks` BOM/CPL leaves the five RCA jacks for hand soldering. Settings the files do not carry:
 
 - 4 layers, 1.6 mm, stack-up **JLC04161H-7628** (F.Cu / In1 GND / In2 GND / B.Cu), impedance
   control on.

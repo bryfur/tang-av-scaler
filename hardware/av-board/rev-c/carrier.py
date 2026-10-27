@@ -46,10 +46,11 @@ def power(second_rail):
     # SMF5.0A is unidirectional (cathode, pad 1, on VBUS): drawn as KiCad's Zener, which shows it;
     # its D_TVS symbol is the bidirectional one
     part("D6", "SMF5.0A", "Device:D_Zener", "Diode_SMD:D_SMF", "C2857263", {"1": "VBUS_IN", "2": "GND"})
-    two(nxt("F"), "PTC1812", "3A", "VBUS_IN", "+5V")
-    for _ in range(2):
-        C("47u", "+5V", size="C1206")
-    C("100n", "+5V")
+    f = nxt("F")
+    two(f, "PTC1812", "3A", "VBUS_IN", "+5V")
+    for _ in range(2):                          # (at the fuse's output, where the 5 V comes in)
+        C("47u", "+5V", size="C1206", at=f + ".2")
+    C("100n", "+5V", at=f + ".2")
 
     # the supply tree for the board's own parts: rev B's (kit/circuits.py)
     supply_tree(second_rail)
@@ -96,29 +97,32 @@ def clocks(refclk):
     rev C-B, the Console's drive into the transceivers' reference input (an ME6211C25), CLK2 then
     within LVCMOS33 typically (the data sheet's VOH floor is 1.9 V). ME6211: >= 1 uF in and out."""
     block("clock")
+    # (each LDO by the MS5351M pin it feeds: by the placer's rules for a part on supplies only they
+    # went 73-80 mm off, by the XIAO's level translators, their rails as long)
     part("U24", "ME6211C30M5G-N", "lcsc:ME6211C30M5G-N", "lcsc:SOT-23-5_L2.9-W1.6-P0.95-LS2.8-BL", "C403651",
-         {"1": "3V3", "2": "GND", "3": "3V3", "5": "3V0"})
-    C("1u", "3V3")
-    C("10u", "3V0")
+         {"1": "3V3", "2": "GND", "3": "3V3", "5": "3V0"}, at="U17.1")
+    C("1u", "3V3", at="U24.1")                  # (at VIN and VOUT)
+    C("10u", "3V0", at="U24.5")
     vddo = "3V3"
     if refclk:
         vddo = "2V5"
         part("U18", "ME6211C25M5G-N", "lcsc:ME6211C25M5G-N", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C194395",
-             {"1": "3V3", "2": "GND", "3": "3V3", "5": "2V5"})
-        C("1u", "3V3")
-        C("10u", "2V5")
+             {"1": "3V3", "2": "GND", "3": "3V3", "5": "2V5"}, at="U17.7")
+        C("1u", "3V3", at="U18.1")
+        C("10u", "2V5", at="U18.5")
     pins = {"1": "3V0", "2": "PLL_XA", "3": "PLL_XB", "4": "PLL_SCL", "5": "PLL_SDA", "6": "PLL_CLK2_S",
             "7": vddo, "8": "GND"}
     if refclk:
         pins.update({"10": "PLL_CLK0", "9": "PLL_CLK1"})
     part("U17", "MS5351M", "lcsc:MS5351M", "lcsc:MSOP-10_L3.0-W3.0-P0.50-LS5.0-BL", "C1509083", pins)
-    C("100n", "3V0")
-    C("100n", vddo)
     # 25 MHz, 10 pF load (the Console's): the MS5351M's internal load capacitance, set over I2C to
     # 10 pF, matches it [data sheet: crystal CL 6-12 pF, ESR <= 150 R]. HY25MSMD2016EA1R30: +-10 ppm,
-    # +-10 ppm over -20..70 C, 45 R, 2016 four-pad (pads 2, 4 the case)
+    # +-10 ppm over -20..70 C, 45 R, 2016 four-pad (pads 2, 4 the case). Placed before the 100 nF
+    # (VDD, pin 1, is XA's neighbour): its lines the shortest
     part("Y2", "25MHz 10pF", "lcsc:HY25MSMD2016EA1R30", "lcsc:CRYSTAL-SMD_4P-L2.0-W1.6-BL", "C5265839",
          {"1": "PLL_XA", "3": "PLL_XB", "2": "GND", "4": "GND"})
+    C("100n", "3V0", at="U17.1")                # (at VDD and VDDO)
+    C("100n", vddo, at="U17.7")
     # I2C: 4.7 k to 3.3 V (the FPGA's bus level; the MS5351M's inputs take up to 3.6 V at VIH 0.7 x
     # the bus supply, and want 1 k or more)
     R("4.7k", "3V3", "PLL_SCL")
@@ -173,12 +177,13 @@ def control():
     buttons_led()
 
 
-def common(second_rail):
-    """Everything but the HDMI transmitter: rev B's shared circuits (kit/circuits.py) and rev C's own."""
+def common(second_rail, spdif_connectors="jack"):
+    """Everything but the HDMI transmitter: rev B's shared circuits (kit/circuits.py) and rev C's own.
+    spdif_connectors: kit/circuits.py spdif()'s (C-A "jack": coax and optical; C-B "optical")."""
     power(second_rail)
     adv7181d()
     pcm1808()
-    spdif("jack")
+    spdif(spdif_connectors)
     control()
     hdmi_receptacle()
 
@@ -188,20 +193,22 @@ def common(second_rail):
 # ---------------------------------------------------------------------------
 
 # Groups of FPGA signals and where their chip sits (floor.py), in the order they are given pins
-def common_groups():
+def common_groups(spdif_at=floor.SPDIF_AT, ui_at=floor.UI_AT):
     """The chips' places are floor.py's (the ADV7181D under the video jacks, its pins as placed;
     the PCM1808 under the audio jacks, the S/PDIF input under its jack, the clock generator by J21's
-    top, the XIAO's translators at the front left, the buttons and LEDs along the front)."""
+    top, the XIAO's translators at the front left, the buttons and LEDs along the front); a
+    revision's own S/PDIF and button places if it moves them (C-B)."""
     u1, body = chip_pins("lcsc:LFCSP-64_L9.0-W9.0-P0.50-BL-EP7.1", floor.U1_AT, 0,
                          {sig: avpin(name) for sig, name in FRONTEND_PINS.items()})
+    present = {n for p in PARTS for n in p.pins.values()}       # (C-B has no coax input)
     return [
         ("adv7181d", u1, {"IN_LLC": "clock"}, body),
         ("pcm1808", point(["IN_SCKI", "IN_BCK", "IN_LRCK", "IN_DOUT"], floor.PCM1808_AT), {}),
-        ("spdif", point(["SPDIF_RX", "SPDIF_ORX"], floor.SPDIF_AT), {}),
+        ("spdif", point([n for n in ("SPDIF_RX", "SPDIF_ORX") if n in present], spdif_at), {}),
         ("vga", point(["VGA_SDA_F", "VGA_SCL_F"], floor.VGA_AT), {}),
         ("clock", point(["PLL_CLK2", "PLL_SCL", "PLL_SDA"], floor.CLOCK_AT), {"PLL_CLK2": "clock"}),
         ("xiao", point([n for n, _ in XIAO_LINES.values() if n.startswith("ESP_")], floor.XIAO_AT), {}),
-        ("ui", point(["IN_KEY1", "IN_KEY2", "IN_LED"], floor.UI_AT), {}),
+        ("ui", point(["IN_KEY1", "IN_KEY2", "IN_LED"], ui_at), {}),
     ]
 
 

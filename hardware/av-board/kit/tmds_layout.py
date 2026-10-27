@@ -34,6 +34,10 @@ class TMDSLayout:
     TMDS_INWARD = {}
     TMDS_ESD = ("U9", "U10")
     SMALL_VIA = (0.4, 0.2)
+    # a line's straight run out of its pin before its corner, at least: the corner then clears the
+    # neighbouring pin's pad (rev C-B's receptacle 1 mm further left turned D2+ 0.2 mm out of its
+    # pin, its diagonal 0.19 mm from pin 36)
+    TMDS_OUT = 0.8
 
     def to_frame(self, p):
         return _rot(p[0], p[1], -self.TMDS_ANGLE)
@@ -65,7 +69,7 @@ class TMDSLayout:
                 sp = ((prev[0] - x0) + (yi - prev[1])) / 2      # its spacing to the line inside it
                 c = c_prev - math.sqrt(2) * sp
                 d = c - x0 + yi
-            assert 0 < d < min(yi - y0, xi - x0), (name, d)
+            assert 0 < d < min(yi - y0, xi - x0) and yi - d - y0 >= self.TMDS_OUT, (name, d, yi - d - y0)
             net = b.FindNet(name)
             pts = [(x0, y0), (x0, yi - d), (x0 + d, yi), (xi, yi), (xo, yo)]
             # to the connector: straight on, then 45 degrees onto its pin's line

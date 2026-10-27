@@ -7,12 +7,16 @@ positions and the script stops if one is off.
 
 Placement: the big parts by hand (Layout.HAND), the small ones next to the pin they serve: each
 two-terminal part, array or filter is put on the free spot nearest to its anchor (the IC pin it
-connects to), on the side given for its group.
+connects to; a part board.py names a pad for, at=, that pad), on the side given for its group.
+The ESD parts go first, at their connectors, then the small chips, each pin's capacitor as soon
+as its chip is down, then the rest (rank in main()).
 
     python3 rev-x/gen_pcb.py            # rev-x/<name>.kicad_pcb, placed and unrouted
     python3 rev-x/gen_pcb.py --route    # ... routed by Freerouting (SES=file.ses: import that session
                                         # instead; ROUTER=deeppcb MINUTES=60: route on DeepPCB)
     python3 rev-x/gen_pcb.py --silk     # the silkscreen rules again, on the board as it is (routed)
+    python3 rev-x/gen_pcb.py --move REF x y angle   # a part moved on the routed board (move_part),
+    python3 rev-x/gen_pcb.py --complete             # then its connections made again, the stubs cleared
 
 PCB=path puts a trial board elsewhere.
 """
@@ -176,6 +180,49 @@ def copper_key(t):
     return ("track", t.GetLayer()) + min(a, z) + max(a, z)
 
 
+def covered(b, eps=0.03):
+    """Copper the router laid twice over: each unlocked segment lying wholly on another of its net
+    and layer, at least as wide (both its ends within (wB - wA) / 2 + eps mm of the other's centre
+    line); of two identical ones, one. It joins nothing the wider one does not (freerouting leaves
+    such copies where it routes over its own track: kit/doubled.py lists the side-by-side ones)."""
+    by = {}
+    for t in b.GetTracks():
+        if t.GetClass() == "PCB_TRACK":
+            by.setdefault((t.GetNetCode(), t.GetLayer()), []).append(
+                (t, ToMM(t.GetWidth()), [ToMM(v) for v in (t.GetStart().x, t.GetStart().y,
+                                                           t.GetEnd().x, t.GetEnd().y)]))
+    gone = []
+    for segs in by.values():
+        out = set()
+        for i, (t, wa, (ax, ay, az, aw)) in enumerate(segs):
+            if t.IsLocked() or wa / 2 <= eps:
+                continue
+            for j, (_, wb, s) in enumerate(segs):
+                tol = (wb - wa) / 2 + eps
+                if (j != i and j not in out and wb >= wa and seg_dist(ax, ay, *s) <= tol
+                        and seg_dist(az, aw, *s) <= tol):
+                    out.add(i)
+                    gone.append(t)
+                    break
+    return gone
+
+
+def drc_report(path, *flags):
+    """kicad-cli's DRC of the board at path (its JSON report: violations, unconnected_items). No
+    report means kicad-cli could not load the board (a save cut short by a full disk): an error
+    with kicad-cli's own words, which the routing steps' "no path" handlers (SystemExit) let pass."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rpt = os.path.join(tmp, "drc.json")
+        r = subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json"] + list(flags) + ["-o", rpt, path],
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        try:
+            with open(rpt) as f:
+                return json.load(f)
+        except (OSError, ValueError):
+            raise RuntimeError("DRC of %s gave no report (kicad-cli exit %d): %s"
+                               % (path, r.returncode, r.stdout.strip()[-400:]))
+
+
 class Occ:
     """Occupancy of each side on a grid, for the small-part placer."""
 
@@ -248,14 +295,17 @@ class Layout:
     BIAS_NETS = set()       # nets whose parts are placed first, nearest their pins
     BUSES = []              # (header, IC): crossings reported after placement
     FPGA_HEADERS = ("J9", "J10")    # the FPGA's side: a series resistor on a line it drives sits there
-    # Silkscreen: designators only for the parts one finds by eye; labels by the jacks (on the
-    # jack's body by the left edge), near parts (ref, text), a header's pins (ref, {pad: text}, under
-    # each pad; the header's designator then hidden), and the board's name (TITLE_AT: its centre, else near the bottom edge's middle)
+    # Silkscreen: designators only for the parts one finds by eye; labels by the jacks (inboard of
+    # the jack's body, at its board edge), near parts (ref, text), a header's pins (ref, {pad: text}[,
+    # "left"]: see pin_labels; the header's designator then hidden), and the board's name (TITLE_AT:
+    # (x, y[, angle]) its centre, else near the bottom edge's middle). SILK_HIDDEN: boxes a label
+    # would be hidden in once the parts are fitted, besides their bodies (rev C: under the SOM)
     SILK_KEEP = {"U", "J", "SW", "Y", "FL", "L", "F", "FB", "H"}
     SILK_LABELS = []
     SILK_NEAR = []
     SILK_PINS = []
     TITLE_AT = None
+    SILK_HIDDEN = []
 
     def __init__(self, board, here):
         self.board = board
@@ -291,8 +341,12 @@ class Layout:
         return None
 
     def bias_rank(self, p):
-        """The order among the first-placed parts (bias, references, filters): 0, or a little later."""
-        return 0
+        """The order among the first-placed parts (bias, references, filters): with the parts board.py
+        names a pin for (at=), in board.py's order, the circuits' own order of importance (a
+        regulator's input capacitor, its inductor, output capacitor, feedback divider; R_EXT before
+        the ADV7511's decoupling). Ranked after those parts they lost their pins' room (the
+        feedback dividers 11-13 mm off, R_EXT 7.5 mm)."""
+        return -1
 
     # ESD parts, by value: TI's TPDxE05U06 diodes and arrays, the SMF TVS diodes
     ESD_VALUES = ("TPD", "SMF")
@@ -392,6 +446,17 @@ class Layout:
         fp.SetOrientationDegrees(ang)
         fp.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
         occ.take(side, box)
+        # (the nearest free spot may lie across a reserved area from the anchor - a corridor, the
+        # SOM - once the room by it has run out: noted, as its lines must then cross that area; a
+        # millimetre at least, not a corner clipped)
+        d = math.hypot(x - ax, y - ay)
+        pts = [(ax + (x - ax) * k / max(1, int(d / 0.25)), ay + (y - ay) * k / max(1, int(d / 0.25)))
+               for k in range(max(1, int(d / 0.25)) + 1)]
+        for rx0, ry0, rx1, ry1 in self.RESERVED:
+            def inside(p):
+                return rx0 < p[0] < rx1 and ry0 < p[1] < ry1
+            if not inside(pts[0]) and not inside(pts[-1]) and sum(map(inside, pts)) * d / len(pts) >= 1.0:
+                print("note: %s placed across a reserved area from its anchor (%.1f, %.1f)" % (fp.GetReference(), ax, ay))
 
     def main(self):
         board = self.board
@@ -478,12 +543,19 @@ class Layout:
                 pad.SetNumber(str(hit[0]))
                 if str(hit[0]) in p.pins:           # (a pin left open has no net)
                     pad.SetNet(net(p.pins[str(hit[0])]))
+        # the labelled headers' pin labels: their room kept free of parts (pin_labels)
+        for ref, names, *side in self.SILK_PINS:
+            if ref in fps:
+                for _, (x0, y0, x1, y1) in self.pin_labels(b, fps[ref], names, *side):
+                    occ.take("F", (x0 - 0.15, y0 - 0.15, x1 + 0.15, y1 + 0.15))
 
         # --- small parts next to their anchors
         # pads already placed, by net: the hand-placed parts now, each small part as it is placed
         ic_pads = {}
+        placed = set()
 
         def add_pads(fp):
+            placed.add(fp.GetReference())
             for pad in fp.Pads():
                 v = pad.GetPosition()
                 ic_pads.setdefault(pad.GetNetname(), []).append((ToMM(v.x), ToMM(v.y), fp.GetReference()))
@@ -493,6 +565,15 @@ class Layout:
 
         def anchor_for(p):
             """Where a small part goes, or None while nothing it hangs on is placed yet."""
+            # a part for one pad (board.py's at="REF.PAD": a supply pin's decoupling, a regulator's
+            # input or output capacitor) at that pad, once its part is placed: by the rules below
+            # every capacitor on a rail went to the chip's first pin on it (an ADV7511's 100 nF all
+            # by its pin 24, 9-20 mm from the pins on its other sides [HWG 7.1: each "as close to
+            # the supply pin as possible"]; a TLV62569's input capacitor by EN, pin 1, its VIN on
+            # the package's other side, 5-14 mm off)
+            if p.at:
+                ref, pad = p.at.split(".")
+                return (pad_pos(fps[ref], pad), "F") if ref in placed else None
             special = self.anchor_special(p, ic_pads, fps)
             if special is not None:
                 return special
@@ -558,12 +639,20 @@ class Layout:
         order = [p for p in board.PARTS if p.ref not in HAND]
 
         def rank(p):
-            """The order the small parts get their places in: inductors, filters, bias and reference
-            parts first, then the revision's own ranks, then whatever serves an IC pin (in board.py
-            order), then the rest."""
+            """The order the small parts get their places in: the ESD parts at their connectors
+            first, the small chips, then a pin's own parts in board.py's order (its capacitor, at=,
+            each as soon as its chip is placed; the bias, reference and filter parts, bias_rank),
+            a regulator or filter for one chip (at= that chip's pin) beside it, then the
+            revision's own ranks, then whatever serves an IC pin (in board.py order), the rest."""
             nets_ = set(p.pins.values())
             if self.esd(p):
-                return 0                # (before anything else takes the room at its connector)
+                return -2               # (before anything else takes the room at its connector)
+            if p.ref.startswith("U") and not p.at:
+                return -1.5             # (a small chip by its partners, before parts crowd round them)
+            if p.at:
+                # (a pin's own capacitor before anything takes its room; anything else at= - a
+                # regulator for one chip, a rail's filter - beside the pin, its capacitors placed)
+                return -1 if p.ref.startswith("C") else -0.5
             if p.ref.startswith(("FL", "L", "Y")) or nets_ & self.BIAS_NETS:
                 return self.bias_rank(p)
             s = self.rank_special(p, ic_pads)
@@ -596,6 +685,8 @@ class Layout:
         self.fanout_planes(b)
         self.planes(b, fps)
         pcbnew.SaveBoard(self.OUT, b)
+        if os.path.exists(self.OUT + ".before-rip"):    # (an older board's unfinished rip-up, which
+            os.remove(self.OUT + ".before-rip")         # finish_unconnected would put back over this one)
         print("%s: %d footprints" % (self.OUT, len(fps)))
         if "--route" in sys.argv:
             self.route()
@@ -604,15 +695,52 @@ class Layout:
 
     _removed = []
 
+    def pin_labels(self, b, fp, names, side=None):
+        """A labelled header's pin labels (SILK_PINS): [(text, box)], not yet on the board. Pins in a
+        row: each label under its pin, below the body, every other one above it where neighbours
+        would run together (0.9 mm text at 2.54 mm: TCK TDO TDI TMS); pins in a column: each beside
+        its pin, right of the body (side "left": left of it). The placer keeps their boxes free of
+        parts, so that no label ends up under a part or over a pad."""
+        bb = fp.GetBoundingBox(False, False)
+        l_, t_, r_, b_ = ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetRight()), ToMM(bb.GetBottom())
+        pins = sorted((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y), names[p.GetNumber()])
+                      for p in fp.Pads() if p.GetNumber() in names)
+
+        def label(s_, x, y, just):
+            t = pcbnew.PCB_TEXT(b)
+            t.SetText(s_)
+            t.SetLayer(pcbnew.F_SilkS)
+            t.SetTextSize(VECTOR2I(FromMM(0.9), FromMM(0.9)))
+            t.SetTextThickness(FromMM(0.15))
+            t.SetHorizJustify(just)
+            t.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
+            r = t.GetBoundingBox()
+            return t, (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
+        if pins[-1][0] - pins[0][0] < 0.01:
+            if side == "left":
+                return [label(s_, l_ - 0.5, y, pcbnew.GR_TEXT_H_ALIGN_RIGHT) for _, y, s_ in pins]
+            return [label(s_, r_ + 0.5, y, pcbnew.GR_TEXT_H_ALIGN_LEFT) for _, y, s_ in pins]
+        row = [label(s_, x, b_ + 0.75, pcbnew.GR_TEXT_H_ALIGN_CENTER) for x, _, s_ in pins]
+        if any(a[1][2] > z[1][0] for a, z in zip(row, row[1:])):
+            row = [label(s_, x, t_ - 0.75 if k % 2 else b_ + 0.75, pcbnew.GR_TEXT_H_ALIGN_CENTER)
+                   for k, (x, _, s_) in enumerate(pins)]
+        return row
+
     def silkscreen(self, b):
         """Designators only for the parts one finds by eye (SILK_KEEP); the passives' stay on the
         fab layer (JLCPCB places from the CPL, and 0402s leave no room). Labels by the inputs and
-        outputs, and the board's."""
+        outputs, and the board's. Each text on the board, clear of the pads and of the texts
+        before it, a label also of the parts' bodies (and SILK_HIDDEN: where it would be hidden
+        once they are fitted): the headers' pin labels first (each belongs at its pin), then the
+        board's name, the jacks' and parts' labels, last the designators (hidden where there is
+        no room); a label left with no clear place is reported."""
         silk = (pcbnew.F_SilkS, pcbnew.B_SilkS)
         X0, Y0, X1, Y1 = self.X0, self.Y0, self.X1, self.Y1
-        # copper a text must keep off, per side (through-hole pads on both)
+        # copper a text must keep off, per side (through-hole pads on both); the parts' bodies
         pads = {pcbnew.F_SilkS: [], pcbnew.B_SilkS: []}
+        bodies = {pcbnew.F_SilkS: list(self.SILK_HIDDEN), pcbnew.B_SilkS: []}
         for fp in b.GetFootprints():
+            bodies[pcbnew.B_SilkS if fp.IsFlipped() else pcbnew.F_SilkS].append(courtyard(fp, 0))
             for pad in fp.Pads():
                 r = pad.GetBoundingBox()
                 box = (ToMM(r.GetLeft()) - 0.15, ToMM(r.GetTop()) - 0.15, ToMM(r.GetRight()) + 0.15, ToMM(r.GetBottom()) + 0.15)
@@ -624,6 +752,87 @@ class Layout:
 
         def hits(box, boxes):
             return any(box[2] > q[0] and box[0] < q[2] and box[3] > q[1] and box[1] < q[3] for q in boxes)
+
+        def clear(box, side=pcbnew.F_SilkS, label=True, own=None, gap=0.0):
+            """On the board, clear of the pads and of the texts placed (a label also of the parts'
+            bodies but own), gap apart from texts and bodies."""
+            g = (box[0] - gap, box[1] - gap, box[2] + gap, box[3] + gap)
+            return box[0] > X0 + 0.3 and box[2] < X1 - 0.3 and box[1] > Y0 + 0.3 and box[3] < Y1 - 0.3 \
+                and not hits(box, pads[side]) and not hits(g, placed[side]) \
+                and not (label and hits(g, [q for q in bodies[side] if q != own]))
+        labels = {t for _, t in self.SILK_LABELS} | {t for _, t in self.SILK_NEAR} | \
+            {self.BOARD_LABEL, self.BOARD_LABEL.replace(" AV board", "\nAV board")} | \
+            {t for _, names, *_ in self.SILK_PINS for t in names.values()}
+        for item in list(b.GetDrawings()):                  # (again on a re-run: no duplicates)
+            if isinstance(item, pcbnew.PCB_TEXT) and item.GetText() in labels:
+                b.Remove(item)
+                self._removed.append(item)  # (kept referenced: freed, they break pcbnew's later calls)
+        for ref, names, *side in self.SILK_PINS:
+            fp = b.FindFootprintByReference(ref)
+            for t, box in self.pin_labels(b, fp, names, *side):
+                if not clear(box, own=courtyard(fp, 0)):
+                    print("silkscreen: %s's pin label %s is not clear" % (ref, t.GetText()))
+                placed[pcbnew.F_SilkS].append(box)
+                b.Add(t)
+
+        def text(s_, size, spots, just=pcbnew.GR_TEXT_H_ALIGN_CENTER, must=True, reach=6.0, shrink=True,
+                 gaps=(0.3, 0.0)):
+            """A label at the first of spots [(x, y, angle)] that is clear (0.3 mm from other texts
+            and bodies), else at the nearest clear place within reach of the first or the last; the
+            same at 1 mm if it is larger (shrink: JLCPCB's smallest legible height); then both
+            again with no gap kept (gaps); if there is none, at the last spot, reported (must), or
+            not at all (False returned)."""
+            t = pcbnew.PCB_TEXT(b)
+            t.SetText(s_)
+            t.SetLayer(pcbnew.F_SilkS)
+            t.SetHorizJustify(just)
+            n = int(reach / 0.5)
+            near = sorted(((i * 0.5, j * 0.5) for i in range(-n, n + 1) for j in range(-n, n + 1)), key=lambda d: math.hypot(*d))
+
+            def fit(size_, gap):
+                t.SetTextSize(VECTOR2I(FromMM(size_), FromMM(size_)))
+                t.SetTextThickness(FromMM(0.18 if size_ >= 1.2 else 0.15))
+                for x_, y_, a_ in spots + [(s[0] + dx, s[1] + dy, s[2]) for s in (spots[0], spots[-1]) for dx, dy in near[1:]]:
+                    t.SetPosition(VECTOR2I(FromMM(x_), FromMM(y_)))
+                    t.SetTextAngleDegrees(a_)
+                    r = t.GetBoundingBox()
+                    if clear((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom())), gap=gap):
+                        return True
+                return False
+            sizes = [size] + ([1.0] if shrink and size > 1.0 else [])
+            if not any(fit(s_, g_) for g_ in gaps for s_ in sizes):
+                if not must:
+                    return False
+                t.SetTextSize(VECTOR2I(FromMM(size), FromMM(size)))
+                t.SetTextThickness(FromMM(0.18 if size >= 1.2 else 0.15))
+                t.SetPosition(VECTOR2I(FromMM(spots[-1][0]), FromMM(spots[-1][1])))
+                t.SetTextAngleDegrees(spots[-1][2])
+                print("silkscreen: no clear place for %s" % s_)
+            r = t.GetBoundingBox()
+            placed[pcbnew.F_SilkS].append((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom())))
+            b.Add(t)
+            return True
+        # the board's name, on two lines where one does not fit
+        tx, ty, ta = (tuple(self.TITLE_AT) + (0,))[:3] if self.TITLE_AT else ((X0 + X1) / 2 - 5, Y1 - 1.6, 0)
+        if not text(self.BOARD_LABEL, 1.2, [(tx, ty, ta)], must=False, shrink=False, gaps=(0.3,)):
+            text(self.BOARD_LABEL.replace(" AV board", "\nAV board"), 1.2, [(tx, ty, ta)])
+        for ref, label in self.SILK_LABELS:
+            # inboard of the jack at its board edge, on its middle (along the edge at most a little
+            # either side, short of the next jack's), else there, reported
+            l_, t_, r_, b_ = courtyard(b.FindFootprintByReference(ref), 0)
+            edge = min((l_ - X0, "L"), (X1 - r_, "R"), (t_ - Y0, "T"), (Y1 - b_, "B"))[1]
+            cx, cy = (l_ + r_) / 2, (t_ + b_) / 2
+            out = {"L": (r_ + 0.8, cy, 1, 0), "R": (l_ - 0.8, cy, -1, 0), "T": (cx, b_ + 1.0, 0, 1),
+                   "B": (cx, t_ - 1.0, 0, -1)}[edge]
+            spots = [(out[0] + out[2] * k + out[3] * a, out[1] + out[3] * k + out[2] * a, 0)
+                     for k in (0, 0.8, 1.6) for a in (0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, 3.2, -3.2)]
+            text(label, 1.4, spots + spots[:1], {"L": pcbnew.GR_TEXT_H_ALIGN_LEFT, "R": pcbnew.GR_TEXT_H_ALIGN_RIGHT}.get(
+                edge, pcbnew.GR_TEXT_H_ALIGN_CENTER), reach=2.5)
+        for ref, label in self.SILK_NEAR:                   # above the part, else below it
+            bb = b.FindFootprintByReference(ref).GetBoundingBox(False, False)
+            l_, t_, b_ = ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetBottom())
+            text(label, 1.2, [(l_ + 3.5 + dx, t_ - 1.2 - dy, 0) for dy in (0, 0.8, 1.6, 2.4) for dx in (0, 1.5, -1.5)]
+                 + [(l_ + 3.5, b_ + 1.0 + dy, 0) for dy in (0, 0.8)])
         for fp in b.GetFootprints():
             prefix = "".join(ch for ch in fp.GetReference() if ch.isalpha())
             ref = fp.Reference()
@@ -632,7 +841,7 @@ class Layout:
                 if not fld.IsReference() and fld.GetLayer() in silk:
                     fld.SetVisible(False)
             # (a header with labelled pins: its labels and name say what it is)
-            if prefix not in self.SILK_KEEP or fp.GetReference() in {r for r, _ in self.SILK_PINS}:
+            if prefix not in self.SILK_KEEP or fp.GetReference() in {r for r, *_ in self.SILK_PINS}:
                 ref.SetVisible(False)
                 continue
             # the designator where it is clear of copper and of the texts placed so far: above, below,
@@ -648,57 +857,12 @@ class Layout:
                 ref.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
                 r = ref.GetBoundingBox()
                 box = (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
-                if box[0] > X0 + 0.3 and box[2] < X1 - 0.3 and box[1] > Y0 + 0.3 and box[3] < Y1 - 0.3 \
-                        and not hits(box, pads[side]) and not hits(box, placed[side]):
+                if clear(box, side, label=False):
                     ref.SetVisible(True)
                     placed[side].append(box)
                     break
             else:
                 ref.SetVisible(False)
-        labels = {t for _, t in self.SILK_LABELS} | {t for _, t in self.SILK_NEAR} | {self.BOARD_LABEL} | \
-            {t for _, names in self.SILK_PINS for t in names.values()}
-        for item in list(b.GetDrawings()):                  # (again on a re-run: no duplicates)
-            if isinstance(item, pcbnew.PCB_TEXT) and item.GetText() in labels:
-                b.Remove(item)
-                self._removed.append(item)  # (kept referenced: freed, they break pcbnew's later calls)
-
-        def text(s_, x, y, size, angle=0, spots=None):
-            """A label at (x, y), or at the first of spots [(x, y, angle)] clear of copper and texts."""
-            t = pcbnew.PCB_TEXT(b)
-            t.SetText(s_)
-            t.SetLayer(pcbnew.F_SilkS)
-            t.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
-            t.SetTextSize(VECTOR2I(FromMM(size), FromMM(size)))
-            t.SetTextThickness(FromMM(0.18 if size >= 1.2 else 0.15))
-            t.SetTextAngleDegrees(angle)
-            for x_, y_, a_ in spots or []:
-                t.SetPosition(VECTOR2I(FromMM(x_), FromMM(y_)))
-                t.SetTextAngleDegrees(a_)
-                r = t.GetBoundingBox()
-                box = (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
-                if not hits(box, pads[pcbnew.F_SilkS]) and not hits(box, placed[pcbnew.F_SilkS]):
-                    placed[pcbnew.F_SilkS].append(box)
-                    break
-            b.Add(t)
-        # the board's name first, so the labels below keep off it
-        tx, ty = self.TITLE_AT or ((X0 + X1) / 2 - 5, Y1 - 1.6)
-        text(self.BOARD_LABEL, tx, ty, 1.2, spots=[(tx, ty, 0)])
-        for ref, names in self.SILK_PINS:                   # under each pin, below the part's body
-            fp = b.FindFootprintByReference(ref)
-            y = ToMM(fp.GetBoundingBox(False, False).GetBottom()) + 0.75
-            for pad in fp.Pads():
-                if pad.GetNumber() in names:
-                    x = ToMM(pad.GetPosition().x)
-                    text(names[pad.GetNumber()], x, y, 0.9, spots=[(x, y, 0)])
-        for ref, label in self.SILK_LABELS:                 # on the jack's body by the board edge
-            bb = b.FindFootprintByReference(ref).GetBoundingBox(False, False)
-            text(label, X0 + 1.6, ToMM(bb.GetCenter().y), 1.4, 90)
-        for ref, label in self.SILK_NEAR:                   # above the part, else below it
-            bb = b.FindFootprintByReference(ref).GetBoundingBox(False, False)
-            l_, t_, b_ = ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetBottom())
-            text(label, l_ + 3.5, t_ - 1.2, 1.2, spots=[(l_ + 3.5 + dx, t_ - 1.2 - dy, 0) for dy in (0, 0.8, 1.6, 2.4)
-                                                       for dx in (0, 1.5, -1.5)]
-                 + [(l_ + 3.5, b_ + 1.0 + dy, 0) for dy in (0, 0.8)])
 
     # --- rules, fanout, planes ----------------------------------------------
 
@@ -740,7 +904,7 @@ class Layout:
                 c.SetDiffPairWidth(FromMM(entry[4][0]))
                 c.SetDiffPairGap(FromMM(entry[4][1]))
             ns.SetNetclass(name, c)
-            for n in nets:
+            for n in sorted(nets):              # (sorted: the project file the same on every run)
                 ns.SetNetclassPatternAssignment(n, name)
         ns.RecomputeEffectiveNetclasses()
         ds.m_MinClearance = FromMM(self.MIN_CLEAR or self.CLEAR)
@@ -772,12 +936,13 @@ class Layout:
         v.SetNet(net)
         b.Add(v)
 
-    def fanout_planes(self, b):
+    def fanout_planes(self, b, refs=None):
         """A via next to every surface pad on a plane net (ground; a rail where its plane reaches):
         the router then only routes signals. Each via goes on the first spot, walking out from the
         pad, that clears every other pad, track, via and edge; where the standard via finds none,
         the smallest the rules allow (MIN_VIA) on a 0.2 mm track (a ground pad mid-row in a 0.5 mm
-        pitch part, its neighbours' lines either side)."""
+        pitch part, its neighbours' lines either side). refs: only these parts' pads (a part moved
+        on a routed board: move_part)."""
         VIA_D = self.VIA_D
         obst = []                       # (x0, y0, x1, y1, net, is_hole, is_smd_pad) boxes
         for fp in b.GetFootprints():
@@ -844,6 +1009,8 @@ class Layout:
                 for q in fp.Pads():
                     conn.setdefault(q.GetNetname(), []).append(at(q))
         for p in self.board.PARTS:
+            if refs is not None and p.ref not in refs:
+                continue
             fp = b.FindFootprintByReference(p.ref)
             g = [q for q in fp.Pads() if q.GetNetname() == "GND"] if self.esd(p) and p.ref not in skip_refs else []
             if len(g) != 2 or any("%s.%s" % (p.ref, q.GetNumber()) in skip_refs for q in g):
@@ -880,7 +1047,7 @@ class Layout:
             skip_refs = skip_refs | {"%s.%s" % (p.ref, q.GetNumber()) for q in g}
             n += 1
         for fp in b.GetFootprints():
-            if fp.GetReference() in skip_refs:
+            if fp.GetReference() in skip_refs or (refs is not None and fp.GetReference() not in refs):
                 continue
             for pad in fp.Pads():
                 net = pad.GetNetname()
@@ -1039,34 +1206,53 @@ class Layout:
         use, stubs it left), round after round, refilling the zones each time: each round in a
         process of its own (gen_pcb.py --prune-round), as pcbnew, once it has filled zones, hands
         back the next board it loads without its type."""
-        removed = 0
+        removed, twice = 0, 0
         for _ in range(rounds):
             r = subprocess.run([sys.executable, os.path.join(self.DIR, "gen_pcb.py"), "--prune-round"],
-                               env=dict(os.environ, PCB=path), capture_output=True, text=True, check=True)
-            n = int(re.search(r"pruned (\d+)", r.stdout).group(1))
+                               env=dict(os.environ, PCB=path), capture_output=True, text=True)
+            if r.returncode:
+                raise RuntimeError("prune round on %s failed:\n%s" % (path, (r.stdout + r.stderr).strip()[-800:]))
+            n, d = map(int, re.search(r"pruned (\d+) \((\d+) laid twice\)", r.stdout).groups())
             removed += n
+            twice += d
             if not n:
                 break
-        print("dangling vias and stubs removed:", removed)
+        print("dangling vias and stubs removed: %d; segments laid twice over: %d" % (removed - twice, twice))
 
     def prune_round(self, path):
-        """One round of prune(): the dangling items DRC lists taken out, the zones filled again."""
-        with tempfile.TemporaryDirectory() as tmp:
-            rpt = os.path.join(tmp, "drc.json")
-            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-all", "-o", rpt, path],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            dead = {it["uuid"] for v in json.load(open(rpt))["violations"]
-                    if v["type"] in ("via_dangling", "track_dangling") for it in v["items"]}
-        gone = []
-        if dead:
-            b = pcbnew.LoadBoard(path)
-            gone = [t for t in list(b.GetTracks()) if t.m_Uuid.AsString() in dead]
-            for t in gone:
-                b.Remove(t)
+        """One round of prune(): the dangling items DRC lists taken out, the zones filled again;
+        once none are left, the copper laid twice over (covered()), unless DRC then finds more
+        connections missing or an end left dangling (covered() lets a copy stick out 0.03 mm past
+        the track it lies on: a pad touching only that would be cut off)."""
+        dangling = ("via_dangling", "track_dangling")
+        rpt = drc_report(path, "--severity-all")
+        dead = {it["uuid"] for v in rpt["violations"] if v["type"] in dangling for it in v["items"]}
+        b = pcbnew.LoadBoard(path)
+        gone = [t for t in list(b.GetTracks()) if t.m_Uuid.AsString() in dead]
+        twice = [] if gone else covered(b)
+        for t in gone + twice:
+            b.Remove(t)
+        if twice:
+            with tempfile.TemporaryDirectory() as tmp:
+                check = os.path.join(tmp, "prune.kicad_pcb")
+                pcbnew.SaveBoard(check, b)
+                pro = os.path.splitext(path)[0] + ".kicad_pro"
+                if os.path.exists(pro):
+                    shutil.copy(pro, os.path.join(tmp, "prune.kicad_pro"))
+                after = drc_report(check, "--severity-all")
+            cut = len(after["unconnected_items"]) - len(rpt["unconnected_items"])
+            loose = sum(1 for v in after["violations"] if v["type"] in dangling)
+            if cut > 0 or loose:
+                print("copper laid twice kept: without it %d more connections missing, %d ends dangling"
+                      % (cut, loose))
+                for t in twice:
+                    b.Add(t)
+                twice = []
+        if gone or twice:
             b.BuildConnectivity()
             pcbnew.ZONE_FILLER(b).Fill(b.Zones())
             pcbnew.SaveBoard(path, b)
-        print("pruned %d" % len(gone))
+        print("pruned %d (%d laid twice)" % (len(gone) + len(twice), len(twice)))
 
     @staticmethod
     def freerouting(dsn, ses):
@@ -1258,11 +1444,7 @@ class Layout:
 
     def copper_errors(self):
         """Shorts and copper clearance errors on the board as saved (kicad-cli DRC)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            rpt = os.path.join(tmp, "drc.json")
-            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "--severity-error", "-o", rpt, self.OUT],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            v = json.load(open(rpt))["violations"]
+        v = drc_report(self.OUT, "--severity-error")["violations"]
         return sum(1 for x in v if x["type"] in ("shorting_items", "clearance", "tracks_crossing", "hole_clearance"))
 
     PRE_ROUTE = []      # before the router: [(nets, width, layers, MAZE_COST)], laid by mazeroute, locked
@@ -1328,11 +1510,7 @@ class Layout:
 
     def unconnected(self):
         """DRC's unconnected items on the board as saved (kicad-cli)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            rpt = os.path.join(tmp, "drc.json")
-            subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rpt, self.OUT],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return json.load(open(rpt))["unconnected_items"]
+        return drc_report(self.OUT)["unconnected_items"]
 
     def maze_try(self, a, z, w, env):
         """mazeroute with these MAZE_* settings: True if it laid a path."""
@@ -1455,8 +1633,34 @@ class Layout:
                 g["pads"].append((it[1],) + it[2][0])
         return list(groups.values())
 
+    def move_part(self, ref, x, y, angle):
+        """A part moved on the routed board (where the placer now puts it, after a change that
+        moves only it): the copper ending on its pads taken up, its plane pads given their vias
+        again; --complete then joins its connections and clears the stubs left. Other nets' copper
+        at the new spot stays where it is: DRC after. A full route for one moved part would give a
+        whole new board to check."""
+        b = pcbnew.LoadBoard(self.OUT)
+        fp = b.FindFootprintByReference(ref)
+        pads = [(p.GetNetname(), p.GetBoundingBox()) for p in fp.Pads()]
+
+        def on(pt, net):
+            return any(n == net and bb.Contains(pt) for n, bb in pads)
+        gone = [t for t in b.GetTracks() if (on(t.GetPosition(), t.GetNetname()) if t.GetClass() == "PCB_VIA" else
+                                             on(t.GetStart(), t.GetNetname()) or on(t.GetEnd(), t.GetNetname()))]
+        for t in gone:
+            b.Remove(t)
+            self._removed.append(t)
+        fp.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
+        fp.SetOrientationDegrees(angle)
+        self.fanout_planes(b, {ref})
+        pcbnew.SaveBoard(self.OUT, b)
+        print("%s moved to (%.3f, %.3f) at %g: %d tracks and vias taken up" % (ref, x, y, angle, len(gone)))
+
     def cli(self, argv):
-        if "--pre" in argv:
+        if "--move" in argv:
+            k = argv.index("--move")
+            self.move_part(argv[k + 1], *(float(v) for v in argv[k + 2:k + 5]))
+        elif "--pre" in argv:
             self.pre_route()
         elif "--post" in argv:
             self.post_route()

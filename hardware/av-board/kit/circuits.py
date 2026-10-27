@@ -59,12 +59,17 @@ def supply_tree(second_rail="1V8B"):
     # 0.6 A out
     part("U4", "TLV62569DBVR", "lcsc:TLV62569DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C141836",
          {"1": "+5V", "2": "GND", "3": "SW_3V6", "4": "+5V", "5": "FB_3V6"})
-    C("10u", "+5V", size="C0805")
-    two(nxt("L"), "L3015", "2.2uH", "SW_3V6", "3V6")
-    C("10u", "3V6", size="C0805")
+    # (placed in this order, each by its pin [TI 10.1: the capacitors and the inductor as close as
+    # possible, FB away from SW]: the input capacitor at VIN (EN, pin 1, is on +5 V too, across the
+    # package from it), the feedback divider at FB on the same side, then the inductor at SW and
+    # the output capacitor at its far end)
+    C("10u", "+5V", size="C0805", at="U4.4")
     R("499k", "3V6", "FB_3V6")
     R("100k", "FB_3V6", "GND")
     C("6.8p", "3V6", "FB_3V6")
+    l = nxt("L")
+    two(l, "L3015", "2.2uH", "SW_3V6", "3V6")
+    C("10u", "3V6", size="C0805", at=l + ".2")
 
     # 3V3: TPS7A7001 from 3V6, EN tied to IN [TI 7.3.1]; R1 169 k / R2 30.1 k = 3.307 V [TI Table 2];
     # 10 uF in and out [TI 6.3]; 220 pF feed-forward across R1 [TI 8.1.2: more than 47 uF on the
@@ -72,11 +77,13 @@ def supply_tree(second_rail="1V8B"):
     # dropout at its 0.6 A [TI Fig. 3]; 0.18 W
     part("U5", "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", "C60719",
          {"3": "3V6", "2": "3V6", "6": "3V3", "7": "FB_3V3", "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
-    C("10u", "3V6", size="C0805")
-    C("10u", "3V3", size="C0805")
+    # (in this order: the input capacitor at IN, the feedback divider at FB, the output capacitor
+    # at OUT, FB's neighbour: the divider's node is the one noise reaches)
+    C("10u", "3V6", size="C0805", at="U5.3")
     R("169k", "3V3", "FB_3V3")
     R("30.1k", "FB_3V3", "GND")
     C("220p", "3V3", "FB_3V3")
+    C("10u", "3V3", size="C0805", at="U5.6")
 
     # 1V8A (ADV7181D, about 0.13 A) and 1V8B (ADV7511, at most 0.18 A [HWG 6.8.2: 326 mW]): TPS7A7001
     # from 3V3, EN tied to IN; R1 78.7 k / R2 30.1 k = 1.807 V [TI Table 2]; 10 uF in and out, 220 pF
@@ -85,11 +92,11 @@ def supply_tree(second_rail="1V8B"):
         fb = "FB_" + out
         part(u, "TPS7A7001DDAR", "lcsc:TPS7A7001DDAR", "lcsc:SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL-EP", "C60719",
              {"3": "3V3", "2": "3V3", "6": out, "7": fb, "8": "GND", "9": "GND", "1": "GND", "4": "GND", "5": "GND"})
-        C("10u", "3V3", size="C0805")
-        C("10u", out, size="C0805")
+        C("10u", "3V3", size="C0805", at=u + ".3")      # (in 3V3's order)
         R("78.7k", out, fb)
         R("30.1k", fb, "GND")
         C("220p", out, fb)
+        C("10u", out, size="C0805", at=u + ".6")
 
     # Power-down: 3V3 carries the heavier load and may fall faster than 1V8A; a Schottky from 1V8A
     # to 3V3 holds 1V8A within its forward drop (about 0.25 V at a few mA) of 3V3, inside the
@@ -267,7 +274,7 @@ def _vga(u1):
           "5": "VGA_SCL", "6": "VGA_SCL", "3": "GND", "8": "GND"})
     part("U21", "SN74LVC2G17DBVR", "lcsc:SN74LVC2G17DBVR", "lcsc:SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL", "C10429",
          {"1": "VGA_HS", "2": "GND", "3": "VGA_VS", "4": "VGA_VSB", "5": "3V3", "6": "VGA_HSB"})
-    C("100n", "3V3")
+    C("100n", "3V3", at="U21.5")
     R("10k", "VGA_HS", "GND")
     R("10k", "VGA_VS", "GND")
     R("33", "VGA_HSB", "VGA_HSIN")
@@ -302,11 +309,13 @@ def pcm1808():
     # pull-down); >= 1 uF in, 1-200 uF ceramic out [TI-LDO2 Pin Functions, 6.3]. VCC 4.5 V is inside
     # 4.0-5.5 V
     part("U12", "TPS7A2045PDBVR", "lcsc:TPS7A2045PDBVR", "lcsc:SOT-23-5_L2.9-W1.6-P0.95-LS2.8-BR", "C2873627",
-         {"1": "+5V", "2": "GND", "3": "+5V", "5": "5VA"})
-    C("1u", "+5V")
-    for rail in ("VREF", "5VA", "3V3"):
-        C("100n", rail)
-        C("10u", rail)
+         {"1": "+5V", "2": "GND", "3": "+5V", "5": "5VA"}, at="U3.3")
+    C("1u", "+5V", at="U12.1")
+    # VREF, VCC (5VA) and VDD (3V3): 100 nF and 10 uF at each pin [TI-ADC 10.1.1: "as close to the
+    # pins as possible"]; the 5VA pair is the LDO's output capacitor as well, a few mm off
+    for rail, pin in (("VREF", "1"), ("5VA", "3"), ("3V3", "4")):
+        C("100n", rail, at="U3." + pin)
+        C("10u", rail, at="U3." + pin)
     for jack, ch, lc, colour in (("J4", "L", RCA_YELLOW, "yellow"), ("J5", "R", RCA_RED, "red")):
         part(jack, "RCA " + ch, "lcsc:RCJ-014", "lcsc:CONN-TH_RCJ-011", lc,
              {"2": "RCA_" + ch, "1": "GND"}, note=colour + " RCJ-01x")
@@ -323,46 +332,51 @@ def spdif(connectors):
     biphase code itself (no receiver chip) and can send it on, delayed for lip sync, to the HDMI
     transmitter: Dolby Digital / DTS pass to the TV untouched. connectors: "header" (rev B: J13, five
     pins: 1 COAX, 2 GND, 3 OPT, 4 GND, 5 +5 V; coax on an orange RCA pigtail, a TOSLINK receiver
-    module on 3-5) or "jack" (rev C: an orange RCA, J14, on the back edge; the module on J13, three
-    pins: 1 OUT, 2 GND, 3 +5 V). Module pin order: a PLR135's (OUT, GND, VCC)."""
+    module on 3-5; rev B, and rev C-B, whose narrower board has no room for the jack), "jack" (rev
+    C-A: an orange RCA, J14, on the back edge; the module on J13, three pins: 1 OUT, 2 GND, 3 +5 V)
+    or "optical" (the module's J13 alone, no coax: the PS2 has an optical output only; no board
+    uses it now). Module pin order: a PLR135's (OUT, GND, VCC)."""
     block("spdif")
+    coax = connectors != "optical"
     if connectors == "header":
         part("J13", "SPDIF", "lcsc:PZ254V-11-05P", "lcsc:HDR-TH_5P-P2.54-V-M", "C492404",
              {"1": "SPDIF_COAX", "2": "GND", "3": "SPDIF_OPT", "4": "GND", "5": "SPDIF_5V"})
     else:
-        part("J14", "RCA S/PDIF", "lcsc:RCJ-017", "lcsc:CONN-TH_RCJ-011", RCA_ORANGE, {"2": "SPDIF_COAX", "1": "GND"},
-             note="orange RCJ-01x")
+        if coax:
+            part("J14", "RCA S/PDIF", "lcsc:RCJ-017", "lcsc:CONN-TH_RCJ-011", RCA_ORANGE, {"2": "SPDIF_COAX", "1": "GND"},
+                 note="orange RCJ-01x")
         part("J13", "OPTICAL", "lcsc:PZ254V-11-03P_C2937625", "lcsc:HDR-TH_3P-P2.54-V-M_PZ254V-11-03P", "C2937625",
              {"1": "SPDIF_OPT", "2": "GND", "3": "SPDIF_5V"})
-    # ESD on both inputs, a TPD1E05U06 each at its connector's pin (5.5 V working: a 5 V module's
-    # output is inside it [TI-ESD]): rev C's two connectors are 25 mm apart, too far for one array
-    for ref, sig in (("D12", "SPDIF_COAX"), ("D13", "SPDIF_OPT")):
+    # ESD on each input, a TPD1E05U06 at its connector's pin (5.5 V working: a 5 V module's output
+    # is inside it [TI-ESD]): rev C-A's two connectors are 25 mm apart, too far for one array
+    for ref, sig in ((("D12", "SPDIF_COAX"),) if coax else ()) + (("D13", "SPDIF_OPT"),):
         part(ref, "TPD1E05U06DPYR", "lcsc:TPD1E05U06DPYR", "lcsc:X1SON-2_L1.0-W0.6-P0.65-RD-1", "C436349",
              {"1": sig, "2": "GND"})
     # The module's supply: +5 V through the HDMI 5 V's 0.2 A PTC part (a short at the header trips it
     # instead of pulling down the board's 5 V), 100 nF at the pin. Most modules take 5 V (TORX
     # 4.75-5.25 V, PLR135 2.7-5.5 V)
     two(nxt("F"), "PTC0805", "0.2A", "+5V", "SPDIF_5V")
-    C("100n", "SPDIF_5V")
-    # Coax [IEC 60958-3: 0.5 Vp-p into 75 R]: 75 R termination, 100 nF, then an unbuffered inverter
-    # biased at its threshold by 1 M (a linear amplifier: 0.5 Vp-p swings it rail to rail) and a
-    # buffered one to square the edges; 33 R at the source towards the FPGA
-    two(nxt("R"), "R0603", "75", "SPDIF_COAX", "GND")
-    C("100n", "SPDIF_COAX", "SPDIF_AC")
-    part("U13", "SN74LVC1GU04DBVR", "lcsc:SN74LVC1GU04DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C81934",
-         {"2": "SPDIF_AC", "3": "GND", "4": "SPDIF_AMP", "5": "3V3"})
-    R("1M", "SPDIF_AMP", "SPDIF_AC")
-    part("U14", "SN74LVC1G04DBVR", "lcsc:SN74LVC1G04DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C7827",
-         {"2": "SPDIF_AMP", "3": "GND", "4": "SPDIF_SQ", "5": "3V3"})
-    R("33", "SPDIF_SQ", "SPDIF_RX")
+    C("100n", "SPDIF_5V", at="J13.5" if connectors == "header" else "J13.3")
+    if coax:
+        # Coax [IEC 60958-3: 0.5 Vp-p into 75 R]: 75 R termination, 100 nF, then an unbuffered inverter
+        # biased at its threshold by 1 M (a linear amplifier: 0.5 Vp-p swings it rail to rail) and a
+        # buffered one to square the edges; 33 R at the source towards the FPGA
+        two(nxt("R"), "R0603", "75", "SPDIF_COAX", "GND")
+        C("100n", "SPDIF_COAX", "SPDIF_AC")
+        part("U13", "SN74LVC1GU04DBVR", "lcsc:SN74LVC1GU04DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C81934",
+             {"2": "SPDIF_AC", "3": "GND", "4": "SPDIF_AMP", "5": "3V3"})
+        R("1M", "SPDIF_AMP", "SPDIF_AC")
+        part("U14", "SN74LVC1G04DBVR", "lcsc:SN74LVC1G04DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C7827",
+             {"2": "SPDIF_AMP", "3": "GND", "4": "SPDIF_SQ", "5": "3V3"})
+        R("33", "SPDIF_SQ", "SPDIF_RX")
     # Optical: the module's logic output through a buffer whose input takes 5.5 V at any supply [LVC]:
     # the FPGA sees 3.3 V whatever the module runs from; 100 k holds an empty input low
     part("U15", "SN74LVC1G04DBVR", "lcsc:SN74LVC1G04DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C7827",
          {"2": "SPDIF_OPT", "3": "GND", "4": "SPDIF_OSQ", "5": "3V3"})
     R("100k", "SPDIF_OPT", "GND")
     R("33", "SPDIF_OSQ", "SPDIF_ORX")
-    for _ in range(3):
-        C("100n", "3V3")
+    for u in (("U13", "U14") if coax else ()) + ("U15",):        # (one at each inverter's VCC)
+        C("100n", "3V3", at=u + ".5")
 
 
 # ---------------------------------------------------------------------------
@@ -409,7 +423,7 @@ def xiao(lines):
     part("J11", "XIAO 5V..D7", "lcsc:HXPM2.54-1X7PZC-Y", "lcsc:HDR-TH_7P-P2.54-V-F", "C22438157", j11,
          note="XIAO pins 14..8: 5V GND 3V3 D10 D9 D8 D7")
     part("D3", "B5819W", "Device:D_Schottky", "Diode_SMD:D_SOD-123", "C8598", {"1": "XIAO_5V", "2": "+5V"})
-    C("10u", "XIAO_5V", size="C0805")
+    C("10u", "XIAO_5V", size="C0805", at="J11.1")
     R("100k", "XIAO_3V3", "GND")
     outs = [(d, n) for d, (n, way) in lines.items() if way == "out"]
     ins = [(d, n) for d, (n, way) in lines.items() if way == "in"]
@@ -423,8 +437,8 @@ def xiao(lines):
         else:
             u[str(3 + k)] = "GND"
     part("U22", "SN74LVC8T245PWR", "lcsc:SN74LVC8T245PWR", "lcsc:TSSOP-24_L7.8-W4.4-P0.65-LS6.4-BL", "C27643", u)
-    C("100n", "XIAO_3V3")
-    C("100n", "3V3")
+    C("100n", "XIAO_3V3", at="U22.1")             # (at VCCA and VCCB)
+    C("100n", "3V3", at="U22.24")
     # U23: 1B1, 1B2, 2B1, 2B2 (pins 13, 12, 11, 10) to 1A1 ... 2A2 (pins 4-7), 1DIR/2DIR low (B to A),
     # both OE low; an unused input held low; each output through 470 R to its XIAO pin
     v = {"1": "XIAO_3V3", "2": "GND", "3": "GND", "8": "GND", "9": "GND", "14": "GND", "15": "GND", "16": "3V3"}
@@ -435,8 +449,8 @@ def xiao(lines):
         else:
             v[b] = "GND"
     part("U23", "SN74AVC4T245PWR", "lcsc:SN74AVC4T245PWR", "lcsc:TSSOP-16_L5.0-W4.4-P0.65-LS6.4-BL", "C81461", v)
-    C("100n", "XIAO_3V3")
-    C("100n", "3V3")
+    C("100n", "XIAO_3V3", at="U23.1")
+    C("100n", "3V3", at="U23.16")
     for d, n in ins:
         R("470", "XIAO_%s_A" % d, "XIAO_" + d)
     for d, n in outs:
@@ -470,10 +484,13 @@ def adv7511(pixel):
     audio inputs (I2S0, SPDIF) through 49.9 R at the source, CEC and its clock, R_EXT, decoupling.
     The FPGA lines are OUT_*."""
     block("adv7511")
-    # Rails: 10 uH + 10 uF per domain group [HWG Fig. 23, 7.1]
-    for rail in ("TX_DVDD", "TX_AVDD", "TX_PLVDD"):
-        two(nxt("L"), "L4018", "10uH", "1V8B", rail)
-        C("10u", rail)
+    # Rails: 10 uH + 10 uF per domain group [HWG Fig. 23, 7.1], each filter by the chip [7.1: "as
+    # close to the ADV7511 as possible"; it sat by the 1V8B LDO, 13-20 mm off], its 10 uF at the
+    # inductor's output
+    for rail, pin in (("TX_DVDD", "1"), ("TX_AVDD", "24"), ("TX_PLVDD", "21")):
+        l = nxt("L")
+        two(l, "L4018", "10uH", "1V8B", rail, at="U2." + pin)
+        C("10u", rail, at=l + ".2")
     u2 = {}
     for name, nums in TX.items():
         net = {"GND": "GND", "DVDD": "TX_DVDD", "AVDD": "TX_AVDD", "PVDD": "TX_AVDD", "PLVDD": "TX_PLVDD",
@@ -508,11 +525,13 @@ def adv7511(pixel):
     R("2k", "3V3", "OUT_SDA")
     R("2k", "3V3", "OUT_INT")                           # [HWG 6.3.4]
     R("2k", "OUT_PD", "GND")                            # address 0x72, PD active high [HWG 6.1.5]
-    # 0.1 uF at every supply pin, adjacent pins sharing [HWG 7.1, Fig. 23]: DVDD 1, 19, 49, 76+77;
-    # AVDD 29, 34, 41; PVDD 24+25; PLVDD 21; BGVDD 26; MVDD 47
-    for rail, n in (("TX_DVDD", 4), ("TX_AVDD", 4), ("TX_PLVDD", 2), ("3V3", 1)):
-        for _ in range(n):
-            C("100n", rail)
+    # 0.1 uF at every supply pin, adjacent pins sharing [HWG 7.1, Fig. 23: "as close to the supply
+    # pin as possible"]: DVDD 1, 19, 49, 76+77; AVDD 29, 34, 41; PVDD 24+25; PLVDD 21; BGVDD 26;
+    # MVDD 47. (Top side only: 34 and 41 lie between TMDS pairs, their capacitors beside the pairs)
+    for rail, pins in (("TX_DVDD", ("1", "19", "49", "76")), ("TX_AVDD", ("24", "29", "34", "41")),
+                       ("TX_PLVDD", ("21", "26")), ("3V3", ("47",))):
+        for n in pins:
+            C("100n", rail, at="U2." + n)
     return u2
 
 
@@ -542,7 +561,7 @@ def hdmi_receptacle():
     R("2k", "HDMI_5V", "HDMI_SDA")
     R("10k", "HDMI_HPD", "GND", note="0 V on HPD with no sink [HWG 6.1.4: 10 k +-10 %]")
     two(nxt("F"), "PTC0805", "0.2A", "+5V", "HDMI_5V")
-    C("100n", "HDMI_5V")
+    C("100n", "HDMI_5V", at="J6.18")
     # CEC: 27 k to 3.3 V through a diode [HWG Fig. 26, "leakage < 1.8 uA"]: with the board off its 3V3
     # is near 0 V, and the 27 k alone would pull the TV's CEC bus down (60 uA). 1N4148WS: nA leakage
     # reversed; the line's high level 3.3 V less its drop, 2.7 V, over CEC's 2.5 V minimum

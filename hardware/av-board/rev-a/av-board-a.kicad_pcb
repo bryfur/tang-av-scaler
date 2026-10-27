@@ -27429,7 +27429,7 @@
 		(uuid "e35e7531-05d5-4b50-b8f6-c09c29bfa3e9")
 		(at 164 76)
 		(property "Reference" "SW1"
-			(at 0 -3.375 0)
+			(at 0 3.375 0)
 			(layer "F.SilkS")
 			(uuid "38a5ab66-b727-4db9-9f37-a88e4a3a35d6")
 			(effects
@@ -46506,10 +46506,22 @@
 		(layer "Edge.Cuts")
 		(uuid "5a229430-a1a6-422f-a668-1ad6b1fb5995")
 	)
+	(gr_text "R"
+		(at 90.05 39.099999 0)
+		(layer "F.SilkS")
+		(uuid "ee655ad6-d787-45f0-9d33-f2ea2a6ffdf8")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+			(justify left)
+		)
+	)
 	(gr_text "tang-av-scaler AV board rev A"
 		(at 116.5 88.4 0)
 		(layer "F.SilkS")
-		(uuid "23fa835e-7351-45c9-afab-b900fb943c71")
+		(uuid "325d6d0b-adfc-4e85-821e-eb1f63e0ffc9")
 		(effects
 			(font
 				(size 1.2 1.2)
@@ -46520,7 +46532,7 @@
 	(gr_text "HDMI"
 		(at 162.42 71.8 0)
 		(layer "F.SilkS")
-		(uuid "e4de0083-1ed5-4f44-acb2-a5e6a59f111a")
+		(uuid "5baca2a7-1c20-4499-a542-fda2854b9d36")
 		(effects
 			(font
 				(size 1.2 1.2)
@@ -46529,58 +46541,51 @@
 		)
 	)
 	(gr_text "L"
-		(at 75.8 29.3 90)
+		(at 89.55 29.3 0)
 		(layer "F.SilkS")
-		(uuid "dd9dc5fd-484a-4073-819e-6bf8b43474c1")
+		(uuid "4c59d43b-d7d4-4cd8-9249-cee7ac9438a3")
 		(effects
 			(font
 				(size 1.4 1.4)
 				(thickness 0.18)
 			)
-		)
-	)
-	(gr_text "R"
-		(at 75.8 42.3 90)
-		(layer "F.SilkS")
-		(uuid "89c6b06a-bbc3-48ed-a460-66ec5a7bba2d")
-		(effects
-			(font
-				(size 1.4 1.4)
-				(thickness 0.18)
-			)
+			(justify left)
 		)
 	)
 	(gr_text "Y"
-		(at 75.8 55.3 90)
+		(at 90.05 55.3 0)
 		(layer "F.SilkS")
-		(uuid "e50fc9bd-a27b-49ed-8820-a23c70e820a6")
+		(uuid "23165676-bb60-47e1-88c5-9e5403826ee4")
 		(effects
 			(font
 				(size 1.4 1.4)
 				(thickness 0.18)
 			)
+			(justify left)
 		)
 	)
 	(gr_text "Pb"
-		(at 75.8 68.3 90)
+		(at 90.05 68.3 0)
 		(layer "F.SilkS")
-		(uuid "d3c72825-14e7-4b10-80ca-a7434f8becbd")
+		(uuid "59dfac46-7239-42af-a96e-54ab8b6db011")
 		(effects
 			(font
 				(size 1.4 1.4)
 				(thickness 0.18)
 			)
+			(justify left)
 		)
 	)
 	(gr_text "Pr"
-		(at 75.8 81.3 90)
+		(at 90.05 81.3 0)
 		(layer "F.SilkS")
-		(uuid "eb53a0df-0c6b-4a6d-8860-69a877f4ef54")
+		(uuid "4413a82e-0a43-475a-903d-3e43155518b3")
 		(effects
 			(font
 				(size 1.4 1.4)
 				(thickness 0.18)
 			)
+			(justify left)
 		)
 	)
 	(segment

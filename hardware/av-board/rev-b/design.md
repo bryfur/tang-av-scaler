@@ -216,7 +216,10 @@ see "Power" below.
 - One-sided assembly: every SMT part is on the top (only the J9/J10 sockets, through-hole, sit
   underneath), so JLCPCB assembles one side. The ADV7181D's decoupling therefore sits on the
   top too, by its supply pins' escape vias, outside the lines' band: each pin's 100 nF placed
-  first, 2.7-4.3 mm from its pin (2.2-2.7 mm when they were underneath).
+  first, 2.7-4.3 mm from its pin (2.2-2.7 mm when they were underneath). Every other chip's
+  capacitors name the pin they serve in board.py (`at=`) and go there first, after the ESD parts
+  (second review, 2026-10-26: they had each gone to their rail's first pin, the ADV7511's 0.1 uF
+  3.6-20 mm from its pins [HWG 7.1], the buck's input capacitor 13.5 mm from VIN).
 - Part count: 230 with the additions below (rev A 230).
 - Cost: the jacks are CUI RCJ-014 (yellow, $1.69) for Y, Pb and L and RCJ-012 (red) for Pr and R,
   where rev A had the black RCJ-011 ($3.82, 40 in stock): one footprint for the series, the

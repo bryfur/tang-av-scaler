@@ -27,15 +27,19 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
     # (the USB-C receptacle's GND and VBUS pads are 0.1 mm apart: JLCPCB's four-layer minimum is 0.09)
     MIN_CLEAR = 0.1
     X0, Y0, X1, Y1 = floor.X0, floor.Y0, floor.X1, floor.Y1
-    # the board's own mounting holes (M2.5), in the corners clear of the edges' connectors
-    HOLES = [(floor.X0 + 4.0, floor.Y0 + 22.0), (floor.X1 - 4.0, floor.Y0 + 34.0),
-             (floor.X0 + 4.0, floor.Y1 - 26.0), (floor.X1 - 4.0, floor.Y1 - 4.0)]
+    # the places a revision may move (C-B's board is narrower): the buttons' row, the S/PDIF
+    # header (C-A: the optical module's; C-B: rev B's, coax and optical), the 3V6 buck and the 3V3 LDO ("at the right front, away from both analog
+    # front ends")
+    UI_AT = floor.UI_AT
+    SPDIF_HEADER_AT = (183.0, 86.0)
+    SUPPLIES = {"U4": (222.0, 136.0), "U5": (212.0, 136.0)}
     POWER_NETS = {"+5V", "VBUS_IN", "3V6", "3V3", "1V8A", "3V0", "2V5", "5VA", "HDMI_5V", "SW_3V6", "SPDIF_5V",
                   "XIAO_5V", "XIAO_3V3"} | AV_RAILS
     CLOCK_NETS = {"AV_LLC", "IN_LLC", "PLL_CLK2", "PLL_CLK2_S"}
     TMDS_NETS = {"TMDS_D2_P", "TMDS_D2_N", "TMDS_D1_P", "TMDS_D1_N", "TMDS_D0_P", "TMDS_D0_N", "TMDS_CK_P", "TMDS_CK_N"}
     CLASSES = list(U1_CLASSES)
-    BIAS_NETS = set(U1_BIAS_NETS) | {"FB_3V3", "FB_3V6", "FB_1V8A", "PLL_XA", "PLL_XB"}
+    # (and the S/PDIF coax input's AC-coupled node, high impedance: its parts first, by its pin)
+    BIAS_NETS = set(U1_BIAS_NETS) | {"FB_3V3", "FB_3V6", "FB_1V8A", "PLL_XA", "PLL_XB", "SPDIF_AC"}
     # (the SOM receptacles: 0.8 mm round them for their ground vias, som_fanout)
     KEEP = {"U1": 0.5, "J20": 0.8, "J21": 0.8, "J22": 0.8}
     BOTH_SIDES = {"U1", "U2"}
@@ -46,15 +50,16 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
     SILK_NEAR = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J4", "L"), ("J5", "R"), ("J14", "S/PDIF"),
                  ("J15", "5V"), ("J6", "HDMI"), ("J7", "SYNC"), ("J8", "VGA"), ("J13", "OPTICAL"), ("J16", "JTAG"),
                  ("SW3", "RECONFIG")]
+    # (J13's labels left of it: its ESD diodes sit right of its pins)
     SILK_PINS = [("J16", {"1": "3V3", "2": "G", "3": "TCK", "4": "TDO", "5": "TDI", "6": "TMS"}),
-                 ("J13", {"1": "OUT", "2": "G", "3": "5V"})]
+                 ("J13", {"1": "OUT", "2": "G", "3": "5V"}, "left")]
     TITLE_AT = (floor.X0 + 50.0, floor.Y1 - 1.6)
 
     def hand(self):
         """The hand placement: ref -> (x, y, angle or None, side)."""
         h = {}
         for ref, x in floor.BACK.items():
-            if ref != "J15":
+            if ref != "J15" and ref in self.refs:          # (C-B has no S/PDIF jack, J14)
                 h[ref] = (x, floor.JACK_Y, 0, "F")         # facing out of the back edge
         h["J15"] = (floor.BACK["J15"], floor.Y0 + 4.5, 180, "F")      # (mouth out; its shell's tabs 2 mm inside)
         h["U1"] = (floor.U1_AT[0], floor.U1_AT[1], None, "F")
@@ -77,16 +82,16 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
         h["J16"] = (133.0, 146.0, 0, "F")                      # JTAG header, front
         h["J7"] = (104.0, 84.0, 90, "F")                       # SYNC header, by the video ESD array
         h["J8"] = floor.VGA_AT + (90, "F")                     # VGA header
-        h["J13"] = (183.0, 86.0, 90, "F")                      # optical module header, by the S/PDIF input
-        ux, uy = floor.UI_AT
+        h["J13"] = self.SPDIF_HEADER_AT + (90, "F")            # the S/PDIF header, by its inputs' parts
+        ux, uy = self.UI_AT
         h["SW1"] = (ux - 8.0, uy, 0, "F")
         h["SW2"] = (ux, uy, 0, "F")
         h["SW3"] = (ux + 8.0, uy, 0, "F")
         h["U17"] = floor.CLOCK_AT + (0, "F")                   # the clock generator, by J21's top
         # the supplies at the right front, away from both analog front ends; 1V8A (quiet, LDO) by
         # the ADV7181D
-        h["U4"] = (222.0, 136.0, 0, "F")
-        h["U5"] = (212.0, 136.0, 0, "F")
+        for ref, (x, y) in self.SUPPLIES.items():
+            h[ref] = (x, y, 0, "F")
         h["U6"] = (110.0, 112.0, 0, "F")
         # the 5 V input in order straight under the USB-C: its TVS (as close to the receptacle as
         # the CC resistors leave room for: the jacks either side leave the placer none), then the
@@ -111,7 +116,8 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
     def reserved(self):
         sx, sy = floor.SOM_AT
         sp = floor.BACK["J15"]
-        return [(sx - 17.5, sy - 22.5, sx + 17.5, sy + 22.5),
+        # (the SOM; the 5 V input's branches from the USB-C to the fuse, vbus_in; the spine)
+        return [(sx - 17.5, sy - 22.5, sx + 17.5, sy + 22.5), (sp - 2.8, floor.Y0 + 7.6, sp + 3.4, floor.Y0 + 14.2),
                 (sp - 1.2, floor.Y0 + 17.0, sp + 1.2, sy - 22.5)] + self.tmds_corridor()
 
     def tmds_corridor(self):
@@ -123,6 +129,14 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
 
     def __init__(self, board, here):
         pcbkit.Layout.__init__(self, board, here)
+        # the board's own mounting holes (M2.5), in the corners clear of the edges' connectors
+        self.HOLES = [(self.X0 + 4.0, self.Y0 + 22.0), (self.X1 - 4.0, self.Y0 + 34.0),
+                      (self.X0 + 4.0, self.Y1 - 26.0), (self.X1 - 4.0, self.Y1 - 4.0)]
+        self.refs = {p.ref for p in board.PARTS}
+        self.SILK_NEAR = [(r, t) for r, t in self.SILK_NEAR if r in self.refs]
+        # no label under the SOM (45 x 35 mm, turned)
+        (sx, sy), (w, h) = floor.SOM_AT, floor.som.SIZE
+        self.SILK_HIDDEN = [(sx - h / 2, sy - w / 2, sx + h / 2, sy + w / 2)]
         self.HAND = self.hand()
         self.RESERVED = self.reserved()
         self.FIT = {"U1": fit_u1, "F1": fit_fuse}
@@ -158,8 +172,41 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
 
     def checks(self, fps):
         for ref in ("J1", "J2", "J3", "J4", "J5", "J14", "J15", "J6"):
+            if ref not in fps:
+                continue
             bx = pcbkit.courtyard(fps[ref], 0)
             assert bx[1] < self.Y0 + 1.5, (ref, "not at the back edge", bx)
+
+    def vbus_in(self, b, fps):
+        """The 5 V input from the USB-C to the fuse, as wide as the board's 2 A wants (left to the
+        router it was 0.25 mm, about 1 A at a 10 C rise by IPC-2221: 27 mR and 0.1 W in 14 mm at
+        2 A): from each of the two VBUS pads a 0.7 mm branch (each carries half), the left one
+        straight down and 45 degrees into the TVS's cathode, the TVS's cathode on to the fuse at the
+        spine's 1.2 mm, the right one down, round the TVS's ground pad and into the fuse's pad. The
+        CC lines cross the branches on B.Cu."""
+        n = b.FindNet("VBUS_IN")
+        (lx, ly), (rx, ry) = sorted((ToMM(q.GetPosition().x), ToMM(q.GetPosition().y))
+                                    for q in fps["J15"].Pads() if q.GetNetname() == "VBUS_IN")
+        rbot = max(ToMM(q.GetBoundingBox().GetBottom()) for q in fps["J15"].Pads() if q.GetNetname() == "VBUS_IN")
+        (d,) = [q for q in fps["D6"].Pads() if q.GetNetname() == "VBUS_IN"]
+        (g,) = [q for q in fps["D6"].Pads() if q.GetNetname() == "GND"]
+        (f,) = [q for q in fps["F1"].Pads() if q.GetNetname() == "VBUS_IN"]
+        dx, dy = ToMM(d.GetPosition().x), ToMM(d.GetPosition().y)
+        fb, gb = f.GetBoundingBox(), g.GetBoundingBox()
+        fy = (ToMM(fb.GetTop()) + ToMM(fb.GetBottom())) / 2
+        w = 0.7
+        left = [(lx, ly), (lx, dy - (dx - lx)), (dx, dy)]
+        for a, z in zip(left, left[1:]):
+            self.track(b, a, z, w, pcbnew.F_Cu, n)
+        self.track(b, (dx, dy), (dx, ToMM(fb.GetTop()) + 0.5), 1.2, pcbnew.F_Cu, n)
+        # right: 0.6 mm past the pads' end (clear of the ground pad beside it), 45 degrees out to
+        # 0.4 mm clear of the TVS's ground pad, down, 45 degrees into the fuse's pad near its end
+        xr = ToMM(gb.GetRight()) + 0.4 + w / 2
+        xf = ToMM(fb.GetRight()) - 0.5
+        pts = [(rx, ry), (rx, rbot + 0.6), (xr, rbot + 0.6 + (xr - rx)), (xr, fy - (xr - xf)), (xf, fy)]
+        for a, z in zip(pts, pts[1:]):
+            self.track(b, a, z, w, pcbnew.F_Cu, n)
+        print("VBUS_IN: USB-C (%.1f, %.1f) and (%.1f, %.1f) to the fuse, %.1f mm and 1.2 mm wide" % (lx, ly, rx, ry, w))
 
     def spine(self, b, fps):
         """The SOM's 5 V: from the fuse straight down to J22's six VBUS pins (its inner row's top
@@ -212,6 +259,7 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
         self.esd_clearance(fps)
         self.fanout_u1(b, fps)
         self.crystal_lines(b, fps)
+        self.vbus_in(b, fps)
         self.spine(b, fps)
         self.tx_fanout(b, fps)
 

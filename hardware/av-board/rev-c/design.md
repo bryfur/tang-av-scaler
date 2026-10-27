@@ -9,14 +9,16 @@ straight into this board. Two carriers share everything but the HDMI transmitter
 | HDMI | ADV7511, as rev B, fed 24-bit RGB 4:4:4 | the FPGA's transceivers through a TI SN65DP159 retimer |
 | Output | up to 1080p60 (HDMI 1.4) | up to 4K60 (HDMI 2.0, 5.94 Gb/s a lane) |
 | HDMI in gateware | video timing only (the ADV7511 does TMDS, audio packets, CEC, EDID) | TMDS coding, HDMI 2.0 scrambling and SCDC, audio data islands, InfoFrames, CEC |
-| Parts | 280 | 291 |
+| S/PDIF in | coax (an orange RCA) and optical (a module's header) | both on rev B's 5-pin header (coax on a pigtail to an orange RCA, an optical module on pins 3-5) |
+| Board | 130 x 100 mm | 100 x 100 mm: the receptacle in the coax jack's place |
+| Parts | 280 | 290 |
 
 What both have that rev B has (rev B's circuits, reviewed in rev-b/review.md, from the same code:
 kit/circuits.py): the ADV7181D component/RGB front end with the SCART sync and VGA inputs, the
-PCM1808 stereo input on its own 4.5 V LDO, the S/PDIF input (coax slicer, optical module), the
+PCM1808 stereo input on its own 4.5 V LDO, the S/PDIF input (coax slicer and optical module), the
 supply tree for the ADV7181D, the HDMI receptacle with its ESD arrays and DDC/HPD/CEC parts, the
 XIAO ESP32's sockets and level translators, the buttons and status LED. New in rev C: the SOM
-interface, USB-C power, an orange RCA for S/PDIF coax on the back edge, the MS5351M clock
+interface, USB-C power, an orange RCA for S/PDIF coax on C-A's back edge, the MS5351M clock
 generator, the XIAO as the FPGA's programmer and console, a JTAG header, configuration LEDs and
 the RECONFIG button. The circuits are in rev-c/carrier.py (shared by C-A and C-B) and each
 board.py.
@@ -53,11 +55,16 @@ J1, J2, J0. Everything about them is copied from the Console:
 
 ## Floor plan (rev-c/floor.py)
 
-130 x 100 mm, the same four layers as rev B (JLC04161H-7628: F.Cu / GND / GND / B.Cu).
+C-A 130 x 100 mm, C-B 100 x 100 mm, the same four layers as rev B (JLC04161H-7628: F.Cu / GND /
+GND / B.Cu).
 
-- The back edge carries every cable: the Y, Pb, Pr jacks, the USB-C power input, the L, R and
-  S/PDIF jacks, then HDMI. USB-C sits between the video and audio jacks, straight above the SOM's
-  5 V pins, its 5 V running between the two analog front ends, not through them.
+- The back edge carries every cable: the Y, Pb, Pr jacks, the USB-C power input, the L, R (and on
+  C-A the S/PDIF coax) jacks, then HDMI. USB-C sits between the video and audio jacks, straight
+  above the SOM's 5 V pins, its 5 V running between the two analog front ends, not through them.
+  C-B, with no coax jack (rev B's header takes both inputs), puts its receptacle in that jack's
+  place, 3 mm from the R jack, as far left as its retimer's TMDS lines allow (they need room to
+  fan out of its right side before they turn up), and ends 1 mm past it: 30 mm narrower, its
+  supplies, buttons and S/PDIF header moved in from the strip that went.
 - The SOM below, turned 270 degrees from its place on the Console: J22 (banks 4/5, the 5 V input)
   faces left, towards the ADV7181D, PCM1808 and S/PDIF under the jacks; J21 (banks 2/3 and the
   transceivers) faces right, towards the HDMI transmitter; J20 (JTAG, RECONFIG_N, DONE, READY)
@@ -75,7 +82,8 @@ J1, J2, J0. Everything about them is copied from the Console:
   generator (kit/tmds_layout.py) as on rev B.
 - The front edge: the XIAO (its USB-C out of the front), the JTAG header, the buttons.
 - The 3V6 buck and the 3V3 LDO at the right front, away from both analog front ends and clear of
-  the TMDS lines; the 1V8A LDO by the ADV7181D; the clock generator above J21's top end.
+  the TMDS lines (C-B: below its retimer's 1V1 buck); the 1V8A LDO by the ADV7181D; the clock
+  generator above J21's top end.
 - Nothing under the SOM (its own parts hang 3 mm above the board): only copper there.
 
 ## Power
@@ -83,9 +91,11 @@ J1, J2, J0. Everything about them is copied from the Console:
 - USB-C (TYPE-C-31-M-12), a 5 V sink: 5.1 k on each CC. With Rd alone the board cannot see how
   much the source offers, and the SOM and board draw up to about 2 A: a 5 V / 3 A USB-C supply,
   not a computer's port. A 5 V TVS (SMF5.0A) at the receptacle, then a 3 A resettable fuse (1812,
-  16 V) into +5 V.
+  16 V) into +5 V, laid before routing (layout.py vbus_in): 0.7 mm from each of the receptacle's
+  two VBUS pads, 1.2 mm from the TVS into the fuse (the router had laid it all 0.25 mm, about 1 A
+  at a 10 C rise).
 - +5 V to the SOM: a 1.2 mm track (about 2 A) laid by the generator from the fuse straight down to
-  J22's six VBUS pins (layout.py spine()), 2 x 47 uF + 4 x 22 uF at the SOM.
+  J22's six VBUS pins (layout.py spine()), 2 x 47 uF at the fuse's output, 4 x 22 uF at the SOM.
 - rev B's tree for the board's own parts: TLV62569 buck to 3V6, TPS7A7001 to 3V3 and 1V8A, the
   1V8A clamp; rev C-A adds rev B's 1V8B LDO for the ADV7511.
 - The clock generator's: below.
@@ -151,14 +161,14 @@ lines leave its right side and run up the right edge (1080p60: 1.485 Gb/s a lane
 so no pair crosses; the gateware maps channels to lanes). The retimer beside J21: the lanes run
 7 mm, straight out of J21's pads, through their capacitors, into its pins (gen_pcb.py serdes();
 0.2 mm lines 0.2 mm apart over ground 0.21 mm down: about 105 R differential, at the pairs' 100 R
-whatever their length). Its TMDS outputs to the ESD arrays and the receptacle: 59.6-67.9 mm, inside
-the 2 to 3 inches of board trace its driver is made for [10.2.2] (the receptacle 15.5 mm left of
-rev C-A's for it); intra-pair skew under 1 mm (5 ps), between pairs 8 mm (50 ps, of HDMI's 337 ps
-at 5.94 Gb/s); its pre-emphasis and swing are set over I2C. Vsadj 7.06 k 0.5 % [10.3.1]; I2C
-control (I2C_EN high, A0/A1 low); OE from the FPGA with 100 nF; DDC passed through (2 k each
-side); HPD out to the FPGA. CEC from the FPGA: one open-drain pin through a 2N7002 in the
-bidirectional level-shifter arrangement (gate at 3.3 V): with the board off the TV's bus sees only
-the FET's leakage.
+whatever their length). Its TMDS outputs to the ESD arrays and the receptacle: 49.6-57.9 mm, with
+the connector the 2 to 3 inches of board trace and connector its driver is made for [10.2.2] (the
+receptacle in the coax jack's place, 25.5 mm left of rev C-A's); intra-pair skew under 1 mm (5 ps),
+between pairs 8 mm (50 ps, of HDMI's 337 ps at 5.94 Gb/s); its pre-emphasis and swing are set over
+I2C. Vsadj 7.06 k 0.5 % [10.3.1]; I2C control (I2C_EN high, A0/A1 low); OE from the FPGA with
+100 nF; DDC passed through (2 k each side); HPD out to the FPGA. CEC from the FPGA: one open-drain
+pin through a 2N7002 in the bidirectional level-shifter arrangement (gate at 3.3 V): with the
+board off the TV's bus sees only the FET's leakage.
 
 **Both**: CEC's 27 k pull-up through a 1N4148WS (HDMI: a powered-off device must not load CEC
 [HWG Fig. 26]; rev B had the 27 k straight to 3V3, corrected there too).

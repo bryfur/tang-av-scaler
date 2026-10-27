@@ -6,6 +6,14 @@ user's guide Rev D, [TI-LDO] TPS7A7001 (SBVS134F), [TI-BUCK] TLV62569 (SLVSD87),
 TPD1E05U06/TPD4E05U06 (SLVSBO7O), [TI-ADC] PCM1808 (SLES177), [AN-1260], [PSU] ADI's HDMI RX supply note, and JLCPCB's
 part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this review changed.
 
+**Status (2026-10-27):** the routed board, its schematic and its fab files are the route before the
+placement fixes of 2026-10-26 (capacitors at their pins, ESD parts first), with the silkscreen
+pass: DRC clean, no unconnected items, the board = its schematic part for part. The fixes in the
+Buck layout, LDO capacitors, U8 and Supply filters rows are in the generator (board.py, gen_pcb.py,
+kit/pcbkit.py) but not routed yet (the routes on the new placement left 1 and 3 connections). board.py now also numbers eight capacitors the other way round (C10/C11, C13/C14,
+C16/C17, C19/C20: each regulator's feedback and output capacitor), so the schematic stays the one
+the board was routed from until rev B is routed again.
+
 ## Supplies and sequencing
 
 | Check | Requirement | Board | Verdict |
@@ -21,6 +29,8 @@ part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this r
 | 1.8 V LDOs | as above | 1.5 V headroom, 0.2 and 0.27 W | OK |
 | Buck | Eq. 2 with R2 <= 200 k; 6.8 pF Cff for R2 = 100 k; 2.2 uH and 10-47 uF per Table 4 [TI-BUCK 8.2.2] | R2 100 k, R1 499 k: 3.594 V; 6.8 pF; 2.2 uH (Isat 2 A) for 0.6 A + ripple; 10 uF out; input 10 uF (TI's 4.7 uF doubled for DC bias) | OK |
 | Sequencing of the buck | soft start 0.9 ms [TI-BUCK 7.3.3] | the LDOs follow its ramp | OK |
+| Buck layout | the input and output capacitors and the inductor as close to the IC as possible [TI-BUCK 10.1] | the input capacitor was placed by EN (pin 1, on +5 V too), across the package from VIN: 13.5 mm (second review, 2026-10-26) | **Fixed**: each regulator capacitor names its pin (board.py `at=`, placed before the rest): at VIN, 2.6 mm; the feedback divider next (FB is VIN's neighbour), 4.4 mm as before; then the inductor and the output capacitor at its output |
+| LDO capacitors | input and output capacitors at the device, as its layout example [TI-LDO 10.1, Fig. 8] | 5-19 mm (placed by the rail's first pin of whatever chip came before them in board.py) | **Fixed** (`at=`): 2.6-4.1 mm; but the 3V3 LDO's output capacitor 8.9 mm, its OUT pin facing the TMDS lines 1.2 mm off (about 3 nH of track: nothing to its stability). The feedback dividers, placed before the output capacitors: 3.4, 7.5 and 8.1 mm (1V8A, 1V8B, 3V3; were 3.4, 5.9, 7.5): FB is OUT's neighbour on the side facing the corridor (turned over, the row came out worse) |
 
 ## ADV7181D
 
@@ -55,11 +65,11 @@ part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this r
 | Video data | match lengths [HWG 7.2] | J9 to the ADV7511: 18.1-28.7 mm (70 ps spread in a 6.7 ns period, SDR); the FPGA's output delays can trim it | OK |
 | R_EXT | 887 R 1 %, short, nothing switching near [HWG 7.6] | 887 R 1 %, 2.2 mm of trace (was 5.2 mm) | OK |
 | DDC | 1.5-2 k to HDMI 5 V; < 50 pF [HWG 6.3.3] | 2 k 1 %; TPD4E05U06 0.5 pF | OK |
-| DDC/HPD/CEC ESD (U8) | as close to the connector as possible [TI-ESD] | was 14-18 mm from J6: the placer put parts by the IC on their signal nets, the ADV7511 | **Fixed**: every ESD part is placed first, at its connector, 2.5 mm towards where its lines go (kit/pcbkit.py): U8 5.5-8.3 mm from J6's pins 13-19, the TMDS corridor and the buck holding the nearer room |
+| DDC/HPD/CEC ESD (U8) | as close to the connector as possible [TI-ESD] | was 14-18 mm from J6: the placer put parts by the IC on their signal nets, the ADV7511; then 5.4-9.1 mm (placed after the ADV7181D's decoupling, which took the room) | **Fixed**: 2.6-3.8 mm (ESD parts now first of all, second review); every ESD part is placed first, at its connector, 2.5 mm towards where its lines go (kit/pcbkit.py): U8 5.5-8.3 mm from J6's pins 13-19, the TMDS corridor and the buck holding the nearer room |
 | HPD | 10 k +-10 % to GND [HWG 6.1.4] | 10 k 1 % | OK |
 | HDMI +5 V | >= 55 mA; 4.8-5.3 V at the source | 200 mA PTC (0.5-1.5 R: 30-80 mV at 55 mA) from the Console's 5 V; no ESD channel (it gave it to CEC): a supply behind its PTC and 100 nF | OK if the Console's 5 V is >= 4.9 V; note |
 | CEC | 27 k to 3.3 V through a diode with < 1.8 uA leakage; CEC_CLK 3-100 MHz +-2 % [HWG 7.7, Fig. 26] | was 27 k straight to 3V3: with the board off, 3V3 sits near 0 V and the 27 k pulled the TV's CEC bus down (about 60 uA) | **Fixed**: 27 k 1 % through a 1N4148WS (nA reverse leakage; high level 3.3 V less 0.6 V = 2.7 V, over CEC's 2.5 V); ESD on the DDC array's fourth channel; CEC_CLK from the FPGA (J9 pin 31) |
-| Supply filters | 10 uH + 10 uF per group, 0.1 uF per pin [HWG 7.1, Fig. 23] | NRS4018 10 uH (1.2 A, 150 mR): < 15 mV drop | OK |
+| Supply filters | 10 uH + 10 uF per group, "as close to the ADV7511 as possible"; 0.1 uF at each supply pin, "as close to the supply pin as possible", adjacent pins sharing [HWG 7.1, Fig. 23] | NRS4018 10 uH (1.2 A, 150 mR): < 15 mV drop. Placed (second review, 2026-10-26): every 0.1 uF of a rail by its first pin, 3.6-20.2 mm from the pins; the filters by the 1V8B LDO | **Fixed**: each 0.1 uF names its pin (board.py `at=`), placed before everything but the ESD parts: 2.1-7.1 mm (AVDD 41 and MVDD 47 open onto the TMDS lines' corridor, their capacitors beside it: decoupling stays on the top); the filters by the chip, 3-7 mm from its edge |
 
 ## Interference (analog against everything else)
 
@@ -140,6 +150,7 @@ layer, closer than 1 mm; tracks on the other outer layer are shielded by both gr
 |---|---|
 | Signal layers | F.Cu and B.Cu only; In1 and In2 solid ground |
 | DRC | no errors, no unconnected items (warnings: silkscreen overlapping, over copper and by the edge, which JLCPCB clips; footprints changed from the library on purpose: local clearances, the sockets renumbered) |
+| Silkscreen | the inputs' names were under the jacks' bodies (out of sight once fitted) and HDMI's over two parts: **fixed**, each name inboard of its jack (within 3.2 mm of its middle, the jacks 13 mm apart) and HDMI's by the receptacle, clear (kit/pcbkit.py silkscreen; the silkscreen layer alone changed). "XIAO, USB >" still crosses three small parts' outlines: no clear place by the sockets |
 | ERC, netlist | clean; schematic = board.py, 858 pins |
 | ADV7181D to J10 | LLC 16.7 mm (one via); data 9.8-23.8 mm, at most two vias (74.25 MHz at most: about 90 ps spread in 13.5 ns) |
 | J9 to the ADV7511 | pixel clock 22.5 mm (three vias, each beside the ground planes' stitching); data 16.9-28.7 mm |

@@ -54,6 +54,19 @@ class RevCB(RevC):
 
     TX_CHIP = (floor.DP159_AT, 3.0)
     HDMI_AT = floor.HDMI_AT_CB
+    # no S/PDIF jack (coax and optical on rev B's 5-pin header): the receptacle in its place and the
+    # board 30 mm narrower (floor.py); what sat in the strip cut off comes in: the supplies below
+    # the retimer's 1V1 buck, the buttons left of the corner hole, the S/PDIF header left of the
+    # TMDS lines (which now run where it was), as high as the R jack lets it: both inputs' parts
+    # below it then, left of the TMDS lines and right of the PCM1808's digital side (lower, the
+    # optical input's buffer went above it, by the R audio input)
+    X1 = floor.X1_CB
+    UI_AT = floor.UI_AT_CB
+    SPDIF_HEADER_AT = (179.0, 75.5)
+    SUPPLIES = {"U4": (190.0, 140.0), "U5": (190.0, 131.0)}
+    SILK_NEAR = [(r, "SPDIF" if r == "J13" else t) for r, t in RevC.SILK_NEAR]
+    SILK_PINS = [(r, {"1": "COAX", "2": "G", "3": "OPT", "4": "G", "5": "5V"} if r == "J13" else pins, *side)
+                 for r, pins, *side in RevC.SILK_PINS]
 
     def hand(self):
         h = RevC.hand(self)

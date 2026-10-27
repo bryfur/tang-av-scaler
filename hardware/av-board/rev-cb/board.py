@@ -19,9 +19,12 @@ from carrier import PARTS, block, part, two, nxt, R, C, lib_pins, unconnected, s
 
 NAME = "av-board-cb"
 REV = "C-B"
-VARIANTS = {"hand-jacks": ["J1", "J2", "J3", "J4", "J5", "J14"]}
+VARIANTS = {"hand-jacks": ["J1", "J2", "J3", "J4", "J5"]}
 
-common(second_rail=None)
+# S/PDIF on rev B's 5-pin header (coax on a pigtail to an orange RCA, an optical module on pins 3-5)
+# instead of C-A's orange jack: the receptacle takes the jack's place by the audio jacks and the
+# board is 30 mm narrower (rev-c/floor.py)
+common(second_rail=None, spdif_connectors="header")
 clocks(refclk=True)
 
 # ---------------------------------------------------------------------------
@@ -34,12 +37,15 @@ block("dp159")
 # 6.8 pF feed-forward for R2 = 100 k [8.2.2.2]; 2.2 uH with 10 uF for 0.6-1.2 V out [Table 4]
 part("U7", "TLV62569DBVR", "lcsc:TLV62569DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C141836",
      {"1": "+5V", "2": "GND", "3": "SW_1V1", "4": "+5V", "5": "FB_1V1"})
-C("10u", "+5V", size="C0805")
-two(nxt("L"), "L3015", "2.2uH", "SW_1V1", "1V1")
-C("10u", "1V1", size="C0805")
+# (in rev B's 3V6 buck's order, each by its pin [TI-BUCK 10.1]: VIN's capacitor, the feedback
+# divider, the inductor, the capacitor at its output)
+C("10u", "+5V", size="C0805", at="U7.4")
 R("82.5k", "1V1", "FB_1V1")
 R("100k", "FB_1V1", "GND")
 C("6.8p", "1V1", "FB_1V1")
+L_1V1 = nxt("L")
+two(L_1V1, "L3015", "2.2uH", "SW_1V1", "1V1")
+C("10u", "1V1", size="C0805", at=L_1V1 + ".2")
 
 DP = lib_pins("lcsc:SN65DP159RGZR")
 u2 = {}
@@ -99,16 +105,17 @@ u2[pin("VSADJ")] = "DP_VSADJ"
 R("7.06k", "DP_VSADJ", "GND")
 part("U2", "SN65DP159RGZR", "lcsc:SN65DP159RGZR", "lcsc:VQFN-48_L7.0-W7.0-P0.50-BL-EP4.1", "C179676", u2)
 # Decoupling [Fig. 33]: VCC 10 uF + 0.1 uF + 0.01 uF (two pins); VDD 10 uF and 0.1 uF at each of
-# its five pins, 0.01 uF twice
-C("10u", "3V3")
-for _ in range(2):
-    C("100n", "3V3")
-C("10n", "3V3")
-C("10u", "1V1")
-for _ in range(5):
-    C("100n", "1V1")
-for _ in range(2):
-    C("10n", "1V1")
+# its five pins, 0.01 uF twice; each at its pin [12.2, Fig. 36: "as close to VCC and VDD pins as
+# possible"]: VCC 13 and 43, VDD 14, 23, 24 on one side, 37 and 48 on the other
+C("10u", "3V3", at="U2.13")
+for n in ("13", "43"):
+    C("100n", "3V3", at="U2." + n)
+C("10n", "3V3", at="U2.43")
+C("10u", "1V1", at="U2.24")
+for n in ("14", "23", "24", "37", "48"):
+    C("100n", "1V1", at="U2." + n)
+for n in ("14", "37"):
+    C("10n", "1V1", at="U2." + n)
 
 # CEC from the FPGA (rev C-A's ADV7511 has its own engine): one open-drain FPGA pin through a 2N7002
 # in the bidirectional level-shifter arrangement, gate at 3.3 V: either side pulls the other low.
@@ -126,7 +133,8 @@ R("10k", "3V3", "CEC_FPGA")
 DP159_PADS = {net: num for num, net in u2.items() if net in ("DP_SCL", "DP_SDA", "DDC_SCL", "DDC_SDA", "DP_HPD", "DP_OE")}
 DP159_PADS["CEC_FPGA"] = pin("HPD_SNK")
 dp_pins, dp_body = chip_pins("lcsc:VQFN-48_L7.0-W7.0-P0.50-BL-EP4.1", floor.DP159_AT, floor.DP159_ANGLE, DP159_PADS)
-SOM_NETS = som(common_groups() + [("dp159", dp_pins, {}, dp_body)], transceiver_lanes=LANES, rev=REV)
+SOM_NETS = som(common_groups(spdif_at=floor.SPDIF_AT_CB, ui_at=floor.UI_AT_CB) + [("dp159", dp_pins, {}, dp_body)],
+               transceiver_lanes=LANES, rev=REV)
 
 
 def _unused_dp_pins(name):

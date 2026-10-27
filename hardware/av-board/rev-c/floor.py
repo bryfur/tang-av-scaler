@@ -1,11 +1,11 @@
 """Rev C's floor plan, shared by both carriers (C-A: ADV7511, C-B: SN65DP159) and by both their
 board.py (the FPGA pin assignment follows the geometry) and gen_pcb.py (placement).
 
-A 130 x 100 mm board. The back edge (top) carries every cable: the six RCA jacks facing out (Y, Pb,
-Pr, L, R, S/PDIF coax), the USB-C power input between the video and audio jacks (straight above
-the SOM's 5 V pins, between the two analog front ends rather than through them) and the HDMI
-receptacle at the right. The SOM sits below, turned 270 degrees from its place on the Console so
-that
+A 130 x 100 mm board (C-B: 100 x 100, X1_CB). The back edge (top) carries every cable: the RCA
+jacks facing out (Y, Pb, Pr, L, R, and on C-A the S/PDIF coax), the USB-C power input between the
+video and audio jacks (straight above the SOM's 5 V pins, between the two analog front ends rather
+than through them) and the HDMI receptacle at the right. The SOM sits below, turned 270 degrees
+from its place on the Console so that
 
     J22 (banks 4, 5, 10, the 5 V input)  faces left:  the ADV7181D, PCM1808 and S/PDIF, under the jacks
     J21 (banks 2, 3, the transceivers)   faces right: the ADV7511 (C-A) or SN65DP159 (C-B) beside it
@@ -32,11 +32,16 @@ JACK_Y = Y0 + 11.0                  # an RCA footprint's origin, its mouth 0.2 m
 BACK = {"J1": 109.0, "J2": 122.0, "J3": 135.0, "J15": 147.5, "J4": 160.0, "J5": 173.0, "J14": 186.0}
 # the HDMI receptacle's block: rev B's (its TMDS ESD arrays, the receptacle) turned 90 degrees, on
 # the back edge at the right: placed relative to HDMI_AT, where rev B's ADV7511 would sit (the
-# receptacle 15 mm right of it). Rev C-B's 15.5 mm further left, 1 mm past the S/PDIF jack: its
-# retimer's outputs then run about 66 mm to the receptacle, inside the 2 to 3 inches its driver is
-# made for [TI-DP159 10.2.2]; rev C-A's ADV7511, whose right side its lines leave, sits too far right
+# receptacle 15 mm right of it). Rev C-A's ADV7511, whose right side its lines leave, sits too far
+# right for it to come further left. Rev C-B has no S/PDIF jack (both inputs on rev B's header), so
+# its receptacle takes that jack's place, 3 mm from the R jack (centre x 191): as far left as its
+# retimer's TMDS lines allow (they leave its right side, x 185, and need a straight run out of the
+# pins and room to fan out before they turn up: kit/tmds_layout.py), 49.6-57.9 mm of line, with the
+# connector the 2 to 3 inches its driver is made for [TI-DP159 10.2.2]; and the board ends 1 mm past
+# the receptacle's shell (X1_CB), 30 mm narrower than C-A
 HDMI_AT = (201.5, 70.8)
-HDMI_AT_CB = (186.0, 70.8)
+HDMI_AT_CB = (176.0, 70.8)
+X1_CB = 200.0
 # rev C-A's ADV7511 (LQFP-100) at 0 degrees: its pixel inputs on its top and left sides (pins 51-100),
 # their corner level with the top of J21's I/O pins (y 114-126: the transceivers' pins above them are
 # unused here), so the left side's lines cross straight over and the top side's wrap round the
@@ -54,8 +59,10 @@ XIAO_AT = (112.0, 139.0)
 VGA_AT = (104.5, 100.0)             # the VGA header, upright, left of the ADV7181D
 PCM1808_AT = (166.5, 76.0)          # under the audio jacks
 SPDIF_AT = (186.0, 76.0)            # the S/PDIF slicer, under its jack
+SPDIF_AT_CB = (179.0, 84.0)         # C-B: the S/PDIF inputs' parts, by their header left of the TMDS lines
 CLOCK_AT = (178.0, 98.0)            # the clock generator, by J21's top (C-B: the transceivers' REFCLK0)
 UI_AT = (186.0, 145.0)              # the buttons along the front edge
+UI_AT_CB = (172.0, 145.0)           # C-B's, clear of its narrower board's corner hole
 
 
 def rotate(x, y, angle):

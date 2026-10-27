@@ -53,11 +53,11 @@ IO_LOC "in_hs" AB13;  // J22 pin 62, bank 5
 IO_PORT "in_hs" IO_TYPE=LVCMOS33;
 IO_LOC "in_int" AA13;  // J22 pin 60, bank 5
 IO_PORT "in_int" IO_TYPE=LVCMOS33;
-IO_LOC "in_key1" A21;  // J21 pin 5, bank 2
+IO_LOC "in_key1" B22;  // J20 pin 75, bank 2
 IO_PORT "in_key1" IO_TYPE=LVCMOS33;
-IO_LOC "in_key2" B21;  // J21 pin 7, bank 2
+IO_LOC "in_key2" C22;  // J20 pin 73, bank 2
 IO_PORT "in_key2" IO_TYPE=LVCMOS33;
-IO_LOC "in_led" A20;  // J21 pin 11, bank 2
+IO_LOC "in_led" E18;  // J20 pin 71, bank 2
 IO_PORT "in_led" IO_TYPE=LVCMOS33;
 IO_LOC "in_llc" V13;  // J22 pin 88, bank 5, MGCLKT_7
 IO_PORT "in_llc" IO_TYPE=LVCMOS33;

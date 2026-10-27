@@ -50,9 +50,9 @@ J9_NET.update({39: "IN_DOUT", 40: "IN_BCK", 37: "IN_SCKI", 38: "IN_LRCK", 31: "O
 block("headers")
 header("J10", J10_NET, "to the Console's J10 (FPGA bank 4)", nc=J10_NC)
 header("J9", J9_NET, "to the Console's J9 (FPGA bank 2)")
-C("22u", "+5V")
-C("22u", "+5V")
-C("100n", "+5V")
+C("22u", "+5V", at="J9.11")                     # (at the headers' 5 V pins, where it comes in)
+C("22u", "+5V", at="J10.11")
+C("100n", "+5V", at="J9.11")
 
 # The scaler's two menu buttons (the board covers the Console's own S1/S2) on J10 pins 31/32, its
 # status LED on J10 pin 33 (kit/circuits.py)

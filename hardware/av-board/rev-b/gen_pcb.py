@@ -59,7 +59,10 @@ class RevB(ADV7181D, TMDSLayout, pcbkit.Layout):
         # 1V8B under the ADV7511, 3V3, and the buck furthest right, away from the analog side and
         # the TMDS lines
         "U6": (137.0, 68.5, 0, "F"), "U7": (143.5, 68.5, 0, "F"),
-        "U5": (150.0, 68.5, 0, "F"), "U4": (156.5, 70.0, 0, "F"),
+        # (the buck turned over: SW faces the 3V3 LDO, its inductor between them; VIN and FB face
+        # the free board right of it. The other way up its inductor's place above SW was the HDMI
+        # DDC array's, placed first at the receptacle: SW ran 9 mm to it [TI-BUCK 10.1])
+        "U5": (150.0, 68.5, 0, "F"), "U4": (156.5, 70.0, 180, "F"),
         "J6": (163.6, 62.0, 90, "F"),
         # TMDS ESD, in line before the HDMI pads (pins 1-12 at x 160.2, y 57.5-63)
         "U9": (156.3, 58.75, None, "F"), "U10": (156.3, 61.75, None, "F"),
@@ -88,10 +91,13 @@ class RevB(ADV7181D, TMDSLayout, pcbkit.Layout):
                 (94.0, 86.8, 139.5, 90.0), (126.0, 81.6, 139.5, 84.2)]
     KEEP = {"U1": 0.5}
     BOTH_SIDES = {"U1", "U2"}       # (under U1: its exposed pad's vias)
-    # the ADV7511's bias resistor and the regulators' feedback dividers, placed before the
-    # decoupling takes their room: short traces [HWG 7.6; TI TPS7A70, TLV62569 layout] (the
+    # the ADV7511's bias resistor and the regulators' feedback dividers, placed with the pins' own
+    # capacitors in board.py's order (R_EXT before the ADV7511's decoupling, a divider before its
+    # regulator's output capacitor): short traces [HWG 7.6; TI TPS7A70, TLV62569 layout] (the
     # ADV7181D's references and loop filter are laid out, kit/adv7181d_layout.py)
-    BIAS_NETS = U1_BIAS_NETS | {"R_EXT", "FB_3V3", "FB_3V6", "FB_1V8A", "FB_1V8B"}
+    # (and the S/PDIF coax input's AC-coupled node, high impedance: its chain from the connector end,
+    # by its pin; else from the FPGA's, along the bottom edge, U13 and U14 12 mm apart)
+    BIAS_NETS = U1_BIAS_NETS | {"R_EXT", "FB_3V3", "FB_3V6", "FB_1V8A", "FB_1V8B", "SPDIF_AC"}
     BUSES = [("J10", "U1"), ("J9", "U2")]
     CLASSES = U1_CLASSES
     SILK_LABELS = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J4", "L"), ("J5", "R")]
