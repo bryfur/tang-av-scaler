@@ -24,8 +24,10 @@ def dist(p, a, z):
     return math.hypot(p[0] - a[0] - u * dx, p[1] - a[1] - u * dy)
 
 
-def doubled(b, verbose=False):
-    """{(net, layer name): length laid twice, mm}."""
+def pairs(b):
+    """Each copy found beside another: ((net, layer name), the shorter track, the other, the
+    shorter one's ends, the other's ends, the shorter one's length in mm). pcbkit's prune takes up
+    the shorter of each (beside())."""
     by = collections.defaultdict(list)
     for t in b.GetTracks():
         if t.GetClass() != "PCB_TRACK" or t.GetNetname() in SKIP:
@@ -33,12 +35,11 @@ def doubled(b, verbose=False):
         a = (ToMM(t.GetStart().x), ToMM(t.GetStart().y))
         z = (ToMM(t.GetEnd().x), ToMM(t.GetEnd().y))
         if math.hypot(z[0] - a[0], z[1] - a[1]) > 0.3:
-            by[(t.GetNetname(), b.GetLayerName(t.GetLayer()))].append((a, z))
-    found = collections.defaultdict(float)
+            by[(t.GetNetname(), b.GetLayerName(t.GetLayer()))].append((t, a, z))
     for key, segs in by.items():
         for i in range(len(segs)):
             for j in range(i + 1, len(segs)):
-                (a1, z1), (a2, z2) = segs[i], segs[j]
+                (t1, a1, z1), (t2, a2, z2) = segs[i], segs[j]
                 r1 = {(round(p[0], 3), round(p[1], 3)) for p in (a1, z1)}
                 if r1 & {(round(p[0], 3), round(p[1], 3)) for p in (a2, z2)}:
                     continue                    # (neighbours along one path)
@@ -46,13 +47,20 @@ def doubled(b, verbose=False):
                 l1, l2 = math.hypot(*d1), math.hypot(*d2)
                 if abs(d1[0] * d2[0] + d1[1] * d2[1]) / (l1 * l2) < math.cos(math.radians(10)):
                     continue
-                (sa, sz, sl), (la, lz) = ((a1, z1, l1), (a2, z2)) if l1 < l2 else ((a2, z2, l2), (a1, z1))
+                (st, sa, sz, sl), (lt, la, lz) = (((t1, a1, z1, l1), (t2, a2, z2)) if l1 < l2
+                                                  else ((t2, a2, z2, l2), (t1, a1, z1)))
                 mid = ((sa[0] + sz[0]) / 2, (sa[1] + sz[1]) / 2)
                 if dist(mid, la, lz) < 0.3 and dist(sa, la, lz) < 0.35 and dist(sz, la, lz) < 0.35:
-                    found[key] += sl
-                    if verbose:
-                        print("   %s %s: (%.3f, %.3f)-(%.3f, %.3f) beside (%.3f, %.3f)-(%.3f, %.3f)" % (
-                            key + a1 + z1 + a2 + z2))
+                    yield key, st, lt, sa + sz, la + lz, sl
+
+
+def doubled(b, verbose=False):
+    """{(net, layer name): length laid twice, mm}."""
+    found = collections.defaultdict(float)
+    for key, _, _, short, other, length in pairs(b):
+        found[key] += length
+        if verbose:
+            print("   %s %s: (%.3f, %.3f)-(%.3f, %.3f) beside (%.3f, %.3f)-(%.3f, %.3f)" % (key + short + other))
     return found
 
 

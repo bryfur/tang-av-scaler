@@ -7,8 +7,9 @@ BOM: one line per LCSC part (Comment, Designator, Footprint, LCSC Part #); DNP p
 Variants (board.py VARIANTS): <name>-<variant>-bom.csv / -cpl.csv without the parts listed there
 (soldered by hand); the Gerbers are the same.
 CPL: Designator, Mid X, Mid Y, Layer, Rotation, in mm from the board's lower-left corner, y up
-(JLCPCB's convention). Check the rotations in JLCPCB's placement preview before ordering: their
-library sometimes turns a part 90 or 180 degrees from KiCad's.
+(JLCPCB's convention). JLCPCB places a part by its own footprint for the LCSC number, not by ours:
+where theirs is drawn turned against ours, JLC_TURN adds the difference. Check the rotations in
+JLCPCB's placement preview before ordering.
 """
 
 import csv
@@ -32,6 +33,13 @@ PCB = os.path.join(HERE, NAME + ".kicad_pcb")
 FAB = os.path.join(HERE, "fab")
 COPPER = {4: "F.Cu,In1.Cu,In2.Cu,B.Cu", 6: "F.Cu,In1.Cu,In2.Cu,In3.Cu,In4.Cu,B.Cu"}
 OTHER = "F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts"
+# LCSC number -> degrees (counter-clockwise, from the top) JLCPCB's footprint for it is turned from
+# ours. CUI RCJ-014 (yellow) and RCJ-017 (orange): theirs is EasyEDA's CONN-TH_RCJ-013, our
+# CONN-TH_RCJ-011 (RCJ-011's) turned 90 degrees counter-clockwise (pin 2 at (2.25, 0), ours at
+# (0, 2.25)): at the board's rotation their preview had the jacks' barrels along the edge instead
+# of over it. RCJ-011 (black) is ours; RCJ-012 (red) has no footprint at EasyEDA (no model in the
+# preview): placed by ours, as drawn.
+JLC_TURN = {"C4991844": -90, "C22359757": -90}
 
 
 def main():
@@ -76,8 +84,11 @@ def main():
         key = (fp.GetValue(), fp.GetFPIDAsString().split(":")[1], lcsc)
         groups.setdefault(key, []).append(ref)
         pos = fp.GetPosition()
+        if lcsc in JLC_TURN and fp.IsFlipped():
+            raise SystemExit("%s: JLC_TURN for a part on the bottom not worked out (turned as seen from the top)" % ref)
         rows.append([ref, "%.3f" % (ToMM(pos.x) - ox), "%.3f" % (oy - ToMM(pos.y)),
-                     "Bottom" if fp.IsFlipped() else "Top", "%.1f" % (fp.GetOrientationDegrees() % 360)])
+                     "Bottom" if fp.IsFlipped() else "Top",
+                     "%.1f" % ((fp.GetOrientationDegrees() + JLC_TURN.get(lcsc, 0)) % 360)])
     def write(suffix, omit=()):
         g = {k: [r for r in refs if r not in omit] for k, refs in groups.items()}
         g = {k: refs for k, refs in g.items() if refs}

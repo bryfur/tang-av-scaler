@@ -8,8 +8,7 @@ into the ADV7181D, stereo audio into a PCM1808, HDMI out of an ADV7511. Four lay
 ![Rev B, top](img/av-board-b-top.png)
 
 Status: reviewed against every part's data sheet (review.md), routed, DRC clean, fab files made;
-not ordered. The routed board predates the placement fixes now in the generator (review.md,
-Status).
+not ordered.
 
 - [design.md](design.md): what changed from rev A, and the ADV7181D's circuit with its sources
 - [review.md](review.md): every part checked against its data sheet, with the fixes
@@ -41,4 +40,7 @@ Settings the files do not carry:
   header: SYNC, GND. J13 (S/PDIF) is a 5-pin header: COAX, GND, OPT, GND, 5V (design.md). J8 (VGA) is a 2 x 8 header,
   pin n the DE-15's pin n, for a bracket cable.
 - Check every part's rotation in JLCPCB's placement preview, mainly U1 (the ADV7181D: pin 1 at
-  the dot, AIN10 at its top left), U2, U3, the regulators and the three resistor arrays RN1-RN3.
+  the dot, AIN10 at its top left), U2, U3, the regulators and the three resistor arrays RN1-RN3,
+  and the RCA jacks' barrels over the edge (the CPL turns the yellow ones 90 degrees for JLCPCB's
+  footprint, kit/gen_fab.py JLC_TURN; the red RCJ-012 has no model there and is placed as drawn,
+  as the black RCJ-011).

@@ -9563,148 +9563,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C9") (unit 1)))))
   (wire
-    (pts (xy 603.25 66.04) (xy 600.71 66.04))
-    (stroke (width 0) (type default))
-    (uuid "a8fd6142-4cdd-5023-b6dd-742b5e0f043c"))
-  (label "SW_3V6"
-    (at 600.71 66.04 180)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "2d6131b2-8bff-521f-9fe7-725c5e243e00"))
-  (wire
-    (pts (xy 613.41 66.04) (xy 615.95 66.04))
-    (stroke (width 0) (type default))
-    (uuid "d9298bef-d8a2-5cab-a590-2f63f9cf81c6"))
-  (label "3V6"
-    (at 615.95 66.04 0)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "ec2a7c28-cf3f-549e-aecb-41659cb406b0"))
-  (symbol
-    (lib_id "lcsc:FNR3015S2R2MT")
-    (at 608.33 66.04 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "6f92a621-0673-5d9f-9084-4ce4c692a56d")
-    (property "Reference" "L1"
-      (at 608.33 62.23 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "2.2uH"
-      (at 608.33 69.85 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "lcsc:IND-SMD_L3.0-W3.0_FNR30XXS"
-      (at 608.33 66.04 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 608.33 66.04 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C167747"
-      (at 608.33 66.04 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "9fe3bdb5-6c4b-5fee-8b71-469f164ab9fc"))
-    (pin "2" (uuid "f8f5189f-1424-51ab-b5ac-d2172cd6a3d3"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "L1") (unit 1)))))
-  (wire
-    (pts (xy 636.27 66.04) (xy 636.27 63.5))
-    (stroke (width 0) (type default))
-    (uuid "9195dffc-b699-5f33-8a2e-268e7b183be6"))
-  (label "3V6"
-    (at 636.27 63.5 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "f43305b7-b84b-566b-ba48-cccf6176d96e"))
-  (wire
-    (pts (xy 636.27 73.66) (xy 636.27 76.2))
-    (stroke (width 0) (type default))
-    (uuid "de81aa45-1248-5a1b-937c-1b5b82404847"))
-  (label "GND"
-    (at 636.27 76.2 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "038957e5-906e-5415-be0f-ef43d70645ab"))
-  (symbol
-    (lib_id "Device:C")
-    (at 636.27 69.85 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "dacb5779-1f90-56d3-a1b0-af28129de736")
-    (property "Reference" "C10"
-      (at 636.27 62.23 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "10u"
-      (at 636.27 77.47 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 636.27 69.85 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 636.27 69.85 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C15850"
-      (at 636.27 69.85 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "efc02188-fbf0-5d6b-b1ae-43299c9fef6a"))
-    (pin "2" (uuid "382165c8-6978-5359-903d-fd26a416356e"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C10") (unit 1)))))
-  (wire
-    (pts (xy 660.4 66.04) (xy 660.4 63.5))
+    (pts (xy 604.52 66.04) (xy 604.52 63.5))
     (stroke (width 0) (type default))
     (uuid "4f2add91-597f-569c-9a97-3056756b2459"))
   (label "3V6"
-    (at 660.4 63.5 90)
+    (at 604.52 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "33a7483a-54bb-5752-9c13-70c29ef88cb0"))
+    (uuid "8792bf72-b0e4-51c6-9aaf-c4c2fbdad1c5"))
   (wire
-    (pts (xy 660.4 73.66) (xy 660.4 76.2))
+    (pts (xy 604.52 73.66) (xy 604.52 76.2))
     (stroke (width 0) (type default))
     (uuid "53bf09eb-7298-57f2-b879-1cf5c6551604"))
   (label "FB_3V6"
-    (at 660.4 76.2 270)
+    (at 604.52 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "bd92aabe-86c3-5845-af13-66cfd8f31937"))
+    (uuid "8fe4d6ef-eded-5303-be5d-8433d78c05e3"))
   (symbol
     (lib_id "Device:R")
-    (at 660.4 69.85 0)
+    (at 604.52 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -9713,25 +9595,25 @@
     (fields_autoplaced yes)
     (uuid "f6b3f991-b355-5d19-9461-4ac96be05586")
     (property "Reference" "R13"
-      (at 660.4 62.23 0)
+      (at 604.52 62.23 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "499k"
-      (at 660.4 77.47 0)
+      (at 604.52 77.47 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 660.4 69.85 0)
+      (at 604.52 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 660.4 69.85 0)
+      (at 604.52 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C25793"
-      (at 660.4 69.85 0)
+      (at 604.52 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -9740,30 +9622,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R13") (unit 1)))))
   (wire
-    (pts (xy 688.34 66.04) (xy 688.34 63.5))
+    (pts (xy 631.19 66.04) (xy 631.19 63.5))
     (stroke (width 0) (type default))
     (uuid "c4fe4ae3-528a-5c39-a2ba-f85e208a236c"))
   (label "FB_3V6"
-    (at 688.34 63.5 90)
+    (at 631.19 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "c489e383-769e-5caa-87c4-934daf37177a"))
+    (uuid "b164eacd-bad4-5455-8aae-659074234b4c"))
   (wire
-    (pts (xy 688.34 73.66) (xy 688.34 76.2))
+    (pts (xy 631.19 73.66) (xy 631.19 76.2))
     (stroke (width 0) (type default))
     (uuid "e33703e4-e76d-55ea-974c-e2509387e538"))
   (label "GND"
-    (at 688.34 76.2 270)
+    (at 631.19 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "daa6a2b1-ef27-5f35-ab77-2707f3cda0f3"))
+    (uuid "a71a9797-e4d3-5fb5-855c-f0de113a3913"))
   (symbol
     (lib_id "Device:R")
-    (at 688.34 69.85 0)
+    (at 631.19 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -9772,25 +9654,25 @@
     (fields_autoplaced yes)
     (uuid "08405173-5ff5-59b9-b4b1-3d2c9a5c3dee")
     (property "Reference" "R14"
-      (at 688.34 62.23 0)
+      (at 631.19 62.23 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "100k"
-      (at 688.34 77.47 0)
+      (at 631.19 77.47 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 688.34 69.85 0)
+      (at 631.19 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 688.34 69.85 0)
+      (at 631.19 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C25741"
-      (at 688.34 69.85 0)
+      (at 631.19 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -9799,30 +9681,148 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R14") (unit 1)))))
   (wire
-    (pts (xy 713.74 66.04) (xy 713.74 63.5))
+    (pts (xy 657.86 66.04) (xy 657.86 63.5))
     (stroke (width 0) (type default))
-    (uuid "1b87b693-d7e0-57a9-ac5b-1f981d116e14"))
+    (uuid "9195dffc-b699-5f33-8a2e-268e7b183be6"))
   (label "3V6"
-    (at 713.74 63.5 90)
+    (at 657.86 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "e01f8359-0a01-5207-8774-44fb6897fce6"))
+    (uuid "55b4fb7e-6112-55eb-9095-0185130d7b50"))
   (wire
-    (pts (xy 713.74 73.66) (xy 713.74 76.2))
+    (pts (xy 657.86 73.66) (xy 657.86 76.2))
     (stroke (width 0) (type default))
-    (uuid "1d1a8ebf-3ae6-5f97-b151-5a3fd2aa29bd"))
+    (uuid "de81aa45-1248-5a1b-937c-1b5b82404847"))
   (label "FB_3V6"
-    (at 713.74 76.2 270)
+    (at 657.86 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "0e69257e-93c3-5f38-b5a5-1d4c5573a8fa"))
+    (uuid "b2a847bb-26fa-5217-93d3-1a1f249e98bf"))
   (symbol
     (lib_id "Device:C")
-    (at 713.74 69.85 0)
+    (at 657.86 69.85 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "dacb5779-1f90-56d3-a1b0-af28129de736")
+    (property "Reference" "C10"
+      (at 657.86 62.23 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "6.8p"
+      (at 657.86 77.47 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+      (at 657.86 69.85 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 657.86 69.85 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C1576"
+      (at 657.86 69.85 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "efc02188-fbf0-5d6b-b1ae-43299c9fef6a"))
+    (pin "2" (uuid "382165c8-6978-5359-903d-fd26a416356e"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C10") (unit 1)))))
+  (wire
+    (pts (xy 683.26 66.04) (xy 680.72 66.04))
+    (stroke (width 0) (type default))
+    (uuid "a8fd6142-4cdd-5023-b6dd-742b5e0f043c"))
+  (label "SW_3V6"
+    (at 680.72 66.04 180)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "fa927f38-284f-5ce2-b135-298d59f9b951"))
+  (wire
+    (pts (xy 693.42 66.04) (xy 695.96 66.04))
+    (stroke (width 0) (type default))
+    (uuid "d9298bef-d8a2-5cab-a590-2f63f9cf81c6"))
+  (label "3V6"
+    (at 695.96 66.04 0)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "05926bb6-0f83-5a11-9f35-94394aae21a2"))
+  (symbol
+    (lib_id "lcsc:FNR3015S2R2MT")
+    (at 688.34 66.04 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "6f92a621-0673-5d9f-9084-4ce4c692a56d")
+    (property "Reference" "L1"
+      (at 688.34 62.23 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "2.2uH"
+      (at 688.34 69.85 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "lcsc:IND-SMD_L3.0-W3.0_FNR30XXS"
+      (at 688.34 66.04 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 688.34 66.04 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C167747"
+      (at 688.34 66.04 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "9fe3bdb5-6c4b-5fee-8b71-469f164ab9fc"))
+    (pin "2" (uuid "f8f5189f-1424-51ab-b5ac-d2172cd6a3d3"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "L1") (unit 1)))))
+  (wire
+    (pts (xy 716.28 66.04) (xy 716.28 63.5))
+    (stroke (width 0) (type default))
+    (uuid "1b87b693-d7e0-57a9-ac5b-1f981d116e14"))
+  (label "3V6"
+    (at 716.28 63.5 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "50ea3990-4955-57de-8ee5-567e80913dcd"))
+  (wire
+    (pts (xy 716.28 73.66) (xy 716.28 76.2))
+    (stroke (width 0) (type default))
+    (uuid "1d1a8ebf-3ae6-5f97-b151-5a3fd2aa29bd"))
+  (label "GND"
+    (at 716.28 76.2 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "68b455a5-367a-50d5-976d-5be21d2d026e"))
+  (symbol
+    (lib_id "Device:C")
+    (at 716.28 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -9831,25 +9831,25 @@
     (fields_autoplaced yes)
     (uuid "34826548-1a7a-5ba5-92df-a6e30fc86ef7")
     (property "Reference" "C11"
-      (at 713.74 62.23 0)
+      (at 716.28 62.23 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "6.8p"
-      (at 713.74 77.47 0)
+    (property "Value" "10u"
+      (at 716.28 77.47 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 713.74 69.85 0)
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
+      (at 716.28 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 713.74 69.85 0)
+      (at 716.28 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C1576"
-      (at 713.74 69.85 0)
+    (property "LCSC" "C15850"
+      (at 716.28 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -9917,89 +9917,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C12") (unit 1)))))
   (wire
-    (pts (xy 758.19 66.04) (xy 758.19 63.5))
-    (stroke (width 0) (type default))
-    (uuid "a8fc8f4c-9193-5535-af61-920030550765"))
-  (label "3V3"
-    (at 758.19 63.5 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "d882ed8d-7ed7-5b62-b375-4147b4ce39c6"))
-  (wire
-    (pts (xy 758.19 73.66) (xy 758.19 76.2))
-    (stroke (width 0) (type default))
-    (uuid "fe4b4804-9f83-5d08-98fd-f64e9d087745"))
-  (label "GND"
-    (at 758.19 76.2 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "adc53dd7-b614-5a28-b6ae-5cc18dabcd1a"))
-  (symbol
-    (lib_id "Device:C")
-    (at 758.19 69.85 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "4869a656-6018-5687-984d-385cf3b61f9a")
-    (property "Reference" "C13"
-      (at 758.19 62.23 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "10u"
-      (at 758.19 77.47 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 758.19 69.85 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 758.19 69.85 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "LCSC" "C15850"
-      (at 758.19 69.85 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "9d816849-1e8d-59ca-9d6c-06675883144e"))
-    (pin "2" (uuid "57f8c39b-487c-5444-8849-0905a83cc98a"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C13") (unit 1)))))
-  (wire
-    (pts (xy 782.32 66.04) (xy 782.32 63.5))
+    (pts (xy 760.73 66.04) (xy 760.73 63.5))
     (stroke (width 0) (type default))
     (uuid "1e064e73-5e03-5660-a5d7-fcca9f9102d9"))
   (label "3V3"
-    (at 782.32 63.5 90)
+    (at 760.73 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "e2f4732a-e7c3-51d0-8310-f1ae2abe2475"))
+    (uuid "f68cfdb7-9803-5b5a-9283-88875c5b94b6"))
   (wire
-    (pts (xy 782.32 73.66) (xy 782.32 76.2))
+    (pts (xy 760.73 73.66) (xy 760.73 76.2))
     (stroke (width 0) (type default))
     (uuid "a56f47ce-cf56-50f8-b966-29b8f6e68865"))
   (label "FB_3V3"
-    (at 782.32 76.2 270)
+    (at 760.73 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "406e3788-a2f5-518c-95fb-38fe5ca2cbf4"))
+    (uuid "f9391f12-86af-5d2f-a5d8-ca4a78169f24"))
   (symbol
     (lib_id "Device:R")
-    (at 782.32 69.85 0)
+    (at 760.73 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10008,25 +9949,25 @@
     (fields_autoplaced yes)
     (uuid "72cf5ef0-4f13-53c6-a26e-65625fff1e45")
     (property "Reference" "R15"
-      (at 782.32 62.23 0)
+      (at 760.73 62.23 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "169k"
-      (at 782.32 77.47 0)
+      (at 760.73 77.47 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 782.32 69.85 0)
+      (at 760.73 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 782.32 69.85 0)
+      (at 760.73 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C25758"
-      (at 782.32 69.85 0)
+      (at 760.73 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10035,30 +9976,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R15") (unit 1)))))
   (wire
-    (pts (xy 808.99 66.04) (xy 808.99 63.5))
+    (pts (xy 788.67 66.04) (xy 788.67 63.5))
     (stroke (width 0) (type default))
     (uuid "c87293e5-6708-5a4f-b0ec-d47ca09243db"))
   (label "FB_3V3"
-    (at 808.99 63.5 90)
+    (at 788.67 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "3a99f18f-82e3-53db-8181-633175f0b6d7"))
+    (uuid "1a90db74-59ce-57a6-97cc-ab84e28ffa21"))
   (wire
-    (pts (xy 808.99 73.66) (xy 808.99 76.2))
+    (pts (xy 788.67 73.66) (xy 788.67 76.2))
     (stroke (width 0) (type default))
     (uuid "9d93a07b-cfca-5fbf-a35d-d6e21b1c5b58"))
   (label "GND"
-    (at 808.99 76.2 270)
+    (at 788.67 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "7df04533-fc8b-5f88-8efd-05c49f9d8f9f"))
+    (uuid "41becae8-4dae-5db9-a885-eafd8b6466d2"))
   (symbol
     (lib_id "Device:R")
-    (at 808.99 69.85 0)
+    (at 788.67 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10067,25 +10008,25 @@
     (fields_autoplaced yes)
     (uuid "abeb0a69-0516-5fcf-9ce9-33d8ab630c0c")
     (property "Reference" "R16"
-      (at 808.99 62.23 0)
+      (at 788.67 62.23 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "30.1k"
-      (at 808.99 77.47 0)
+      (at 788.67 77.47 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 808.99 69.85 0)
+      (at 788.67 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 808.99 69.85 0)
+      (at 788.67 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C29402"
-      (at 808.99 69.85 0)
+      (at 788.67 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10094,30 +10035,89 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R16") (unit 1)))))
   (wire
-    (pts (xy 835.66 66.04) (xy 835.66 63.5))
+    (pts (xy 814.07 66.04) (xy 814.07 63.5))
     (stroke (width 0) (type default))
-    (uuid "91cb8650-b2ed-550d-a51d-869e47f271d4"))
+    (uuid "a8fc8f4c-9193-5535-af61-920030550765"))
   (label "3V3"
-    (at 835.66 63.5 90)
+    (at 814.07 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "a787c1f2-1306-5d00-8d6b-e8eaa0c1730e"))
+    (uuid "8f9100f7-7e1f-5a99-9af4-ebf18176bf2a"))
   (wire
-    (pts (xy 835.66 73.66) (xy 835.66 76.2))
+    (pts (xy 814.07 73.66) (xy 814.07 76.2))
     (stroke (width 0) (type default))
-    (uuid "cdbb037c-854e-582c-a0c5-653e8214a6e4"))
+    (uuid "fe4b4804-9f83-5d08-98fd-f64e9d087745"))
   (label "FB_3V3"
-    (at 835.66 76.2 270)
+    (at 814.07 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "a41fbd04-3e88-56b5-bd52-97ae77a88005"))
+    (uuid "be25dc47-164c-5705-9670-68ef478c9ca4"))
   (symbol
     (lib_id "Device:C")
-    (at 835.66 69.85 0)
+    (at 814.07 69.85 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "4869a656-6018-5687-984d-385cf3b61f9a")
+    (property "Reference" "C13"
+      (at 814.07 62.23 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "220p"
+      (at 814.07 77.47 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+      (at 814.07 69.85 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 814.07 69.85 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C1530"
+      (at 814.07 69.85 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "9d816849-1e8d-59ca-9d6c-06675883144e"))
+    (pin "2" (uuid "57f8c39b-487c-5444-8849-0905a83cc98a"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C13") (unit 1)))))
+  (wire
+    (pts (xy 838.2 66.04) (xy 838.2 63.5))
+    (stroke (width 0) (type default))
+    (uuid "91cb8650-b2ed-550d-a51d-869e47f271d4"))
+  (label "3V3"
+    (at 838.2 63.5 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "696536f3-3b30-5830-8d53-60a5419505b6"))
+  (wire
+    (pts (xy 838.2 73.66) (xy 838.2 76.2))
+    (stroke (width 0) (type default))
+    (uuid "cdbb037c-854e-582c-a0c5-653e8214a6e4"))
+  (label "GND"
+    (at 838.2 76.2 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "c7ea3af7-d177-5698-bf8b-5a5a9c7b109e"))
+  (symbol
+    (lib_id "Device:C")
+    (at 838.2 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10126,25 +10126,25 @@
     (fields_autoplaced yes)
     (uuid "99789a36-466c-59cc-9ed3-e2a00313a516")
     (property "Reference" "C14"
-      (at 835.66 62.23 0)
+      (at 838.2 62.23 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "220p"
-      (at 835.66 77.47 0)
+    (property "Value" "10u"
+      (at 838.2 77.47 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 835.66 69.85 0)
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
+      (at 838.2 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 835.66 69.85 0)
+      (at 838.2 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C1530"
-      (at 835.66 69.85 0)
+    (property "LCSC" "C15850"
+      (at 838.2 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10212,86 +10212,86 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C15") (unit 1)))))
   (wire
-    (pts (xy 880.11 66.04) (xy 880.11 63.5))
+    (pts (xy 883.92 66.04) (xy 883.92 63.5))
     (stroke (width 0) (type default))
-    (uuid "8a21f5a9-bc95-5149-8996-f5d82f2b1e4d"))
+    (uuid "c026e0f1-c815-5012-9841-f97fd897e514"))
   (label "1V8A"
-    (at 880.11 63.5 90)
+    (at 883.92 63.5 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "4884b6fc-5ff1-5bc2-b8ef-af02a3c1005d"))
+    (uuid "4151d03d-2df1-54cf-a673-f80009caef67"))
   (wire
-    (pts (xy 880.11 73.66) (xy 880.11 76.2))
+    (pts (xy 883.92 73.66) (xy 883.92 76.2))
     (stroke (width 0) (type default))
-    (uuid "3a960126-7b48-5646-8322-c24e1bec376f"))
-  (label "GND"
-    (at 880.11 76.2 270)
+    (uuid "eda6c75a-2696-5290-98e7-eb2d791236b6"))
+  (label "FB_1V8A"
+    (at 883.92 76.2 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "4573777f-b111-5d3f-9779-9b749ad575dd"))
+    (uuid "29e406b9-7711-5c86-ab81-8b2f9763f1e5"))
   (symbol
-    (lib_id "Device:C")
-    (at 880.11 69.85 0)
+    (lib_id "Device:R")
+    (at 883.92 69.85 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "f0bfd960-22c0-55a7-9481-432022e0567a")
-    (property "Reference" "C16"
-      (at 880.11 62.23 0)
+    (uuid "bc940099-774b-568d-80b5-db4099c21aac")
+    (property "Reference" "R17"
+      (at 883.92 62.23 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "10u"
-      (at 880.11 77.47 0)
+    (property "Value" "78.7k"
+      (at 883.92 77.47 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 880.11 69.85 0)
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 883.92 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 880.11 69.85 0)
+      (at 883.92 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C15850"
-      (at 880.11 69.85 0)
+    (property "LCSC" "C67239"
+      (at 883.92 69.85 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "3135994e-c631-5d1d-9ff5-d58175d395b7"))
-    (pin "2" (uuid "908f3795-9f76-5eb2-87e0-ca7b77bce564"))
+    (pin "1" (uuid "995cccd7-1da9-55df-a073-e82694757ebf"))
+    (pin "2" (uuid "818efd6a-6268-56bd-a882-9c90fac92a71"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C16") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R17") (unit 1)))))
   (wire
     (pts (xy 584.2 85.09) (xy 584.2 82.55))
     (stroke (width 0) (type default))
-    (uuid "c026e0f1-c815-5012-9841-f97fd897e514"))
-  (label "1V8A"
+    (uuid "d2b56a6f-1afa-59c9-947b-882b530cdaa8"))
+  (label "FB_1V8A"
     (at 584.2 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "e4feac53-5010-552e-ae02-e816816d6a8e"))
+    (uuid "267bd119-aca2-5109-9e9b-4d39702c4fe7"))
   (wire
     (pts (xy 584.2 92.71) (xy 584.2 95.25))
     (stroke (width 0) (type default))
-    (uuid "eda6c75a-2696-5290-98e7-eb2d791236b6"))
-  (label "FB_1V8A"
+    (uuid "79d34048-63ae-5162-aa96-63bd3d272140"))
+  (label "GND"
     (at 584.2 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "6bc35854-2265-510d-b7a4-86b00d77891a"))
+    (uuid "b26879d3-dbad-5745-ade7-72b6e72f5110"))
   (symbol
     (lib_id "Device:R")
     (at 584.2 88.9 0)
@@ -10301,12 +10301,12 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "bc940099-774b-568d-80b5-db4099c21aac")
-    (property "Reference" "R17"
+    (uuid "2a88aa6c-872a-5bdf-a127-8a41b8afa357")
+    (property "Reference" "R18"
       (at 584.2 81.28 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "78.7k"
+    (property "Value" "30.1k"
       (at 584.2 96.52 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10320,67 +10320,8 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C67239"
-      (at 584.2 88.9 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "995cccd7-1da9-55df-a073-e82694757ebf"))
-    (pin "2" (uuid "818efd6a-6268-56bd-a882-9c90fac92a71"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R17") (unit 1)))))
-  (wire
-    (pts (xy 613.41 85.09) (xy 613.41 82.55))
-    (stroke (width 0) (type default))
-    (uuid "d2b56a6f-1afa-59c9-947b-882b530cdaa8"))
-  (label "FB_1V8A"
-    (at 613.41 82.55 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "768c1320-eedb-5988-8130-1fe0827fc2fc"))
-  (wire
-    (pts (xy 613.41 92.71) (xy 613.41 95.25))
-    (stroke (width 0) (type default))
-    (uuid "79d34048-63ae-5162-aa96-63bd3d272140"))
-  (label "GND"
-    (at 613.41 95.25 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "e64d5d21-e92c-542b-b299-381180d5a56d"))
-  (symbol
-    (lib_id "Device:R")
-    (at 613.41 88.9 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "2a88aa6c-872a-5bdf-a127-8a41b8afa357")
-    (property "Reference" "R18"
-      (at 613.41 81.28 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "30.1k"
-      (at 613.41 96.52 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 613.41 88.9 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 613.41 88.9 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
     (property "LCSC" "C29402"
-      (at 613.41 88.9 0)
+      (at 584.2 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10389,30 +10330,89 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R18") (unit 1)))))
   (wire
-    (pts (xy 641.35 85.09) (xy 641.35 82.55))
+    (pts (xy 612.14 85.09) (xy 612.14 82.55))
     (stroke (width 0) (type default))
-    (uuid "3b981d47-1f2b-5b0c-b881-564f51c6820f"))
+    (uuid "8a21f5a9-bc95-5149-8996-f5d82f2b1e4d"))
   (label "1V8A"
-    (at 641.35 82.55 90)
+    (at 612.14 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "d265bf9a-ad6c-5343-9f60-bcd67442b64f"))
+    (uuid "5939f033-2870-508f-8633-4a4edb32ec54"))
   (wire
-    (pts (xy 641.35 92.71) (xy 641.35 95.25))
+    (pts (xy 612.14 92.71) (xy 612.14 95.25))
     (stroke (width 0) (type default))
-    (uuid "910a0f9b-98d1-5e7d-9459-f0c54dde000b"))
+    (uuid "3a960126-7b48-5646-8322-c24e1bec376f"))
   (label "FB_1V8A"
-    (at 641.35 95.25 270)
+    (at 612.14 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "eab11f74-e624-50ec-834c-2ce2903516ec"))
+    (uuid "bdae6db6-9e0d-5479-8997-a1d2ef9215da"))
   (symbol
     (lib_id "Device:C")
-    (at 641.35 88.9 0)
+    (at 612.14 88.9 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "f0bfd960-22c0-55a7-9481-432022e0567a")
+    (property "Reference" "C16"
+      (at 612.14 81.28 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "220p"
+      (at 612.14 96.52 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+      (at 612.14 88.9 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 612.14 88.9 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C1530"
+      (at 612.14 88.9 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "3135994e-c631-5d1d-9ff5-d58175d395b7"))
+    (pin "2" (uuid "908f3795-9f76-5eb2-87e0-ca7b77bce564"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C16") (unit 1)))))
+  (wire
+    (pts (xy 636.27 85.09) (xy 636.27 82.55))
+    (stroke (width 0) (type default))
+    (uuid "3b981d47-1f2b-5b0c-b881-564f51c6820f"))
+  (label "1V8A"
+    (at 636.27 82.55 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "3146ca4e-2937-5605-a217-86f8cd240a2e"))
+  (wire
+    (pts (xy 636.27 92.71) (xy 636.27 95.25))
+    (stroke (width 0) (type default))
+    (uuid "910a0f9b-98d1-5e7d-9459-f0c54dde000b"))
+  (label "GND"
+    (at 636.27 95.25 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "d4499839-11e8-5107-a7e5-5fb01fbf131b"))
+  (symbol
+    (lib_id "Device:C")
+    (at 636.27 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10421,25 +10421,25 @@
     (fields_autoplaced yes)
     (uuid "de36f294-0048-5177-ad52-3f6aa953b44d")
     (property "Reference" "C17"
-      (at 641.35 81.28 0)
+      (at 636.27 81.28 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "220p"
-      (at 641.35 96.52 0)
+    (property "Value" "10u"
+      (at 636.27 96.52 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 641.35 88.9 0)
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
+      (at 636.27 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 641.35 88.9 0)
+      (at 636.27 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C1530"
-      (at 641.35 88.9 0)
+    (property "LCSC" "C15850"
+      (at 636.27 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10448,30 +10448,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C17") (unit 1)))))
   (wire
-    (pts (xy 665.48 85.09) (xy 665.48 82.55))
+    (pts (xy 657.86 85.09) (xy 657.86 82.55))
     (stroke (width 0) (type default))
     (uuid "db88c897-f673-5ce7-993f-7e0fc5ea72c2"))
   (label "3V3"
-    (at 665.48 82.55 90)
+    (at 657.86 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "55a8e02f-7022-52c7-b1f3-398a23d91d08"))
+    (uuid "1f30f9e1-10f7-5df6-9b7c-939235f0292b"))
   (wire
-    (pts (xy 665.48 92.71) (xy 665.48 95.25))
+    (pts (xy 657.86 92.71) (xy 657.86 95.25))
     (stroke (width 0) (type default))
     (uuid "6019b0db-7f67-5805-95de-7a2fc98c176b"))
   (label "GND"
-    (at 665.48 95.25 270)
+    (at 657.86 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "3c2790e0-8771-594b-9f9e-5b1202325dde"))
+    (uuid "7caf09ad-2cec-5124-a52b-8574770986ce"))
   (symbol
     (lib_id "Device:C")
-    (at 665.48 88.9 0)
+    (at 657.86 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10480,25 +10480,25 @@
     (fields_autoplaced yes)
     (uuid "0cafaa52-fda0-5090-85cc-9e25c6c7f1b2")
     (property "Reference" "C18"
-      (at 665.48 81.28 0)
+      (at 657.86 81.28 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10u"
-      (at 665.48 96.52 0)
+      (at 657.86 96.52 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 665.48 88.9 0)
+      (at 657.86 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 665.48 88.9 0)
+      (at 657.86 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C15850"
-      (at 665.48 88.9 0)
+      (at 657.86 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10507,86 +10507,86 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C18") (unit 1)))))
   (wire
-    (pts (xy 687.07 85.09) (xy 687.07 82.55))
+    (pts (xy 683.26 85.09) (xy 683.26 82.55))
     (stroke (width 0) (type default))
-    (uuid "13b210c8-3c8f-5319-818f-cd118d76aada"))
+    (uuid "89045dfd-1a46-55e7-a27d-baec98152025"))
   (label "1V8B"
-    (at 687.07 82.55 90)
+    (at 683.26 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "ca3bf867-5c75-543a-9399-32d68f7162ba"))
+    (uuid "1480468d-2318-5bf4-8f9b-e52ab4a9827b"))
   (wire
-    (pts (xy 687.07 92.71) (xy 687.07 95.25))
+    (pts (xy 683.26 92.71) (xy 683.26 95.25))
     (stroke (width 0) (type default))
-    (uuid "7aacef2b-9947-503d-8990-0049dffb2103"))
-  (label "GND"
-    (at 687.07 95.25 270)
+    (uuid "134d967c-11c8-59f3-9081-8473c34505ac"))
+  (label "FB_1V8B"
+    (at 683.26 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "5dbfebcd-45a5-5924-8893-66ee9c20f9fb"))
+    (uuid "54a6c988-f4c4-5c61-82cc-7f83856d556a"))
   (symbol
-    (lib_id "Device:C")
-    (at 687.07 88.9 0)
+    (lib_id "Device:R")
+    (at 683.26 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "b547b98e-67b4-5e69-ac01-c9eea9fadb91")
-    (property "Reference" "C19"
-      (at 687.07 81.28 0)
+    (uuid "702e4732-7f2a-5bbc-a9ce-e223cefac250")
+    (property "Reference" "R19"
+      (at 683.26 81.28 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "10u"
-      (at 687.07 96.52 0)
+    (property "Value" "78.7k"
+      (at 683.26 96.52 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
-      (at 687.07 88.9 0)
+    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
+      (at 683.26 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 687.07 88.9 0)
+      (at 683.26 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C15850"
-      (at 687.07 88.9 0)
+    (property "LCSC" "C67239"
+      (at 683.26 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (pin "1" (uuid "ea51dd3c-46e9-5c8a-8f05-67bab519f6be"))
-    (pin "2" (uuid "12c822d9-cdfd-577a-99cd-1b85da10f446"))
+    (pin "1" (uuid "19285317-676e-5b6f-bfeb-00e0536855f0"))
+    (pin "2" (uuid "7181a308-0466-5d93-8172-3e777e200887"))
     (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C19") (unit 1)))))
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R19") (unit 1)))))
   (wire
     (pts (xy 712.47 85.09) (xy 712.47 82.55))
     (stroke (width 0) (type default))
-    (uuid "89045dfd-1a46-55e7-a27d-baec98152025"))
-  (label "1V8B"
+    (uuid "f6306a1c-2595-5c11-938b-0a11f06c7c7b"))
+  (label "FB_1V8B"
     (at 712.47 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "9bd0e890-b6d5-5897-a59a-a56101251ede"))
+    (uuid "d847b536-663d-571b-9d6f-093363c39ecd"))
   (wire
     (pts (xy 712.47 92.71) (xy 712.47 95.25))
     (stroke (width 0) (type default))
-    (uuid "134d967c-11c8-59f3-9081-8473c34505ac"))
-  (label "FB_1V8B"
+    (uuid "042ff2a5-c16f-5697-994d-8087dd3e8196"))
+  (label "GND"
     (at 712.47 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "4e52523f-9842-5603-b496-7c754f0c6b2c"))
+    (uuid "2641398f-73ff-51db-b9aa-e4454b39f82e"))
   (symbol
     (lib_id "Device:R")
     (at 712.47 88.9 0)
@@ -10596,12 +10596,12 @@
     (on_board yes)
     (dnp no)
     (fields_autoplaced yes)
-    (uuid "702e4732-7f2a-5bbc-a9ce-e223cefac250")
-    (property "Reference" "R19"
+    (uuid "2d565edb-7ec5-5776-8ee1-0c3218bf7ba4")
+    (property "Reference" "R20"
       (at 712.47 81.28 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "78.7k"
+    (property "Value" "30.1k"
       (at 712.47 96.52 0)
       (effects
         (font (size 1.27 1.27))))
@@ -10615,67 +10615,8 @@
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C67239"
-      (at 712.47 88.9 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (pin "1" (uuid "19285317-676e-5b6f-bfeb-00e0536855f0"))
-    (pin "2" (uuid "7181a308-0466-5d93-8172-3e777e200887"))
-    (instances
-      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R19") (unit 1)))))
-  (wire
-    (pts (xy 741.68 85.09) (xy 741.68 82.55))
-    (stroke (width 0) (type default))
-    (uuid "f6306a1c-2595-5c11-938b-0a11f06c7c7b"))
-  (label "FB_1V8B"
-    (at 741.68 82.55 90)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify left))
-    (uuid "85cf360c-0ec8-5533-b84c-a2f90c68592a"))
-  (wire
-    (pts (xy 741.68 92.71) (xy 741.68 95.25))
-    (stroke (width 0) (type default))
-    (uuid "042ff2a5-c16f-5697-994d-8087dd3e8196"))
-  (label "GND"
-    (at 741.68 95.25 270)
-    (fields_autoplaced yes)
-    (effects
-      (font (size 1.27 1.27))
-      (justify right))
-    (uuid "819cbb1d-c7c9-5777-9896-5ad8a0b2dcc9"))
-  (symbol
-    (lib_id "Device:R")
-    (at 741.68 88.9 0)
-    (unit 1)
-    (exclude_from_sim no)
-    (in_bom yes)
-    (on_board yes)
-    (dnp no)
-    (fields_autoplaced yes)
-    (uuid "2d565edb-7ec5-5776-8ee1-0c3218bf7ba4")
-    (property "Reference" "R20"
-      (at 741.68 81.28 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Value" "30.1k"
-      (at 741.68 96.52 0)
-      (effects
-        (font (size 1.27 1.27))))
-    (property "Footprint" "Resistor_SMD:R_0402_1005Metric"
-      (at 741.68 88.9 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
-    (property "Datasheet" ""
-      (at 741.68 88.9 0)
-      (effects
-        (font (size 1.27 1.27))
-        (hide yes)))
     (property "LCSC" "C29402"
-      (at 741.68 88.9 0)
+      (at 712.47 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10684,30 +10625,89 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "R20") (unit 1)))))
   (wire
-    (pts (xy 769.62 85.09) (xy 769.62 82.55))
+    (pts (xy 740.41 85.09) (xy 740.41 82.55))
     (stroke (width 0) (type default))
-    (uuid "db75359c-38ab-57e6-8a7d-88ec1c07b428"))
+    (uuid "13b210c8-3c8f-5319-818f-cd118d76aada"))
   (label "1V8B"
-    (at 769.62 82.55 90)
+    (at 740.41 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "c40f560f-f2a3-5e50-b587-e99991a1f047"))
+    (uuid "a587a6c4-d838-5f4e-bcb2-06e630603f9d"))
   (wire
-    (pts (xy 769.62 92.71) (xy 769.62 95.25))
+    (pts (xy 740.41 92.71) (xy 740.41 95.25))
     (stroke (width 0) (type default))
-    (uuid "a6e8db54-a8df-50ef-9c34-d9f75da0dfe1"))
+    (uuid "7aacef2b-9947-503d-8990-0049dffb2103"))
   (label "FB_1V8B"
-    (at 769.62 95.25 270)
+    (at 740.41 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "018efa96-1fd7-5a8f-94ea-99e26b44ef64"))
+    (uuid "dbfb6f29-04d4-5a71-a229-682827590b15"))
   (symbol
     (lib_id "Device:C")
-    (at 769.62 88.9 0)
+    (at 740.41 88.9 0)
+    (unit 1)
+    (exclude_from_sim no)
+    (in_bom yes)
+    (on_board yes)
+    (dnp no)
+    (fields_autoplaced yes)
+    (uuid "b547b98e-67b4-5e69-ac01-c9eea9fadb91")
+    (property "Reference" "C19"
+      (at 740.41 81.28 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Value" "220p"
+      (at 740.41 96.52 0)
+      (effects
+        (font (size 1.27 1.27))))
+    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
+      (at 740.41 88.9 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "Datasheet" ""
+      (at 740.41 88.9 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (property "LCSC" "C1530"
+      (at 740.41 88.9 0)
+      (effects
+        (font (size 1.27 1.27))
+        (hide yes)))
+    (pin "1" (uuid "ea51dd3c-46e9-5c8a-8f05-67bab519f6be"))
+    (pin "2" (uuid "12c822d9-cdfd-577a-99cd-1b85da10f446"))
+    (instances
+      (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C19") (unit 1)))))
+  (wire
+    (pts (xy 764.54 85.09) (xy 764.54 82.55))
+    (stroke (width 0) (type default))
+    (uuid "db75359c-38ab-57e6-8a7d-88ec1c07b428"))
+  (label "1V8B"
+    (at 764.54 82.55 90)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify left))
+    (uuid "a6eaa7ac-d483-5a8c-86d8-34cd4d451c0a"))
+  (wire
+    (pts (xy 764.54 92.71) (xy 764.54 95.25))
+    (stroke (width 0) (type default))
+    (uuid "a6e8db54-a8df-50ef-9c34-d9f75da0dfe1"))
+  (label "GND"
+    (at 764.54 95.25 270)
+    (fields_autoplaced yes)
+    (effects
+      (font (size 1.27 1.27))
+      (justify right))
+    (uuid "cc655354-f102-57f5-944a-6072bed4c39c"))
+  (symbol
+    (lib_id "Device:C")
+    (at 764.54 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10716,25 +10716,25 @@
     (fields_autoplaced yes)
     (uuid "2daad8f5-f7d4-5165-9437-5389a04cd819")
     (property "Reference" "C20"
-      (at 769.62 81.28 0)
+      (at 764.54 81.28 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Value" "220p"
-      (at 769.62 96.52 0)
+    (property "Value" "10u"
+      (at 764.54 96.52 0)
       (effects
         (font (size 1.27 1.27))))
-    (property "Footprint" "Capacitor_SMD:C_0402_1005Metric"
-      (at 769.62 88.9 0)
+    (property "Footprint" "Capacitor_SMD:C_0805_2012Metric"
+      (at 764.54 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 769.62 88.9 0)
+      (at 764.54 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
-    (property "LCSC" "C1530"
-      (at 769.62 88.9 0)
+    (property "LCSC" "C15850"
+      (at 764.54 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10743,30 +10743,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C20") (unit 1)))))
   (wire
-    (pts (xy 793.75 85.09) (xy 791.21 85.09))
+    (pts (xy 784.86 85.09) (xy 782.32 85.09))
     (stroke (width 0) (type default))
     (uuid "de7bd036-9f4a-5a05-a5bb-8705a30741bf"))
   (label "3V3"
-    (at 791.21 85.09 180)
+    (at 782.32 85.09 180)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "6819444d-35a7-50fb-adae-026273047f6c"))
+    (uuid "1fd50895-a84e-572a-8033-18f04b69081d"))
   (wire
-    (pts (xy 801.37 85.09) (xy 803.91 85.09))
+    (pts (xy 792.48 85.09) (xy 795.02 85.09))
     (stroke (width 0) (type default))
     (uuid "0c42224b-50e0-57eb-8853-f56d716f483a"))
   (label "1V8A"
-    (at 803.91 85.09 0)
+    (at 795.02 85.09 0)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "b828bafb-3921-5eda-a4c1-4b10683aadb0"))
+    (uuid "965b597f-5216-55ee-aac7-e631366092c4"))
   (symbol
     (lib_id "Device:D_Schottky")
-    (at 797.56 85.09 0)
+    (at 788.67 85.09 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10775,25 +10775,25 @@
     (fields_autoplaced yes)
     (uuid "69426bbb-14d6-5e76-9eb4-329de341cb8e")
     (property "Reference" "D1"
-      (at 797.56 81.28 0)
+      (at 788.67 81.28 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "B5819W"
-      (at 797.56 88.9 0)
+      (at 788.67 88.9 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Diode_SMD:D_SOD-123"
-      (at 797.56 85.09 0)
+      (at 788.67 85.09 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 797.56 85.09 0)
+      (at 788.67 85.09 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C8598"
-      (at 797.56 85.09 0)
+      (at 788.67 85.09 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10802,30 +10802,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "D1") (unit 1)))))
   (wire
-    (pts (xy 825.5 85.09) (xy 825.5 82.55))
+    (pts (xy 816.61 85.09) (xy 816.61 82.55))
     (stroke (width 0) (type default))
     (uuid "7813a748-9e8b-53c8-ba5d-254cd80acc3e"))
   (label "1V8A"
-    (at 825.5 82.55 90)
+    (at 816.61 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "7334d673-e7e3-57dc-a43f-18f62041baaa"))
+    (uuid "531c5f57-2670-52cc-87a8-a7a1818aa54b"))
   (wire
-    (pts (xy 825.5 92.71) (xy 825.5 95.25))
+    (pts (xy 816.61 92.71) (xy 816.61 95.25))
     (stroke (width 0) (type default))
     (uuid "9e95a1c9-3bb1-5a02-bd84-077c8f845a38"))
   (label "AV_DVDD"
-    (at 825.5 95.25 270)
+    (at 816.61 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "ddfef08d-480a-59fc-a7c6-0ee1200cd0bd"))
+    (uuid "ddee2f9d-0747-5daa-bb08-09943d73dec8"))
   (symbol
     (lib_id "Device:FerriteBead")
-    (at 825.5 88.9 0)
+    (at 816.61 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10834,25 +10834,25 @@
     (fields_autoplaced yes)
     (uuid "656a6cd9-dcda-5f8c-9db6-32a5693bab83")
     (property "Reference" "FB1"
-      (at 825.5 81.28 0)
+      (at 816.61 81.28 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "120R"
-      (at 825.5 96.52 0)
+      (at 816.61 96.52 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Inductor_SMD:L_0603_1608Metric"
-      (at 825.5 88.9 0)
+      (at 816.61 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 825.5 88.9 0)
+      (at 816.61 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C14709"
-      (at 825.5 88.9 0)
+      (at 816.61 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10861,30 +10861,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "FB1") (unit 1)))))
   (wire
-    (pts (xy 852.17 85.09) (xy 852.17 82.55))
+    (pts (xy 844.55 85.09) (xy 844.55 82.55))
     (stroke (width 0) (type default))
     (uuid "b496f407-eb5a-52f1-b136-934c5799a1ec"))
   (label "AV_DVDD"
-    (at 852.17 82.55 90)
+    (at 844.55 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "5e09f30e-92ab-5cd2-8889-82da81647aad"))
+    (uuid "f6fa785f-766a-5811-8a54-45854504ff81"))
   (wire
-    (pts (xy 852.17 92.71) (xy 852.17 95.25))
+    (pts (xy 844.55 92.71) (xy 844.55 95.25))
     (stroke (width 0) (type default))
     (uuid "8e992305-0c1d-58fc-9fa6-930d8d8cd2ac"))
   (label "GND"
-    (at 852.17 95.25 270)
+    (at 844.55 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "6456e415-f79c-5c8b-9d9b-3b03176ab1c0"))
+    (uuid "4c441338-8fa5-5d5d-bcc0-be8b4790677f"))
   (symbol
     (lib_id "Device:C")
-    (at 852.17 88.9 0)
+    (at 844.55 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10893,25 +10893,25 @@
     (fields_autoplaced yes)
     (uuid "cb3354e8-56d3-53e4-9637-3c240548553b")
     (property "Reference" "C21"
-      (at 852.17 81.28 0)
+      (at 844.55 81.28 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "10u"
-      (at 852.17 96.52 0)
+      (at 844.55 96.52 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Capacitor_SMD:C_0603_1608Metric"
-      (at 852.17 88.9 0)
+      (at 844.55 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 852.17 88.9 0)
+      (at 844.55 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C19702"
-      (at 852.17 88.9 0)
+      (at 844.55 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
@@ -10920,30 +10920,30 @@
     (instances
       (project "av-board-b" (path "/32a576fd-87b7-5d3e-9be1-82bbddc38d72" (reference "C21") (unit 1)))))
   (wire
-    (pts (xy 878.84 85.09) (xy 878.84 82.55))
+    (pts (xy 871.22 85.09) (xy 871.22 82.55))
     (stroke (width 0) (type default))
     (uuid "b3ec3dbd-8eab-59da-a58c-5f69f7033420"))
   (label "1V8A"
-    (at 878.84 82.55 90)
+    (at 871.22 82.55 90)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify left))
-    (uuid "88019f8c-7d63-59d0-b617-d9d44d5f5b74"))
+    (uuid "afd560dd-37d0-52d5-a3a0-a100f2140706"))
   (wire
-    (pts (xy 878.84 92.71) (xy 878.84 95.25))
+    (pts (xy 871.22 92.71) (xy 871.22 95.25))
     (stroke (width 0) (type default))
     (uuid "167871d0-1993-5bdc-953e-21894c5dfcaf"))
   (label "AV_PVDD"
-    (at 878.84 95.25 270)
+    (at 871.22 95.25 270)
     (fields_autoplaced yes)
     (effects
       (font (size 1.27 1.27))
       (justify right))
-    (uuid "b68cc012-e39d-5dbd-8822-e893fe23af37"))
+    (uuid "55be305f-d4e4-5ce4-8619-ee164b7c8807"))
   (symbol
     (lib_id "Device:FerriteBead")
-    (at 878.84 88.9 0)
+    (at 871.22 88.9 0)
     (unit 1)
     (exclude_from_sim no)
     (in_bom yes)
@@ -10952,25 +10952,25 @@
     (fields_autoplaced yes)
     (uuid "482ad9b8-576c-514c-9ffe-fe36882ce30d")
     (property "Reference" "FB2"
-      (at 878.84 81.28 0)
+      (at 871.22 81.28 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Value" "120R"
-      (at 878.84 96.52 0)
+      (at 871.22 96.52 0)
       (effects
         (font (size 1.27 1.27))))
     (property "Footprint" "Inductor_SMD:L_0603_1608Metric"
-      (at 878.84 88.9 0)
+      (at 871.22 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "Datasheet" ""
-      (at 878.84 88.9 0)
+      (at 871.22 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))
     (property "LCSC" "C14709"
-      (at 878.84 88.9 0)
+      (at 871.22 88.9 0)
       (effects
         (font (size 1.27 1.27))
         (hide yes)))

@@ -370,15 +370,11 @@
     "netclass_patterns": [
       {
         "netclass": "POWER",
-        "pattern": "TX_AVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_DVDD"
-      },
-      {
-        "netclass": "POWER",
         "pattern": "+5V"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "1V8A"
       },
       {
         "netclass": "POWER",
@@ -386,11 +382,7 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_DVDDIO"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "SPDIF_5V"
+        "pattern": "3V3"
       },
       {
         "netclass": "POWER",
@@ -398,7 +390,43 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "1V8A"
+        "pattern": "5VA"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_DVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_DVDDIO"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "AV_PVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "HDMI_5V"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "SPDIF_5V"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "SW_3V6"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_AVDD"
+      },
+      {
+        "netclass": "POWER",
+        "pattern": "TX_DVDD"
       },
       {
         "netclass": "POWER",
@@ -410,47 +438,19 @@
       },
       {
         "netclass": "POWER",
-        "pattern": "AV_AVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "5VA"
-      },
-      {
-        "netclass": "POWER",
         "pattern": "XIAO_5V"
       },
       {
-        "netclass": "POWER",
-        "pattern": "HDMI_5V"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "3V3"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "TX_DVDD"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "SW_3V6"
-      },
-      {
-        "netclass": "POWER",
-        "pattern": "AV_PVDD"
+        "netclass": "TMDS",
+        "pattern": "TMDS_CK_N"
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_D2_N"
+        "pattern": "TMDS_CK_P"
       },
       {
         "netclass": "TMDS",
         "pattern": "TMDS_D0_N"
-      },
-      {
-        "netclass": "TMDS",
-        "pattern": "TMDS_D2_P"
       },
       {
         "netclass": "TMDS",
@@ -462,15 +462,15 @@
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_CK_N"
-      },
-      {
-        "netclass": "TMDS",
         "pattern": "TMDS_D1_P"
       },
       {
         "netclass": "TMDS",
-        "pattern": "TMDS_CK_P"
+        "pattern": "TMDS_D2_N"
+      },
+      {
+        "netclass": "TMDS",
+        "pattern": "TMDS_D2_P"
       },
       {
         "netclass": "CLOCK",
@@ -478,11 +478,11 @@
       },
       {
         "netclass": "CLOCK",
-        "pattern": "OUT_CLK"
+        "pattern": "IN_LLC"
       },
       {
         "netclass": "CLOCK",
-        "pattern": "IN_LLC"
+        "pattern": "OUT_CLK"
       },
       {
         "netclass": "XTAL",
@@ -494,6 +494,14 @@
       },
       {
         "netclass": "AREF",
+        "pattern": "CAPC2"
+      },
+      {
+        "netclass": "AREF",
+        "pattern": "CAPY1"
+      },
+      {
+        "netclass": "AREF",
         "pattern": "CAPY2"
       },
       {
@@ -502,31 +510,11 @@
       },
       {
         "netclass": "AREF",
-        "pattern": "CAPY1"
-      },
-      {
-        "netclass": "AREF",
-        "pattern": "CAPC2"
-      },
-      {
-        "netclass": "AREF",
         "pattern": "REFOUT"
       },
       {
         "netclass": "ANALOG",
-        "pattern": "VGA_R"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "RCA_R"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "RCA_SYNC"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "AUD_DIV_L"
+        "pattern": "AIN_PB"
       },
       {
         "netclass": "ANALOG",
@@ -534,11 +522,39 @@
       },
       {
         "netclass": "ANALOG",
-        "pattern": "RCA_L"
+        "pattern": "AIN_VB"
       },
       {
         "netclass": "ANALOG",
-        "pattern": "AIN_VB"
+        "pattern": "AIN_VG"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "AIN_VR"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "AIN_Y"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "AUD_DIV_L"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "AUD_DIV_R"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "AUD_VINL"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "AUD_VINR"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "RCA_L"
       },
       {
         "netclass": "ANALOG",
@@ -550,31 +566,23 @@
       },
       {
         "netclass": "ANALOG",
-        "pattern": "SYNC_Y"
+        "pattern": "RCA_R"
       },
       {
         "netclass": "ANALOG",
-        "pattern": "AIN_VR"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "AIN_PB"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "AUD_DIV_R"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "AIN_Y"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "AUD_VINR"
+        "pattern": "RCA_SYNC"
       },
       {
         "netclass": "ANALOG",
         "pattern": "RCA_Y"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "SYNC_G"
+      },
+      {
+        "netclass": "ANALOG",
+        "pattern": "SYNC_Y"
       },
       {
         "netclass": "ANALOG",
@@ -586,15 +594,7 @@
       },
       {
         "netclass": "ANALOG",
-        "pattern": "AUD_VINL"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "AIN_VG"
-      },
-      {
-        "netclass": "ANALOG",
-        "pattern": "SYNC_G"
+        "pattern": "VGA_R"
       }
     ]
   },

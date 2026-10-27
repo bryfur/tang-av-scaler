@@ -26,12 +26,16 @@ import math
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 
 import pcbnew
 from pcbnew import VECTOR2I, FromMM, ToMM
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import doubled  # noqa: E402
 
 KIT = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(os.path.dirname(KIT), "lib")
@@ -184,7 +188,7 @@ def covered(b, eps=0.03):
     """Copper the router laid twice over: each unlocked segment lying wholly on another of its net
     and layer, at least as wide (both its ends within (wB - wA) / 2 + eps mm of the other's centre
     line); of two identical ones, one. It joins nothing the wider one does not (freerouting leaves
-    such copies where it routes over its own track: kit/doubled.py lists the side-by-side ones)."""
+    such copies where it routes over its own track; the side-by-side ones: beside())."""
     by = {}
     for t in b.GetTracks():
         if t.GetClass() == "PCB_TRACK":
@@ -205,6 +209,67 @@ def covered(b, eps=0.03):
                     gone.append(t)
                     break
     return gone
+
+
+def beside(b):
+    """Copper the router laid twice side by side: the shorter of each pair kit/doubled.py finds
+    (same net and layer, within 10 degrees, the shorter within 0.35 mm of the other), unless
+    locked. Taking one up leaves its path's stubs dangling, for the next round of prune()."""
+    out = {}
+    for _, short, _, _, _, _ in doubled.pairs(b):
+        if not short.IsLocked():
+            out.setdefault(short.m_Uuid.AsString(), short)
+    return list(out.values())
+
+
+TRACK = re.compile(r"^\t\((?:segment|via|arc)\n.*?^\t\)\n", re.M | re.S)
+
+
+def save_without(path, items, out):
+    """A copy of the board at path, its project file beside it, without the given tracks: taken out
+    of the file's text (each track a block of its own, tab-indented), no pcbnew board touched."""
+    gone = {t.m_Uuid.AsString() for t in items}
+    left = set(gone)
+
+    def drop(m):
+        uuid = re.search(r'^\t\t\(uuid "([^"]+)"\)$', m.group(0), re.M).group(1)
+        if uuid not in gone:
+            return m.group(0)
+        left.discard(uuid)
+        return ""
+    with open(path) as f:
+        text = TRACK.sub(drop, f.read())
+    if left:
+        raise RuntimeError("%d of the tracks to take out not found in %s" % (len(left), path))
+    with open(out, "w") as f:
+        f.write(text)
+    pro = os.path.splitext(path)[0] + ".kicad_pro"
+    if os.path.exists(pro):
+        shutil.copy(pro, os.path.splitext(out)[0] + ".kicad_pro")
+
+
+def removable(path, rpt, items, loose_ok):
+    """Of the tracks given (copper laid twice), the ones that can go: all of them if DRC of the board
+    without them (save_without()) finds no more connections missing, nor, unless loose_ok, ends
+    left dangling (a copy lying on a track may stick out past it: a pad touching only that end);
+    else each that can, one by one. rpt: the board's DRC report as it is, nothing dangling."""
+    def fine(sub):
+        with tempfile.TemporaryDirectory() as tmp:
+            check = os.path.join(tmp, "prune.kicad_pcb")
+            save_without(path, sub, check)
+            after = drc_report(check, "--severity-all")
+        cut = len(after["unconnected_items"]) - len(rpt["unconnected_items"])
+        loose = sum(1 for v in after["violations"] if v["type"] in ("via_dangling", "track_dangling"))
+        return cut <= 0 and (loose_ok or not loose)
+    if not items or fine(items):
+        return items
+    can = []
+    for t in items:
+        if fine(can + [t]):
+            can.append(t)
+    print("copper laid twice kept: %d of %d copies, without them DRC finds connections missing%s"
+          % (len(items) - len(can), len(items), "" if loose_ok else " or ends dangling"))
+    return can
 
 
 def drc_report(path, *flags):
@@ -1201,17 +1266,24 @@ class Layout:
 
     # --- routing ------------------------------------------------------------
 
-    def prune(self, path, rounds=5):
+    def prune(self, path, rounds=10):
         """Remove the vias and track ends KiCad's DRC reports as dangling (fanout the router did not
-        use, stubs it left), round after round, refilling the zones each time: each round in a
-        process of its own (gen_pcb.py --prune-round), as pcbnew, once it has filled zones, hands
-        back the next board it loads without its type."""
+        use, stubs it left) and the copper it laid twice, round after round, refilling the zones
+        each time: each round in a process of its own (gen_pcb.py --prune-round), as pcbnew, once
+        it has filled zones, hands back the next board it loads without its type. A round that
+        crashes (pcbnew is native code) shows its signal and, from faulthandler, where it was."""
         removed, twice = 0, 0
         for _ in range(rounds):
-            r = subprocess.run([sys.executable, os.path.join(self.DIR, "gen_pcb.py"), "--prune-round"],
-                               env=dict(os.environ, PCB=path), capture_output=True, text=True)
+            r = subprocess.run([sys.executable, "-X", "faulthandler", os.path.join(self.DIR, "gen_pcb.py"),
+                                "--prune-round"], env=dict(os.environ, PCB=path), capture_output=True, text=True)
             if r.returncode:
-                raise RuntimeError("prune round on %s failed:\n%s" % (path, (r.stdout + r.stderr).strip()[-800:]))
+                how = ("killed by %s" % signal.Signals(-r.returncode).name if r.returncode < 0
+                       else "exit %d" % r.returncode)
+                raise RuntimeError("prune round on %s failed (%s):\n%s"
+                                   % (path, how, (r.stdout + r.stderr).strip()[-1500:]))
+            for line in r.stdout.splitlines():
+                if line.startswith("copper laid twice kept"):
+                    print(line)
             n, d = map(int, re.search(r"pruned (\d+) \((\d+) laid twice\)", r.stdout).groups())
             removed += n
             twice += d
@@ -1220,34 +1292,20 @@ class Layout:
         print("dangling vias and stubs removed: %d; segments laid twice over: %d" % (removed - twice, twice))
 
     def prune_round(self, path):
-        """One round of prune(): the dangling items DRC lists taken out, the zones filled again;
-        once none are left, the copper laid twice over (covered()), unless DRC then finds more
-        connections missing or an end left dangling (covered() lets a copy stick out 0.03 mm past
-        the track it lies on: a pad touching only that would be cut off)."""
-        dangling = ("via_dangling", "track_dangling")
+        """One round of prune(): the dangling items DRC lists taken out; once none are left, the
+        copper laid twice that removable() lets go, the copies lying on another track of their net
+        (covered()) first, then the ones beside one (beside()); the zones filled again. What is
+        to go is checked on a copy of the file first, so nothing taken out is ever put back."""
         rpt = drc_report(path, "--severity-all")
-        dead = {it["uuid"] for v in rpt["violations"] if v["type"] in dangling for it in v["items"]}
+        dead = {it["uuid"] for v in rpt["violations"] if v["type"] in ("via_dangling", "track_dangling")
+                for it in v["items"]}
         b = pcbnew.LoadBoard(path)
         gone = [t for t in list(b.GetTracks()) if t.m_Uuid.AsString() in dead]
-        twice = [] if gone else covered(b)
+        twice = []
+        if not gone:
+            twice = removable(path, rpt, covered(b), False) or removable(path, rpt, beside(b), True)
         for t in gone + twice:
             b.Remove(t)
-        if twice:
-            with tempfile.TemporaryDirectory() as tmp:
-                check = os.path.join(tmp, "prune.kicad_pcb")
-                pcbnew.SaveBoard(check, b)
-                pro = os.path.splitext(path)[0] + ".kicad_pro"
-                if os.path.exists(pro):
-                    shutil.copy(pro, os.path.join(tmp, "prune.kicad_pro"))
-                after = drc_report(check, "--severity-all")
-            cut = len(after["unconnected_items"]) - len(rpt["unconnected_items"])
-            loose = sum(1 for v in after["violations"] if v["type"] in dangling)
-            if cut > 0 or loose:
-                print("copper laid twice kept: without it %d more connections missing, %d ends dangling"
-                      % (cut, loose))
-                for t in twice:
-                    b.Add(t)
-                twice = []
         if gone or twice:
             b.BuildConnectivity()
             pcbnew.ZONE_FILLER(b).Fill(b.Zones())
@@ -1528,7 +1586,9 @@ class Layout:
     def finish_unconnected(self, rounds=6, rip=True):
         """Whatever DRC still reports unconnected, by mazeroute.py: for each gap, the pads on its
         two sides (a pad named, or the pads of the copper island a named track belongs to), the
-        nearest pair routed; once more over a wider window if the first try finds no path; then
+        nearest three pairs tried in turn (the nearest can be walled in where the next is not: rev
+        B's TX_PLVDD pin 21, 3.87 mm from pin 26 round the chip's corner, 3.91 mm from its own
+        capacitor), each once more over a wider window if the first try finds no path; then
         by rip-up (mazeroute.py MAZE_SOFT: through other signal nets' unlocked copper, which is
         taken up), what it took up joined again at once, and all of it taken back unless fewer
         gaps are left: a gap walled in by other nets' tracks stayed open otherwise (rev B's
@@ -1554,14 +1614,16 @@ class Layout:
                     x, y = it["pos"]["x"], it["pos"]["y"]
                     hit = [k for k, isl_ in enumerate(isl) if any(math.hypot(x - px, y - py) < 0.05 for px, py in isl_["pts"])]
                     sides.append(isl[hit[0]]["pads"] if hit else [])
-                cands = [(math.hypot(a[1] - c[1], a[2] - c[2]), a[0], c[0]) for a in sides[0] for c in sides[1]]
+                cands = sorted((math.hypot(a[1] - c[1], a[2] - c[2]), a[0], c[0]) for a in sides[0] for c in sides[1])
                 if cands:
-                    pairs.append((net, min(cands)))
+                    pairs.append((net, [(a, z) for _, a, z in cands[:3]]))
             del b
-            for net, (_, a, z) in pairs:
+            for net, tries in pairs:
                 w = 0.25 if net in self.POWER_NETS else self.TRACK
-                if self.maze_try(a, z, w, {"MAZE_MARGIN": "4"}) or self.maze_try(a, z, w, {"MAZE_MARGIN": "8"}):
+                if any(self.maze_try(a, z, w, {"MAZE_MARGIN": "4"}) or self.maze_try(a, z, w, {"MAZE_MARGIN": "8"})
+                       for a, z in tries):
                     continue
+                a, z = tries[0]
                 if not rip or net in self.POWER_NETS | {"GND"} or (a, z) in given_up:
                     continue
                 kept = False

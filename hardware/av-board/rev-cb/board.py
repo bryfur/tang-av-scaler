@@ -37,15 +37,17 @@ block("dp159")
 # 6.8 pF feed-forward for R2 = 100 k [8.2.2.2]; 2.2 uH with 10 uF for 0.6-1.2 V out [Table 4]
 part("U7", "TLV62569DBVR", "lcsc:TLV62569DBVR", "lcsc:SOT-23-5_L3.0-W1.7-P0.95-LS2.8-BR", "C141836",
      {"1": "+5V", "2": "GND", "3": "SW_1V1", "4": "+5V", "5": "FB_1V1"})
-# (in rev B's 3V6 buck's order, each by its pin [TI-BUCK 10.1]: VIN's capacitor, the feedback
-# divider, the inductor, the capacitor at its output)
+# (each by its pin [TI-BUCK 10.1]: VIN's capacitor, the inductor at SW and the capacitor at its
+# output, then the feedback divider by FB, away from the switch node. In rev B's 3V6 buck's order,
+# the divider before the inductor, the divider's 6.8 pF took the inductor's place beside SW here:
+# the inductor went above the chip, its SW pad turned away, 10.7 mm of SW track 0.2 mm from FB's)
 C("10u", "+5V", size="C0805", at="U7.4")
-R("82.5k", "1V1", "FB_1V1")
-R("100k", "FB_1V1", "GND")
-C("6.8p", "1V1", "FB_1V1")
 L_1V1 = nxt("L")
 two(L_1V1, "L3015", "2.2uH", "SW_1V1", "1V1")
 C("10u", "1V1", size="C0805", at=L_1V1 + ".2")
+R("82.5k", "1V1", "FB_1V1")
+R("100k", "FB_1V1", "GND")
+C("6.8p", "1V1", "FB_1V1")
 
 DP = lib_pins("lcsc:SN65DP159RGZR")
 u2 = {}
