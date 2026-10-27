@@ -96,6 +96,49 @@ def courtyard(fp, margin=0.25):
             ToMM(bb.GetRight()) + margin, ToMM(bb.GetBottom()) + margin)
 
 
+def clip_line(a, z, w, boxes, keep, shortest=0.2):
+    """The pieces of the line a-z (mm, w wide) that stay inside keep and out of every box (each
+    (x0, y0, x1, y1)), its edges w / 2 off them; pieces cut shorter than shortest are dropped (the
+    whole line, left as it is, stays)."""
+    dx, dy = z[0] - a[0], z[1] - a[1]
+
+    def span(q, grow):
+        # the stretch [t0, t1] of a + t (z - a) inside the box q grown by grow (Liang-Barsky)
+        x0, y0, x1, y1 = q[0] - grow, q[1] - grow, q[2] + grow, q[3] + grow
+        t0, t1 = 0.0, 1.0
+        for p, d in ((-dx, a[0] - x0), (dx, x1 - a[0]), (-dy, a[1] - y0), (dy, y1 - a[1])):
+            if abs(p) < 1e-12:
+                if d < 0:
+                    return None
+            elif p < 0:
+                t0 = max(t0, d / p)
+            else:
+                t1 = min(t1, d / p)
+        return (t0, t1) if t0 < t1 else None
+    # (a line cut once ends on a box's edge, rounded to 1 nm: only what reaches more than eps past
+    # an edge is cut, and then at the edge itself)
+    eps = 1e-4
+    k = span(keep, eps - w / 2)
+    if k is None:
+        return []
+    if k != (0.0, 1.0):
+        k = span(keep, -w / 2) or k
+    pieces, t = [], k[0]
+    for c0, c1 in sorted(span(q, w / 2) for q in boxes if span(q, w / 2 - eps)):
+        if c0 > t:
+            pieces.append((t, min(c0, k[1])))
+        t = max(t, c1)
+        if t >= k[1]:
+            break
+    if t < k[1]:
+        pieces.append((t, k[1]))
+    n = math.hypot(dx, dy)
+    if pieces == [(0.0, 1.0)]:
+        return [(a, z)]
+    return [((a[0] + dx * t0, a[1] + dy * t0), (a[0] + dx * t1, a[1] + dy * t1))
+            for t0, t1 in pieces if (t1 - t0) * n >= shortest]
+
+
 def inside(poly, r, c):
     """Point in polygon (any 2D coordinates: rev A's planes use the BGA's ball grid)."""
     n, hit = len(poly), False
@@ -361,7 +404,8 @@ class Layout:
     BUSES = []              # (header, IC): crossings reported after placement
     FPGA_HEADERS = ("J9", "J10")    # the FPGA's side: a series resistor on a line it drives sits there
     # Silkscreen: designators only for the parts one finds by eye; labels by the jacks (inboard of
-    # the jack's body, at its board edge), near parts (ref, text), a header's pins (ref, {pad: text}[,
+    # the jack's body, at its board edge), near parts (ref, text[, angle]: turned that much, beside the
+    # part rather than above or below it), a header's pins (ref, {pad: text}[,
     # "left"]: see pin_labels; the header's designator then hidden), and the board's name (TITLE_AT:
     # (x, y[, angle]) its centre, else near the bottom edge's middle). SILK_HIDDEN: boxes a label
     # would be hidden in once the parts are fitted, besides their bodies (rev C: under the SOM)
@@ -371,6 +415,14 @@ class Layout:
     SILK_PINS = []
     TITLE_AT = None
     SILK_HIDDEN = []
+    # [JLCPCB's capabilities: silkscreen lines 0.15 mm wide at least, 0.15 mm from pads; text 1 mm
+    # high at least, its stroke 1:6 of that]
+    SILK_W, SILK_PAD, SILK_TEXT = 0.15, 0.15, 1.0
+
+    @staticmethod
+    def stroke(size):
+        """A silkscreen text's stroke for its height (mm): JLCPCB's 1:6, 0.15 mm at least."""
+        return max(0.15, round(size / 6, 3))
 
     def __init__(self, board, here):
         self.board = board
@@ -763,7 +815,7 @@ class Layout:
     def pin_labels(self, b, fp, names, side=None):
         """A labelled header's pin labels (SILK_PINS): [(text, box)], not yet on the board. Pins in a
         row: each label under its pin, below the body, every other one above it where neighbours
-        would run together (0.9 mm text at 2.54 mm: TCK TDO TDI TMS); pins in a column: each beside
+        would run together (1 mm text at 2.54 mm: TCK TDO TDI TMS); pins in a column: each beside
         its pin, right of the body (side "left": left of it). The placer keeps their boxes free of
         parts, so that no label ends up under a part or over a pad."""
         bb = fp.GetBoundingBox(False, False)
@@ -775,8 +827,8 @@ class Layout:
             t = pcbnew.PCB_TEXT(b)
             t.SetText(s_)
             t.SetLayer(pcbnew.F_SilkS)
-            t.SetTextSize(VECTOR2I(FromMM(0.9), FromMM(0.9)))
-            t.SetTextThickness(FromMM(0.15))
+            t.SetTextSize(VECTOR2I(FromMM(self.SILK_TEXT), FromMM(self.SILK_TEXT)))
+            t.SetTextThickness(FromMM(self.stroke(self.SILK_TEXT)))
             t.SetHorizJustify(just)
             t.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
             r = t.GetBoundingBox()
@@ -794,11 +846,12 @@ class Layout:
     def silkscreen(self, b):
         """Designators only for the parts one finds by eye (SILK_KEEP); the passives' stay on the
         fab layer (JLCPCB places from the CPL, and 0402s leave no room). Labels by the inputs and
-        outputs, and the board's. Each text on the board, clear of the pads and of the texts
-        before it, a label also of the parts' bodies (and SILK_HIDDEN: where it would be hidden
-        once they are fitted): the headers' pin labels first (each belongs at its pin), then the
-        board's name, the jacks' and parts' labels, last the designators (hidden where there is
-        no room); a label left with no clear place is reported."""
+        outputs, and the board's. Each text on the board, 1 mm high at least (SILK_TEXT), clear of
+        the pads, of the texts before it and of the other parts' bodies (and for a label of
+        SILK_HIDDEN: where it would be hidden once they are fitted): the headers' pin labels first
+        (each belongs at its pin), then the board's name, the jacks' and parts' labels, last the
+        designators (hidden where there is no room); a label left with no clear place is
+        reported. Then the parts' own silkscreen, cut back around it all (silk_tidy())."""
         silk = (pcbnew.F_SilkS, pcbnew.B_SilkS)
         X0, Y0, X1, Y1 = self.X0, self.Y0, self.X1, self.Y1
         # copper a text must keep off, per side (through-hole pads on both); the parts' bodies
@@ -818,14 +871,15 @@ class Layout:
         def hits(box, boxes):
             return any(box[2] > q[0] and box[0] < q[2] and box[3] > q[1] and box[1] < q[3] for q in boxes)
 
-        def clear(box, side=pcbnew.F_SilkS, label=True, own=None, gap=0.0):
+        def clear(box, side=pcbnew.F_SilkS, label=True, own=None, gap=0.0, hidden=True):
             """On the board, clear of the pads and of the texts placed (a label also of the parts'
-            bodies but own), gap apart from texts and bodies."""
+            bodies but own, and if hidden of SILK_HIDDEN), gap apart from texts and bodies."""
             g = (box[0] - gap, box[1] - gap, box[2] + gap, box[3] + gap)
             return box[0] > X0 + 0.3 and box[2] < X1 - 0.3 and box[1] > Y0 + 0.3 and box[3] < Y1 - 0.3 \
                 and not hits(box, pads[side]) and not hits(g, placed[side]) \
-                and not (label and hits(g, [q for q in bodies[side] if q != own]))
-        labels = {t for _, t in self.SILK_LABELS} | {t for _, t in self.SILK_NEAR} | \
+                and not (label and hits(g, [q for q in bodies[side] if q != own
+                                            and (hidden or q not in self.SILK_HIDDEN)]))
+        labels = {t for _, t in self.SILK_LABELS} | {e[1] for e in self.SILK_NEAR} | \
             {self.BOARD_LABEL, self.BOARD_LABEL.replace(" AV board", "\nAV board")} | \
             {t for _, names, *_ in self.SILK_PINS for t in names.values()}
         for item in list(b.GetDrawings()):                  # (again on a re-run: no duplicates)
@@ -856,7 +910,7 @@ class Layout:
 
             def fit(size_, gap):
                 t.SetTextSize(VECTOR2I(FromMM(size_), FromMM(size_)))
-                t.SetTextThickness(FromMM(0.18 if size_ >= 1.2 else 0.15))
+                t.SetTextThickness(FromMM(self.stroke(size_)))
                 for x_, y_, a_ in spots + [(s[0] + dx, s[1] + dy, s[2]) for s in (spots[0], spots[-1]) for dx, dy in near[1:]]:
                     t.SetPosition(VECTOR2I(FromMM(x_), FromMM(y_)))
                     t.SetTextAngleDegrees(a_)
@@ -864,12 +918,12 @@ class Layout:
                     if clear((ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom())), gap=gap):
                         return True
                 return False
-            sizes = [size] + ([1.0] if shrink and size > 1.0 else [])
+            sizes = [size] + ([self.SILK_TEXT] if shrink and size > self.SILK_TEXT else [])
             if not any(fit(s_, g_) for g_ in gaps for s_ in sizes):
                 if not must:
                     return False
                 t.SetTextSize(VECTOR2I(FromMM(size), FromMM(size)))
-                t.SetTextThickness(FromMM(0.18 if size >= 1.2 else 0.15))
+                t.SetTextThickness(FromMM(self.stroke(size)))
                 t.SetPosition(VECTOR2I(FromMM(spots[-1][0]), FromMM(spots[-1][1])))
                 t.SetTextAngleDegrees(spots[-1][2])
                 print("silkscreen: no clear place for %s" % s_)
@@ -893,9 +947,14 @@ class Layout:
                      for k in (0, 0.8, 1.6) for a in (0, 0.8, -0.8, 1.6, -1.6, 2.4, -2.4, 3.2, -3.2)]
             text(label, 1.4, spots + spots[:1], {"L": pcbnew.GR_TEXT_H_ALIGN_LEFT, "R": pcbnew.GR_TEXT_H_ALIGN_RIGHT}.get(
                 edge, pcbnew.GR_TEXT_H_ALIGN_CENTER), reach=2.5)
-        for ref, label in self.SILK_NEAR:                   # above the part, else below it
+        for ref, label, *turn in self.SILK_NEAR:            # above the part, else below it
             bb = b.FindFootprintByReference(ref).GetBoundingBox(False, False)
             l_, t_, b_ = ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetBottom())
+            if turn:                                        # (turned: right of the part, else left,
+                r_, mid = ToMM(bb.GetRight()), (t_ + b_) / 2    # along its middle)
+                text(label, 1.2, [(x, mid + dy, turn[0]) for x in (r_ + 1.2, r_ + 2.0, l_ - 1.2, l_ - 2.0)
+                                  for dy in (0, 1.0, -1.0, 2.0, -2.0)])
+                continue
             text(label, 1.2, [(l_ + 3.5 + dx, t_ - 1.2 - dy, 0) for dy in (0, 0.8, 1.6, 2.4) for dx in (0, 1.5, -1.5)]
                  + [(l_ + 3.5, b_ + 1.0 + dy, 0) for dy in (0, 0.8)])
         for fp in b.GetFootprints():
@@ -909,25 +968,143 @@ class Layout:
             if prefix not in self.SILK_KEEP or fp.GetReference() in {r for r, *_ in self.SILK_PINS}:
                 ref.SetVisible(False)
                 continue
-            # the designator where it is clear of copper and of the texts placed so far: above, below,
-            # left or right of the part, or on its body; hidden if none is
+            # the designator where it is clear of copper, of the texts placed so far and of the other
+            # parts' bodies (under one it is hidden once that part is fitted): above, below, left or
+            # right of the part, its middle first, then along that side, then a little further out;
+            # last on its own body; hidden if none is
             side = ref.GetLayer()
-            ref.SetTextSize(VECTOR2I(FromMM(0.8), FromMM(0.8)))
-            ref.SetTextThickness(FromMM(0.15))
-            cy = courtyard(fp, 0.2)
-            cx_, cy_ = (cy[0] + cy[2]) / 2, (cy[1] + cy[3]) / 2
-            for x, y, ang in ((cx_, cy[1] - 0.6, 0), (cx_, cy[3] + 0.6, 0), (cy[0] - 0.6, cy_, 90),
-                              (cy[2] + 0.6, cy_, 90), (cx_, cy_, 0)):
+            ref.SetTextSize(VECTOR2I(FromMM(self.SILK_TEXT), FromMM(self.SILK_TEXT)))
+            ref.SetTextThickness(FromMM(self.stroke(self.SILK_TEXT)))
+            l_, t_, r_, b_ = courtyard(fp, 0.2)
+            spots = []
+            for d in (0.7, 1.2):
+                for f in (0.5, 0.25, 0.75, 0.0, 1.0):
+                    x, y = l_ + f * (r_ - l_), t_ + f * (b_ - t_)
+                    spots += [(x, t_ - d, 0), (x, b_ + d, 0), (l_ - d, y, 90), (r_ + d, y, 90)]
+            for x, y, ang in spots + [((l_ + r_) / 2, (t_ + b_) / 2, 0)]:
                 ref.SetTextAngleDegrees(ang)
                 ref.SetPosition(VECTOR2I(FromMM(x), FromMM(y)))
                 r = ref.GetBoundingBox()
                 box = (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
-                if clear(box, side, label=False):
+                if clear(box, side, own=courtyard(fp, 0), hidden=False):
                     ref.SetVisible(True)
                     placed[side].append(box)
                     break
             else:
                 ref.SetVisible(False)
+        self.silk_tidy(b)
+
+    def silk_tidy(self, b):
+        """The parts' own silkscreen as JLCPCB prints it (SILK_W, SILK_PAD): lines widened to
+        0.15 mm; marks too small to print taken out (EasyEDA's pin 1 dots, 0.12 mm across); each
+        line cut back where it would come within 0.15 mm of a pad, run past the board's edge (0.3 mm
+        inside it, as the texts), under a text, or onto another part's silkscreen (the bigger parts
+        first: a small part's outline gives way). A circle, arc or polygon that would: moved up to
+        0.5 mm clear if it is a mark (pin 1's, 1 mm across at most), else taken out. Once the texts
+        are placed (silkscreen()); a second run changes nothing."""
+        silk = (pcbnew.F_SilkS, pcbnew.B_SilkS)
+
+        def box(r):
+            return (ToMM(r.GetLeft()), ToMM(r.GetTop()), ToMM(r.GetRight()), ToMM(r.GetBottom()))
+
+        def grow(q, g):
+            return (q[0] - g, q[1] - g, q[2] + g, q[3] + g)
+
+        def hits(q, walls):
+            return any(q[2] > w[0] and q[0] < w[2] and q[3] > w[1] and q[1] < w[3] for w in walls)
+        keep = (self.X0 + 0.3, self.Y0 + 0.3, self.X1 - 0.3, self.Y1 - 0.3)
+
+        def onboard(q):
+            return q[0] >= keep[0] and q[1] >= keep[1] and q[2] <= keep[2] and q[3] <= keep[3]
+        pads = {s: [] for s in silk}
+        texts = {s: [] for s in silk}
+        for fp in b.GetFootprints():
+            for pad in fp.Pads():
+                th = pad.GetAttribute() in (pcbnew.PAD_ATTRIB_PTH, pcbnew.PAD_ATTRIB_NPTH)
+                for s in (silk if th else ((pcbnew.B_SilkS,) if fp.IsFlipped() else (pcbnew.F_SilkS,))):
+                    pads[s].append(grow(box(pad.GetBoundingBox()), self.SILK_PAD))
+            ref = fp.Reference()
+            if ref.IsVisible() and ref.GetLayer() in silk:
+                texts[ref.GetLayer()].append(grow(box(ref.GetBoundingBox()), 0.1))
+        for d in b.GetDrawings():
+            if isinstance(d, pcbnew.PCB_TEXT) and d.GetLayer() in silk:
+                texts[d.GetLayer()].append(grow(box(d.GetBoundingBox()), 0.1))
+        kept = {s: [] for s in silk}
+        n_cut = n_gone = n_moved = 0
+        rings = [(r * math.cos(math.radians(a)), r * math.sin(math.radians(a)))
+                 for r in (0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5) for a in range(0, 360, 30)]
+
+        def area(fp):
+            c = courtyard(fp, 0)
+            return (c[2] - c[0]) * (c[3] - c[1])
+        for fp in sorted(b.GetFootprints(), key=lambda f: (-area(f), f.GetReference())):
+            mine = {s: [] for s in silk}
+            for g in list(fp.GraphicalItems()):
+                s = g.GetLayer()
+                if s not in silk or not isinstance(g, pcbnew.PCB_SHAPE):
+                    continue
+                walls = pads[s] + texts[s] + kept[s]
+                if g.GetShape() == pcbnew.SHAPE_T_SEGMENT:
+                    w = max(ToMM(g.GetWidth()), self.SILK_W)
+                    a, z = g.GetStart(), g.GetEnd()
+                    a, z = (ToMM(a.x), ToMM(a.y)), (ToMM(z.x), ToMM(z.y))
+                    span = grow((min(a[0], z[0]), min(a[1], z[1]), max(a[0], z[0]), max(a[1], z[1])), w)
+                    pieces = clip_line(a, z, w, [q for q in walls if hits(q, [span])], keep)
+                    if not pieces:
+                        fp.Remove(g)
+                        self._removed.append(g)
+                        n_gone += 1
+                        continue
+                    if ToMM(g.GetWidth()) < w:
+                        g.SetWidth(FromMM(w))
+                    if pieces == [(a, z)]:          # (as it is: not set again, which would round it)
+                        mine[s].append(grow(span, 0.1 - w / 2))
+                        continue
+                    n_cut += 1
+                    for k, (p, q) in enumerate(pieces):
+                        if k:
+                            g = pcbnew.PCB_SHAPE(fp)
+                            g.SetShape(pcbnew.SHAPE_T_SEGMENT)
+                            g.SetLayer(s)
+                            g.SetWidth(FromMM(w))
+                            fp.Add(g)
+                        g.SetStart(VECTOR2I(FromMM(p[0]), FromMM(p[1])))
+                        g.SetEnd(VECTOR2I(FromMM(q[0]), FromMM(q[1])))
+                        mine[s].append(grow((min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])), w / 2 + 0.1))
+                    continue
+                filled = g.IsFilled()
+                if g.GetShape() == pcbnew.SHAPE_T_CIRCLE:
+                    r, w = ToMM(g.GetRadius()), ToMM(g.GetWidth())
+                    if 2 * (r + w / 2) < 0.2:
+                        fp.Remove(g)                # (too small to print)
+                        self._removed.append(g)
+                        n_gone += 1
+                        continue
+                if not filled and ToMM(g.GetWidth()) < self.SILK_W:
+                    g.SetWidth(FromMM(self.SILK_W))
+                q = box(g.GetBoundingBox())
+                if not hits(q, walls) and onboard(q):
+                    mine[s].append(grow(q, 0.1))
+                    continue
+                if max(q[2] - q[0], q[3] - q[1]) <= 1.0:
+                    for dx, dy in rings:
+                        m = (q[0] + dx, q[1] + dy, q[2] + dx, q[3] + dy)
+                        if not hits(m, walls) and onboard(m):
+                            g.Move(VECTOR2I(FromMM(dx), FromMM(dy)))
+                            mine[s].append(grow(m, 0.1))
+                            n_moved += 1
+                            break
+                    else:
+                        fp.Remove(g)
+                        self._removed.append(g)
+                        n_gone += 1
+                    continue
+                fp.Remove(g)
+                self._removed.append(g)
+                n_gone += 1
+            for s in silk:
+                kept[s] += mine[s]
+        print("silkscreen: parts' lines cut back %d, marks moved %d, taken out %d" % (n_cut, n_moved, n_gone))
 
     # --- rules, fanout, planes ----------------------------------------------
 

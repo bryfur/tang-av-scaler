@@ -47,9 +47,11 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
     TMDS_ANGLE = 90
     FPGA_HEADERS = ("J20", "J21", "J22")
     SILK_LABELS = []
+    # (the XIAO's way in: its USB-C at the end of D0 and 5V, the sockets' pin 1, by the bottom edge;
+    # the label beside J12, reading down to it, as rev B's "XIAO, USB >")
     SILK_NEAR = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J4", "L"), ("J5", "R"), ("J14", "S/PDIF"),
                  ("J15", "5V"), ("J6", "HDMI"), ("J7", "SYNC"), ("J8", "VGA"), ("J13", "OPTICAL"), ("J16", "JTAG"),
-                 ("SW3", "RECONFIG")]
+                 ("SW3", "RECONFIG"), ("J12", "XIAO, USB >", 270)]
     # (J13's labels left of it: its ESD diodes sit right of its pins)
     SILK_PINS = [("J16", {"1": "3V3", "2": "G", "3": "TCK", "4": "TDO", "5": "TDI", "6": "TMS"}),
                  ("J13", {"1": "OUT", "2": "G", "3": "5V"}, "left")]
@@ -133,7 +135,7 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
         self.HOLES = [(self.X0 + 4.0, self.Y0 + 22.0), (self.X1 - 4.0, self.Y0 + 34.0),
                       (self.X0 + 4.0, self.Y1 - 26.0), (self.X1 - 4.0, self.Y1 - 4.0)]
         self.refs = {p.ref for p in board.PARTS}
-        self.SILK_NEAR = [(r, t) for r, t in self.SILK_NEAR if r in self.refs]
+        self.SILK_NEAR = [e for e in self.SILK_NEAR if e[0] in self.refs]
         # no label under the SOM (45 x 35 mm, turned)
         (sx, sy), (w, h) = floor.SOM_AT, floor.som.SIZE
         self.SILK_HIDDEN = [(sx - h / 2, sy - w / 2, sx + h / 2, sy + w / 2)]

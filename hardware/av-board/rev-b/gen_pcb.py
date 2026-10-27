@@ -101,7 +101,9 @@ class RevB(ADV7181D, TMDSLayout, pcbkit.Layout):
     BUSES = [("J10", "U1"), ("J9", "U2")]
     CLASSES = U1_CLASSES
     SILK_LABELS = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J4", "L"), ("J5", "R")]
-    SILK_NEAR = [("J6", "HDMI"), ("J11", "XIAO, USB >"), ("J13", "SPDIF")]
+    # (the XIAO's label by J12, its upper socket: by J11 the parts leave it no room; it lands below
+    # J12's left end, readable as the module goes in)
+    SILK_NEAR = [("J6", "HDMI"), ("J12", "XIAO, USB >"), ("J13", "SPDIF")]
     SILK_PINS = [("J13", {"1": "COAX", "2": "G", "3": "OPT", "4": "G", "5": "5V"})]
     TITLE_AT = (110.0, 88.6)
     def __init__(self):

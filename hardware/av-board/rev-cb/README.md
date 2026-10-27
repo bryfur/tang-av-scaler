@@ -32,7 +32,8 @@ As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers an
 - Minimum clearance 0.1 mm (the USB-C receptacle's own GND/VBUS pads; JLCPCB's four-layer minimum
   is 0.09 mm); 0.4/0.2 mm vias at the SOM receptacles' ground pads and the ESD arrays.
 - Top-side assembly only. Fitted by hand: the SOM's four M2 x 3 mm spacers and M2 screws, the XIAO
-  ESP32-S3 (in its sockets; a C3 works too, JTAG over Wi-Fi only), and the jacks
+  ESP32-S3 (in its sockets J11/J12, its USB-C towards the board's bottom edge: silkscreen
+  "XIAO, USB >" beside J12; a C3 works too, JTAG over Wi-Fi only), and the jacks
   for the `hand-jacks` variant.
 - Power from a 5 V / 3 A USB-C supply (the board and SOM draw up to about 2 A; a sink with only
   5.1 k on CC cannot ask a weaker source for less). J16 (JTAG) is for a cable with the XIAO out of

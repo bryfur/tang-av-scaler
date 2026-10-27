@@ -64,7 +64,7 @@ class RevCB(RevC):
     UI_AT = floor.UI_AT_CB
     SPDIF_HEADER_AT = (179.0, 75.5)
     SUPPLIES = {"U4": (190.0, 140.0), "U5": (190.0, 131.0)}
-    SILK_NEAR = [(r, "SPDIF" if r == "J13" else t) for r, t in RevC.SILK_NEAR]
+    SILK_NEAR = [(r, "SPDIF" if r == "J13" else t, *turn) for r, t, *turn in RevC.SILK_NEAR]
     SILK_PINS = [(r, {"1": "COAX", "2": "G", "3": "OPT", "4": "G", "5": "5V"} if r == "J13" else pins, *side)
                  for r, pins, *side in RevC.SILK_PINS]
 
