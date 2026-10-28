@@ -128,6 +128,59 @@ part(nxt("Q"), "2N7002", "lcsc:2N7002", "lcsc:SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"
 R("10k", "3V3", "CEC_FPGA")
 
 # ---------------------------------------------------------------------------
+# Test access: the SOM hides the FPGA's pins (rev B's sit on the Console's headers)
+# ---------------------------------------------------------------------------
+
+block("debug")
+# J17, a 2 x 8 header (J8's part), left of the SOM: the three configuration buses (the ADV7181D's,
+# the DP159's, the clock generator's), six spare FPGA pins for whatever the gateware brings out,
+# a 3.3 V reference and ground. Each of its signal pins through 220 R at the header (Digilent's
+# Pmod ports: 200 R): a probe slipping onto 3.3 V or ground, or a wire in the wrong place, drives
+# at most 15 mA into a pin (an I2C tap shorted holds its bus, nothing driving it is hurt; a listener
+# or an outside master works through it: 0.15 V at the 4.7 k pull-ups). The 3.3 V pin, beside
+# ground, is a reference (a logic analyzer's threshold, a level shifter), not a supply: shorted,
+# 50 mW in its resistor (62.5 mW rated) and the rail untouched
+DEBUG = ["DBG%d" % k for k in range(6)]
+J17_TAPS = {"1": "3V3", "3": "IN_SCL", "4": "IN_SDA", "5": "DP_SCL", "6": "DP_SDA", "7": "PLL_SCL",
+            "8": "PLL_SDA", "9": "DBG0", "10": "DBG1", "11": "DBG2", "12": "DBG3", "13": "DBG4", "14": "DBG5"}
+
+
+def _j(net):
+    # the header's side of a pin's resistor
+    return "DBG_VREF" if net == "3V3" else net + "_J"
+
+
+part("J17", "DEBUG", "lcsc:Header-Male-2.54_2x8", "lcsc:HDR-TH_16P-P2.54-V-M-R2-C8-S2.54", "C68234",
+     dict({"2": "GND", "15": "GND", "16": "GND"}, **{num: _j(net) for num, net in J17_TAPS.items()}),
+     note="debug header")
+for _num, _net in J17_TAPS.items():
+    R("220", _net, _j(_net), at="J17." + _num, note="debug header pin protection")
+
+
+def _by(net, other):
+    # REF.PAD of the part joining net and other, its pin on net (a buck's inductor, the input fuse)
+    p = [p for p in PARTS if set(p.pins.values()) == {net, other}][0]
+    return p.ref + "." + [n for n, v in p.pins.items() if v == net][0]
+
+
+# A bare test pad (not fitted, not assembled) on each rail by its regulator's output, two for ground;
+# separate pads, not a header: a probe slipping on a header would short 5 V onto the 1.1 V core.
+# TEST_PADS: ref -> its silkscreen label
+TEST_PADS = {}
+for net, at, label in (("+5V", _by("+5V", "VBUS_IN"), "+5V"), ("3V6", _by("3V6", "SW_3V6"), "3V6"),
+                       ("3V3", "U5.6", "3V3"), ("1V8A", "U6.6", "1V8"), ("1V1", _by("1V1", "SW_1V1"), "1V1"),
+                       ("3V0", "U24.5", "3V0"), ("2V5", "U18.5", "2V5"), ("5VA", "U12.5", "5VA")):
+    ref = nxt("TP")
+    part(ref, net, "Connector:TestPoint", "TestPoint:TestPoint_Pad_D1.5mm", "", {"1": net}, at=at,
+         note="test pad")
+    TEST_PADS[ref] = label
+for at in ("U4.2", "U6.1"):
+    ref = nxt("TP")
+    part(ref, "GND", "Connector:TestPoint", "TestPoint:TestPoint_THTPad_D2.0mm_Drill1.0mm", "", {"1": "GND"},
+         at=at, note="ground test pad")
+    TEST_PADS[ref] = "G"
+
+# ---------------------------------------------------------------------------
 # The SOM, the FPGA pins assigned last
 # ---------------------------------------------------------------------------
 
@@ -135,8 +188,8 @@ R("10k", "3V3", "CEC_FPGA")
 DP159_PADS = {net: num for num, net in u2.items() if net in ("DP_SCL", "DP_SDA", "DDC_SCL", "DDC_SDA", "DP_HPD", "DP_OE")}
 DP159_PADS["CEC_FPGA"] = pin("HPD_SNK")
 dp_pins, dp_body = chip_pins("lcsc:VQFN-48_L7.0-W7.0-P0.50-BL-EP4.1", floor.DP159_AT, floor.DP159_ANGLE, DP159_PADS)
-SOM_NETS = som(common_groups(spdif_at=floor.SPDIF_AT_CB, ui_at=floor.UI_AT_CB) + [("dp159", dp_pins, {}, dp_body)],
-               transceiver_lanes=LANES, rev=REV)
+SOM_NETS = som(common_groups(spdif_at=floor.SPDIF_AT_CB, ui_at=floor.UI_AT_CB) + [("dp159", dp_pins, {}, dp_body),
+               ("debug", point(DEBUG, floor.DEBUG_AT_CB), {})], transceiver_lanes=LANES, rev=REV)
 
 
 def _unused_dp_pins(name):

@@ -32,7 +32,9 @@ As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers an
 - Power from a 5 V / 3 A USB-C supply (the board and SOM draw up to about 2 A; a sink with only
   5.1 k on CC cannot ask a weaker source for less). J16 (JTAG) is for a cable with the XIAO out of
   its sockets.
-- Check in JLCPCB's preview: the SOM receptacles J20-J22 (their pad 1 at the Console's), the
-  USB-C (mouth out of the back edge), the chips' rotations, the RCA jacks' barrels over the back
+- Check in JLCPCB's preview: the SOM receptacles J20-J22 on their pads (JLCPCB's footprint numbers
+  them as a mirror of ours, so its pin 1 dot shows at the far end of the row: the DF40 has no
+  polarity [Hirose DF40 drawings], either way is right; do not turn them), the USB-C (mouth out
+  of the back edge), the chips' rotations, the RCA jacks' barrels over the back
   edge (the CPL turns the yellow and orange ones 90 degrees for JLCPCB's footprint, kit/gen_fab.py
   JLC_TURN; the red RCJ-012 has no model there and is placed as drawn, as the black RCJ-011).

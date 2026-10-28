@@ -63,6 +63,7 @@ SPDIF_AT_CB = (179.0, 84.0)         # C-B: the S/PDIF inputs' parts, by their he
 CLOCK_AT = (178.0, 98.0)            # the clock generator, by J21's top (C-B: the transceivers' REFCLK0)
 UI_AT = (186.0, 145.0)              # the buttons along the front edge
 UI_AT_CB = (172.0, 145.0)           # C-B's, clear of its narrower board's corner hole
+DEBUG_AT_CB = (126.0, 114.0)        # C-B's debug header, upright, left of the SOM by J22
 
 
 def rotate(x, y, angle):

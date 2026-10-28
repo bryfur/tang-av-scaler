@@ -28,7 +28,8 @@ STEP = 0.1                  # mm: the sampling along an analog track
 # nets that never switch in operation: pins tied off through resistors, straps, feedback nodes, a
 # source's 5 V, LED anodes, the ADV7181D's reset (released once)
 STATIC = {"ALSB", "PWRDWN", "PD_FB", "MD0", "MD1", "FMT", "VGA_5V", "CEC_PU", "MODE0", "MODE1", "MODE2",
-          "DP_A0", "DP_I2C_EN", "DP_VSADJ", "R_EXT", "CC1", "CC2", "LED_A", "D4_A", "D5_A", "IN_RESET_N"}
+          "DP_A0", "DP_I2C_EN", "DP_VSADJ", "R_EXT", "CC1", "CC2", "LED_A", "D4_A", "D5_A", "IN_RESET_N",
+          "DBG_VREF"}
 
 
 def classify(lay):

@@ -23,6 +23,7 @@ HERE = rev.rev_dir(sys.argv[1])
 LIB = os.path.join(rev.ROOT, "lib")
 NAME = board.NAME
 SYSLIB = "/usr/share/kicad/symbols"
+SYSFP = "/usr/share/kicad/footprints"
 GRID = 1.27
 STUB = 2.54
 
@@ -49,6 +50,16 @@ def load_symbol(lib_id):
     assert not find(sym, "extends"), lib_id
     out = [sym[0], q(lib_id)] + sym[2:]
     return out
+
+
+def in_bom(fp_id):
+    """A part's BOM flag as its footprint has it: "no" where the footprint is marked not to be
+    assembled (exclude_from_bom: mounting holes, the SOM's standoffs, bare test pads), so that
+    symbol and footprint agree (KiCad's schematic parity)."""
+    lib, name = fp_id.split(":")
+    d = os.path.join(LIB, "lcsc.pretty") if lib == "lcsc" else os.path.join(SYSFP, lib + ".pretty")
+    attr = find(parse(open(os.path.join(d, name + ".kicad_mod")).read()), "attr")
+    return "no" if attr and "exclude_from_bom" in [str(a) for a in attr[1:]] else "yes"
 
 
 def pins_of(sym):
@@ -156,7 +167,7 @@ def main():
     for p, unit, cx, cy in placed:
         sym = load_symbol(p.symbol)
         inst = ["symbol", ["lib_id", q(p.symbol)], ["at", cx, cy, 0], ["unit", unit],
-                ["exclude_from_sim", "no"], ["in_bom", "yes"], ["on_board", "yes"], ["dnp", "yes" if p.dnp else "no"],
+                ["exclude_from_sim", "no"], ["in_bom", in_bom(p.footprint)], ["on_board", "yes"], ["dnp", "yes" if p.dnp else "no"],
                 ["fields_autoplaced", "yes"], ["uuid", uid("sym", p.ref, unit)]]
         xmin, xmax, ymin, ymax = extent(sym, unit)
         inst.append(prop("Reference", p.ref, cx, snap(cy - ymax - 3.81)))

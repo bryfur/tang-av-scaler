@@ -3,7 +3,9 @@
 
     python3 kit/gen_fab.py rev-b     # rev-b/fab/<name>-gerbers.zip, <name>-bom.csv, <name>-cpl.csv
 
-BOM: one line per LCSC part (Comment, Designator, Footprint, LCSC Part #); DNP parts left out.
+BOM: one line per LCSC part (Comment, Designator, Footprint, LCSC Part #); DNP parts left out, and
+those the footprint marks as not assembled (KiCad's exclude from BOM / position files: mounting
+holes, the SOM's standoffs, bare test pads).
 Variants (board.py VARIANTS): <name>-<variant>-bom.csv / -cpl.csv without the parts listed there
 (soldered by hand); the Gerbers are the same.
 CPL: Designator, Mid X, Mid Y, Layer, Rotation, in mm from the board's lower-left corner, y up
@@ -75,7 +77,7 @@ def main():
     rows = []
     for fp in b.GetFootprints():
         ref = fp.GetReference()
-        if ref.startswith(("H", "#")) or fp.IsDNP():
+        if ref.startswith(("H", "#")) or fp.IsDNP() or fp.IsExcludedFromBOM() or fp.IsExcludedFromPosFiles():
             continue
         lcsc = fp.GetFieldText("LCSC") if fp.HasFieldByName("LCSC") else ""
         if not lcsc:

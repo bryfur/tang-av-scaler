@@ -64,20 +64,29 @@ class RevCB(RevC):
     UI_AT = floor.UI_AT_CB
     SPDIF_HEADER_AT = (179.0, 75.5)
     SUPPLIES = {"U4": (190.0, 140.0), "U5": (190.0, 131.0)}
-    SILK_NEAR = [(r, "SPDIF" if r == "J13" else t, *turn) for r, t, *turn in RevC.SILK_NEAR]
+    # (the debug header named, and each test pad its rail)
+    SILK_NEAR = [(r, "SPDIF" if r == "J13" else t, *turn) for r, t, *turn in RevC.SILK_NEAR] + \
+        [("J17", "DEBUG")] + list(board.TEST_PADS.items())
     SILK_PINS = [(r, {"1": "COAX", "2": "G", "3": "OPT", "4": "G", "5": "5V"} if r == "J13" else pins, *side)
-                 for r, pins, *side in RevC.SILK_PINS]
+                 for r, pins, *side in RevC.SILK_PINS] + \
+        [("J17", {"1": "VREF", "2": "G", "3": "IN SCL", "4": "IN SDA", "5": "DP SCL", "6": "DP SDA", "7": "PLL SCL",
+                  "8": "PLL SDA", "9": "D0", "10": "D1", "11": "D2", "12": "D3", "13": "D4", "14": "D5", "15": "G",
+                  "16": "G"})]
 
     def hand(self):
         h = RevC.hand(self)
         h["U2"] = floor.DP159_AT + (floor.DP159_ANGLE, "F")
         h["U7"] = (190.0, 122.0, 0, "F")                     # its 1V1 buck, below it
+        h["J17"] = floor.DEBUG_AT_CB + (270, "F")            # the debug header, upright, pin 1 top left
         return h
 
     def reserved(self):
         x, y = floor.DP159_AT
-        # (and the AC capacitors' column, between J21 and the retimer)
-        return RevC.reserved(self) + [(CAP_X - 4.0, y - 3.6, x - 3.0, y + 3.6)]
+        jx, jy = floor.DEBUG_AT_CB
+        # (and the AC capacitors' column, between J21 and the retimer; room above the debug header
+        # for its title, where SILK_NEAR puts it (left of C111, below C43): its pins' resistors would
+        # take that spot first)
+        return RevC.reserved(self) + [(CAP_X - 4.0, y - 3.6, x - 3.0, y + 3.6), (jx - 4.1, jy - 13.4, jx + 3.2, jy - 10.3)]
 
     def ser_caps(self):
         """{(channel, "P"/"N"): AC capacitor ref}."""
@@ -157,13 +166,16 @@ class RevCB(RevC):
                 for a_, z_ in zip(pts, pts[1:]):
                     if abs(a_[0] - z_[0]) + abs(a_[1] - z_[1]) > 1e-6:
                         self.track(b, a_, z_, SER_W, pcbnew.F_Cu, dnet)
-        # its other GND pins (19, 41): straight in onto the exposed pad
+        # its other GND pins (19, 41): straight in onto the exposed pad, 0.3 mm into it (a stub of
+        # 1.2 mm stopped 0.22 mm short of its edge: left dangling unless the router happened to join
+        # it, the prune pass took it up and pin 19 was left unconnected)
+        half = ToMM([p for p in dp.Pads() if p.GetNumber() == "49"][0].GetSize().x) / 2
         for num in ("19", "41"):
             q = [p for p in dp.Pads() if p.GetNumber() == num][0]
             qx, qy = ToMM(q.GetPosition().x), ToMM(q.GetPosition().y)
             cx_, cy_ = floor.DP159_AT
             dx, dy = cx_ - qx, cy_ - qy
-            k = 1.2 / max(abs(dx), abs(dy))
+            k = (max(abs(dx), abs(dy)) - half + 0.3) / max(abs(dx), abs(dy))
             self.track(b, (qx, qy), (qx + dx * k * (abs(dx) > abs(dy)), qy + dy * k * (abs(dy) >= abs(dx))), 0.2,
                        pcbnew.F_Cu, q.GetNet())
         # the input side's pins between the pairs: inwards to a via each

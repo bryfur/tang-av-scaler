@@ -18,6 +18,40 @@ and routed; not ordered.
 - `gen_pcb.py`: the PCB (../rev-c/layout.py, kit/)
 - `fpga/av-board-cb.cst`: the FPGA pin assignment, Gowin constraints, generated from the board
 
+## Test access
+
+The SOM hides the FPGA's pins (rev B's sit on the Console's headers), so C-B brings out what
+bring-up needs.
+
+J17, a 2 x 8 header left of the SOM (assembled; pin 1 top left, labelled on the silkscreen):
+
+| Pin | Signal | Pin | Signal |
+|---|---|---|---|
+| 1 | VREF: 3.3 V through 220 R | 2 | GND |
+| 3 | IN SCL: the ADV7181D's I2C | 4 | IN SDA |
+| 5 | DP SCL: the SN65DP159's | 6 | DP SDA |
+| 7 | PLL SCL: the MS5351M's | 8 | PLL SDA |
+| 9 | D0: FPGA AB16 | 10 | D1: FPGA L13 |
+| 11 | D2: FPGA M13 | 12 | D3: FPGA AA16 |
+| 13 | D4: FPGA AB17 | 14 | D5: FPGA Y17 |
+| 15 | GND | 16 | GND |
+
+D0-D5 are spare FPGA pins (`dbg0`-`dbg5` in `fpga/av-board-cb.cst`, 3.3 V LVCMOS) for whatever
+the gateware brings out: syncs, PLL lock, a UART.
+
+Every pin but ground goes through a 220 R resistor by the header, as Digilent's Pmod ports do
+(200 R): a probe slipping onto VREF or ground, or a wire in the wrong place, drives at most 15 mA
+into the pin behind it. A shorted I2C pin holds its bus without hurting anything that drives it; a
+logic analyzer or an outside I2C master still works through the resistor (0.15 V more on a low,
+against the buses' 4.7 k pull-ups). VREF is a reference for a logic analyzer's threshold or a level
+shifter, not a supply: shorted to the ground pin beside it, it puts 50 mW into its resistor and
+leaves the 3.3 V rail alone. D0-D5 through 220 R still carry a few tens of MHz into a probe's
+10-15 pF.
+
+Test pads, bare (nothing fitted), each by its rail's regulator and labelled with its rail: +5V,
+3V6, 3V3, 1V8, 1V1, 3V0, 2V5, 5VA; two ground pads, with holes for a wire loop, by U4 and by U6.
+Pads apart rather than a header: a probe slipping on a header could short 5 V onto the 1.1 V core.
+
 ## Ordering at JLCPCB
 
 As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers and the BOM/CPL, and a
@@ -38,7 +72,9 @@ As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers an
 - Power from a 5 V / 3 A USB-C supply (the board and SOM draw up to about 2 A; a sink with only
   5.1 k on CC cannot ask a weaker source for less). J16 (JTAG) is for a cable with the XIAO out of
   its sockets.
-- Check in JLCPCB's preview: the SOM receptacles J20-J22 (their pad 1 at the Console's), the
+- Check in JLCPCB's preview: the SOM receptacles J20-J22 on their pads (JLCPCB's footprint numbers
+  them as a mirror of ours, so its pin 1 dot shows at the far end of the row: the DF40 has no
+  polarity [Hirose DF40 drawings], either way is right; do not turn them), the
   USB-C (mouth out of the back edge), the chips' rotations, the RCA jacks' barrels over the back
   edge (the CPL turns the yellow ones 90 degrees for JLCPCB's footprint, kit/gen_fab.py JLC_TURN;
   the red RCJ-012 has no model there and is placed as drawn, as the black RCJ-011).

@@ -40,13 +40,18 @@ import doubled  # noqa: E402
 KIT = os.path.dirname(os.path.abspath(__file__))
 LIB = os.path.join(os.path.dirname(KIT), "lib")
 SYSFP = "/usr/share/kicad/footprints"
-JAVA = "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java"
+# (JAVA, XVFB: the build host's Homebrew ones unless the environment names others, as the routing
+# container on another host does)
+JAVA = os.environ.get("JAVA", "/home/linuxbrew/.linuxbrew/opt/openjdk/bin/java")
 # Freerouting: 1.9.0 by default. On rev A 2.3-2.5 oscillate between 120 and 220 unrouted
 # connections pass after pass; 1.9.0 gets within ~10. 1.9.0 needs an X display even in batch mode:
-# a private Xvfb (Homebrew's xorg-server) runs for it. FREEROUTING=2.5.0 picks the headless one.
+# a private Xvfb (Homebrew's xorg-server) runs for it. FREEROUTING=2.5.0 picks the headless one;
+# FREEROUTING_ARGS adds options of its own (2.x's -mt 1: one optimizer thread, for trials side by
+# side; it takes all cores but one otherwise).
 FREEROUTING_VERSION = os.environ.get("FREEROUTING", "1.9.0")
 FREEROUTING = os.path.expanduser("~/tools/freerouting/freerouting-%s.jar" % FREEROUTING_VERSION)
-XVFB = "/home/linuxbrew/.linuxbrew/bin/Xvfb"
+FREEROUTING_ARGS = os.environ.get("FREEROUTING_ARGS", "").split()
+XVFB = os.environ.get("XVFB", "/home/linuxbrew/.linuxbrew/bin/Xvfb")
 STEP = 0.25                 # the placer's occupancy grid, mm
 
 
@@ -577,7 +582,12 @@ class Layout:
 
     def main(self):
         board = self.board
-        b = pcbnew.BOARD()
+        # the board with its project, where its net classes and rules are kept (KiCad 10 writes no
+        # .kicad_pro for a bare BOARD(): they were lost); the project written anew, as before
+        pro = os.path.splitext(self.OUT)[0] + ".kicad_pro"
+        if os.path.exists(pro):
+            os.remove(pro)
+        b = pcbnew.NewBoard(self.OUT)
         b.SetCopperLayerCount(self.LAYERS)
         ds = b.GetDesignSettings()
         ds.SetBoardThickness(FromMM(1.6))
@@ -816,8 +826,9 @@ class Layout:
         """A labelled header's pin labels (SILK_PINS): [(text, box)], not yet on the board. Pins in a
         row: each label under its pin, below the body, every other one above it where neighbours
         would run together (1 mm text at 2.54 mm: TCK TDO TDI TMS); pins in a column: each beside
-        its pin, right of the body (side "left": left of it). The placer keeps their boxes free of
-        parts, so that no label ends up under a part or over a pad."""
+        its pin, right of the body (side "left": left of it); pins in two columns (a two-row header
+        stood upright): each beside its pin on its column's own side. The placer keeps their boxes
+        free of parts, so that no label ends up under a part or over a pad."""
         bb = fp.GetBoundingBox(False, False)
         l_, t_, r_, b_ = ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetRight()), ToMM(bb.GetBottom())
         pins = sorted((ToMM(p.GetPosition().x), ToMM(p.GetPosition().y), names[p.GetNumber()])
@@ -837,6 +848,10 @@ class Layout:
             if side == "left":
                 return [label(s_, l_ - 0.5, y, pcbnew.GR_TEXT_H_ALIGN_RIGHT) for _, y, s_ in pins]
             return [label(s_, r_ + 0.5, y, pcbnew.GR_TEXT_H_ALIGN_LEFT) for _, y, s_ in pins]
+        xs = sorted({round(x, 2) for x, _, _ in pins})
+        if len(xs) == 2 and len({round(y, 2) for _, y, _ in pins}) > 2:
+            return [label(s_, l_ - 0.5, y, pcbnew.GR_TEXT_H_ALIGN_RIGHT) if round(x, 2) == xs[0]
+                    else label(s_, r_ + 0.5, y, pcbnew.GR_TEXT_H_ALIGN_LEFT) for x, y, s_ in pins]
         row = [label(s_, x, b_ + 0.75, pcbnew.GR_TEXT_H_ALIGN_CENTER) for x, _, s_ in pins]
         if any(a[1][2] > z[1][0] for a, z in zip(row, row[1:])):
             row = [label(s_, x, t_ - 0.75 if k % 2 else b_ + 0.75, pcbnew.GR_TEXT_H_ALIGN_CENTER)
@@ -1072,7 +1087,7 @@ class Layout:
                         g.SetEnd(VECTOR2I(FromMM(q[0]), FromMM(q[1])))
                         mine[s].append(grow((min(p[0], q[0]), min(p[1], q[1]), max(p[0], q[0]), max(p[1], q[1])), w / 2 + 0.1))
                     continue
-                filled = g.IsFilled()
+                filled = g.GetFillMode() != pcbnew.FILL_T_NO_FILL     # (KiCad 10 has no IsFilled)
                 if g.GetShape() == pcbnew.SHAPE_T_CIRCLE:
                     r, w = ToMM(g.GetRadius()), ToMM(g.GetWidth())
                     if 2 * (r + w / 2) < 0.2:
@@ -1361,7 +1376,8 @@ class Layout:
         z.SetDoNotAllowVias(vias)
         z.SetDoNotAllowPads(False)
         z.SetDoNotAllowFootprints(False)
-        z.SetDoNotAllowCopperPour(False)
+        # (KiCad 10 names it zone fills)
+        (z.SetDoNotAllowZoneFills if hasattr(z, "SetDoNotAllowZoneFills") else z.SetDoNotAllowCopperPour)(False)
         if layer is None:
             z.SetLayerSet(pcbnew.LSET.AllCuMask())
         else:
@@ -1448,16 +1464,30 @@ class Layout:
         use, stubs it left) and the copper it laid twice, round after round, refilling the zones
         each time: each round in a process of its own (gen_pcb.py --prune-round), as pcbnew, once
         it has filled zones, hands back the next board it loads without its type. A round that
-        crashes (pcbnew is native code) shows its signal and, from faulthandler, where it was."""
+        crashes or hangs (pcbnew is native code) runs once more: the crashes seen were in pcbnew's
+        worker threads (a std::map walked in its thread pool), the hang in its zone filler, neither
+        the board's doing, and a round saves the board only at its end. A second failure shows its
+        signal and, from faulthandler, where every thread was."""
+        def one_round():
+            try:
+                return subprocess.run([sys.executable, "-X", "faulthandler", os.path.join(self.DIR, "gen_pcb.py"),
+                                       "--prune-round"], env=dict(os.environ, PCB=path), capture_output=True,
+                                      text=True, timeout=1800)
+            except subprocess.TimeoutExpired as e:      # (killed: as a crash, by SIGKILL; its output bytes)
+                out = [x.decode(errors="replace") if isinstance(x, bytes) else x or "" for x in (e.stdout, e.stderr)]
+                return subprocess.CompletedProcess(e.cmd, -signal.SIGKILL, *out)
         removed, twice = 0, 0
         for _ in range(rounds):
-            r = subprocess.run([sys.executable, "-X", "faulthandler", os.path.join(self.DIR, "gen_pcb.py"),
-                                "--prune-round"], env=dict(os.environ, PCB=path), capture_output=True, text=True)
+            r = one_round()
+            if r.returncode < 0:
+                print("prune round killed by %s, once more" % signal.Signals(-r.returncode).name)
+                r = one_round()
             if r.returncode:
                 how = ("killed by %s" % signal.Signals(-r.returncode).name if r.returncode < 0
                        else "exit %d" % r.returncode)
-                raise RuntimeError("prune round on %s failed (%s):\n%s"
-                                   % (path, how, (r.stdout + r.stderr).strip()[-1500:]))
+                out = (r.stdout + r.stderr).strip()
+                k = out.find("Fatal Python error")
+                raise RuntimeError("prune round on %s failed (%s):\n%s" % (path, how, out[k:] if k >= 0 else out[-3000:]))
             for line in r.stdout.splitlines():
                 if line.startswith("copper laid twice kept"):
                     print(line)
@@ -1495,17 +1525,25 @@ class Layout:
         fixed (KiCad's locked tracks and vias) stays as it is."""
         log = open(os.path.splitext(ses)[0] + "-route.log", "w")
         if FREEROUTING_VERSION.startswith("1."):
-            display = ":%d" % (90 + os.getpid() % 100)
-            xvfb = subprocess.Popen([XVFB, display, "-screen", "0", "1280x1024x24"],
+            # Xvfb takes the first free display and names it on the pipe once it takes connections:
+            # trials side by side never share one, and Java never starts before it
+            r, w = os.pipe()
+            xvfb = subprocess.Popen([XVFB, "-displayfd", str(w), "-screen", "0", "1280x1024x24"], pass_fds=(w,),
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os.close(w)
+            with os.fdopen(r) as f:
+                n = f.readline().strip()
             try:
-                subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")],
-                               check=True, stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, DISPLAY=display))
+                if not n:
+                    raise RuntimeError("Xvfb (%s) did not start" % XVFB)
+                subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100")]
+                               + FREEROUTING_ARGS,
+                               check=True, stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, DISPLAY=":" + n))
             finally:
                 xvfb.terminate()
         else:
             subprocess.run([JAVA, "-jar", FREEROUTING, "-de", dsn, "-do", ses, "-mp", os.environ.get("PASSES", "100"),
-                            "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"],
+                            "--gui.enabled=false", "--usage_and_diagnostic_data.disable_analytics=true"] + FREEROUTING_ARGS,
                            check=True, stdout=log, stderr=subprocess.STDOUT)
 
     def session(self, b, ses_for):
@@ -1671,7 +1709,14 @@ class Layout:
             # once laid a track over another net's; the same connection routed again came out clean)
             shutil.copy(self.OUT, before_pcb)
             before = self.copper_errors()
-            subprocess.run([sys.executable, mz, "apply", self.OUT, p], check=True, env=env, stdout=subprocess.DEVNULL)
+            try:
+                # (KiCad's zone filler, run once the path is laid, has hung on one board, a worker
+                # of its thread pool spinning: the path is taken back, rather than the run waiting)
+                subprocess.run([sys.executable, mz, "apply", self.OUT, p], check=True, env=env,
+                               stdout=subprocess.DEVNULL, timeout=600)
+            except subprocess.TimeoutExpired:
+                shutil.copy(before_pcb, self.OUT)
+                raise SystemExit("mazeroute: %s - %s: the zone fill hung (KiCad), taken back" % (a, z))
             after = self.copper_errors()
             if after > before:
                 shutil.copy(before_pcb, self.OUT)
