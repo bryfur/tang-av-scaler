@@ -28,7 +28,9 @@ Settings the files do not carry:
 - 4 layers, 1.6 mm, stack-up **JLC04161H-7628**: F.Cu signal / In1 GND / In2 GND / B.Cu signal
   (the TMDS geometry assumes the 0.21 mm 7628 prepreg under each outer layer). Impedance control
   on: the TMDS pairs are 0.25 mm lines with a 0.25 mm gap on F.Cu, 103 R differential by
-  IPC-2141. Confirm in JLCPCB's impedance calculator (outer layer, W 0.25, S 0.25).
+  IPC-2141. Confirm in JLCPCB's impedance calculator (outer layer, W 0.25, S 0.25). The voids
+  in In1 and In2 under the ESD arrays' TMDS pads are meant (TI SPRAAR7 3.14; review.md's TMDS
+  layout row, `kit/hdmi_audit.py rev-b`).
 - Vias 0.5/0.3 mm, and four 0.4/0.2 mm ones at the ESD arrays' GND pads (inside JLCPCB's
   0.3/0.15 mm four-layer minimum; check the quote does not add a small-via charge). Minimum track
   and space 0.127 mm.

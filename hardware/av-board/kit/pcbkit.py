@@ -17,6 +17,9 @@ as its chip is down, then the rest (rank in main()).
     python3 rev-x/gen_pcb.py --silk     # the silkscreen rules again, on the board as it is (routed)
     python3 rev-x/gen_pcb.py --move REF x y angle   # a part moved on the routed board (move_part),
     python3 rev-x/gen_pcb.py --complete             # then its connections made again, the stubs cleared
+    python3 rev-x/gen_pcb.py --keepouts             # the keep-outs made again on the routed board
+                                                    # (renew_keepouts), what they hold out taken up:
+                                                    # --complete after
 
 PCB=path puts a trial board elsewhere.
 """
@@ -487,6 +490,15 @@ class Layout:
     def fanout(self, b, fps):
         """Locked fanout copper laid before routing (a BGA's dogbones)."""
 
+    # the rule areas keepouts() makes (rule_area(name=...)), which --keepouts takes off a routed
+    # board and makes again
+    KEEPOUT_NAMES = ("TMDS keep-out", "TMDS void", "SER void")
+
+    def keepouts(self, b, fps):
+        """Rule areas along the revision's fast lines, made from the locked copper fanout() laid
+        (TMDSLayout's along the TMDS pairs): on a new board after the fanout, on a routed one by
+        --keepouts."""
+
     def fanout_skip(self):
         """Parts (REF) or pads (REF.PAD) fanout_planes leaves alone (fanned out by fanout())."""
         return set()
@@ -809,6 +821,7 @@ class Layout:
         self.rules(b)
         self.silkscreen(b)
         self.fanout(b, fps)
+        self.keepouts(b, fps)
         self.fanout_planes(b)
         self.planes(b, fps)
         pcbnew.SaveBoard(self.OUT, b)
@@ -1388,12 +1401,14 @@ class Layout:
             o.Append(FromMM(x), FromMM(y))
         b.Add(z)
 
-    def rule_area(self, b, pts, layers, tracks=False, vias=False, fills=False):
+    def rule_area(self, b, pts, layers, tracks=False, vias=False, fills=False, name=""):
         """A rule area over pts [(x, y)] on the layers given (KiCad layer ids), keeping out what is
         named: tracks, vias, zone fills (a void in a plane: under a pad on a fast line, TI SPRAAR7
-        3.10). Freerouting reads the track and via keep-outs from the DSN; KiCad's DRC checks them."""
+        3.10). Freerouting reads the track and via keep-outs from the DSN; KiCad's DRC checks them.
+        Those keepouts() makes are named (KEEPOUT_NAMES): --keepouts renews them."""
         z = pcbnew.ZONE(b)
         z.SetIsRuleArea(True)
+        z.SetZoneName(name)
         z.SetDoNotAllowTracks(tracks)
         z.SetDoNotAllowVias(vias)
         z.SetDoNotAllowPads(False)
@@ -1980,10 +1995,51 @@ class Layout:
         pcbnew.SaveBoard(self.OUT, b)
         print("%s moved to (%.3f, %.3f) at %g: %d tracks and vias taken up" % (ref, x, y, angle, len(gone)))
 
+    def renew_keepouts(self):
+        """keepouts() made again on the routed board (after a change to them): the old ones (by name)
+        taken off, the new ones added, the copper they now hold out taken up - tracks on their
+        layers, vias - but the locked lines they run beside; --complete then routes those
+        connections again and clears the stubs left. The planes filled again."""
+        b = pcbnew.LoadBoard(self.OUT)
+        fps = {fp.GetReference(): fp for fp in b.GetFootprints()}
+        old = [z for z in b.Zones() if z.GetIsRuleArea() and z.GetZoneName() in self.KEEPOUT_NAMES]
+        for z in old:
+            b.Remove(z)
+        self.keepouts(b, fps)
+        new = [z for z in b.Zones() if z.GetIsRuleArea() and z.GetZoneName() in self.KEEPOUT_NAMES]
+        gone = []
+        for t in list(b.GetTracks()):
+            via = t.GetClass() == "PCB_VIA"
+            for z in new:
+                if via and z.GetDoNotAllowVias():
+                    hit = z.Outline().Collide(t.GetPosition(), t.GetWidth(pcbnew.F_Cu) // 2)
+                elif not via and z.GetDoNotAllowTracks() and z.IsOnLayer(t.GetLayer()):
+                    hit = z.Outline().Collide(pcbnew.SEG(t.GetStart(), t.GetEnd()), t.GetWidth() // 2)
+                else:
+                    continue
+                if hit:
+                    if t.IsLocked():
+                        raise SystemExit("%s: locked %s at (%.3f, %.3f) inside a keep-out: the generator's own"
+                                         % (t.GetNetname(), "via" if via else "track", ToMM(t.GetPosition().x),
+                                            ToMM(t.GetPosition().y)))
+                    gone.append(t)
+                    break
+        for t in gone:
+            print("  taken up: %s %s at (%.3f, %.3f)" % (t.GetNetname(), "via" if t.GetClass() == "PCB_VIA" else "track",
+                                                         ToMM(t.GetPosition().x), ToMM(t.GetPosition().y)))
+            b.Remove(t)
+            self._removed.append(t)
+        b.BuildConnectivity()
+        pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+        pcbnew.SaveBoard(self.OUT, b)
+        print("keep-outs renewed: %d off, %d on; %d tracks and vias taken up" % (len(old), len(new), len(gone)))
+
     def cli(self, argv):
         if "--move" in argv:
             k = argv.index("--move")
             self.move_part(argv[k + 1], *(float(v) for v in argv[k + 2:k + 5]))
+        elif "--keepouts" in argv:
+            self.renew_keepouts()
         elif "--pre" in argv:
             self.pre_route()
         elif "--post" in argv:

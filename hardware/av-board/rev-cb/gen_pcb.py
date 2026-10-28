@@ -296,62 +296,21 @@ class RevCB(RevC):
         print("reference pair: P %.1f mm, N %.1f mm laid (%.2f mm apart: %.0f ps)"
               % (length["P"], length["N"], abs(length["P"] - length["N"]), abs(length["P"] - length["N"]) * 6.3))
 
-    # a fast line's keep-out to other lines [TI SPRAAR7 3.1: 30 mil]
-    TMDS_KEEP = 0.76
-
-    def hdmi_keepouts(self, b, fps):
-        """Along the TMDS pairs' straight run (between the retimer's corners and the ESD arrays'
-        break-out): strips on F.Cu beside and between the pairs keeping out other tracks, vias (and
-        so their antipads in In1 under the pairs: >= 1.5 W from a void, 3.2) and the ground pour
-        (a microstrip, as reckoned: 100 R). Under the lanes' AC capacitors' pads and the arrays'
-        TMDS pads: In1 and In2 voided (all of a capacitor's pads, two layers deep, 3.10; 60 % of
-        an ESD pad, 3.14), the pads' capacitance cut back."""
-        hw = self.TMDS_W / 2
-        runs = []
-        for n in {"TMDS_%s_%s" % (p[0], s) for p in self.TMDS for s in ("P", "N")}:
-            tr = [t for t in b.GetTracks() if t.GetNetname() == n and t.GetClass() == "PCB_TRACK"]
-            t = max(tr, key=lambda t: t.GetLength())
-            (x, ya), (_, yb) = (ToMM(t.GetStart().x), ToMM(t.GetStart().y)), (ToMM(t.GetEnd().x), ToMM(t.GetEnd().y))
-            assert abs(ToMM(t.GetStart().x) - ToMM(t.GetEnd().x)) < 1e-3, (n, "the run is not upright")
-            runs.append((x, min(ya, yb) + 0.1, max(ya, yb), tr))
-        runs.sort(key=lambda r: r[0])
-        # each strip as long as the run(s) beside it: outside the outer lines, between the pairs
-        # (the innermost line's corner leaves its run's lower end on the outside: the strip stops short)
-        strips = [(runs[0][0] - hw - self.TMDS_KEEP, runs[0][0] - hw - 0.01, runs[0][1], runs[0][2] - 0.4),
-                  (runs[-1][0] + hw + 0.01, runs[-1][0] + hw + self.TMDS_KEEP, runs[-1][1], runs[-1][2])]
-        strips += [(a[0] + hw + 0.01, z[0] - hw - 0.01, max(a[1], z[1]), min(a[2], z[2]))
-                   for a, z in zip(runs, runs[1:]) if z[0] - a[0] > 1.0]                  # (between pairs)
-        for sx0, sx1, sy0, sy1 in strips:
-            self.rule_area(b, [(sx0, sy0), (sx1, sy0), (sx1, sy1), (sx0, sy1)], [pcbnew.F_Cu], tracks=True, vias=True,
-                           fills=True)
-        # and outside the outermost line's corner, its diagonal from the retimer's side up into the run
-        x, _, y_low, tr = runs[-1]
-        for t in tr:
-            (ax, ay), (zx, zy) = sorted([(ToMM(t.GetStart().x), ToMM(t.GetStart().y)), (ToMM(t.GetEnd().x), ToMM(t.GetEnd().y))])
-            if abs(zx - x) < 1e-3 and abs(zy - y_low) < 1e-3 and abs(ax - zx) > 1e-3 and abs(ay - zy) > 1e-3:
-                n_ = (math.sqrt(0.5), math.sqrt(0.5))           # (outwards: down and to the right)
-                i, o = hw + 0.01, hw + self.TMDS_KEEP
-                self.rule_area(b, [(ax + n_[0] * i, ay + n_[1] * i), (zx + n_[0] * i, zy + n_[1] * i),
-                                   (zx + n_[0] * o, zy + n_[1] * o), (ax + n_[0] * o, ay + n_[1] * o)],
-                               [pcbnew.F_Cu], tracks=True, vias=True, fills=True)
-                strips.append(None)
-        y0, y1 = min(s[2] for s in strips if s), max(s[3] for s in strips if s)
-        voids = [(q, 1.0) for c in self.ser_caps().values() for q in fps[c].Pads()]
-        voids += [(q, math.sqrt(0.6)) for u in self.TMDS_ESD for q in fps[u].Pads() if q.GetNetname().startswith("TMDS_")]
-        for q, k in voids:
-            bb = q.GetBoundingBox()
-            cx, cy = ToMM(bb.GetCenter().x), ToMM(bb.GetCenter().y)
-            hx, hy = ToMM(bb.GetWidth()) * k / 2, ToMM(bb.GetHeight()) * k / 2
-            self.rule_area(b, [(cx - hx, cy - hy), (cx + hx, cy - hy), (cx + hx, cy + hy), (cx - hx, cy + hy)],
-                           [pcbnew.In1_Cu, pcbnew.In2_Cu], fills=True)
-        print("HDMI keep-outs: %d strips along the TMDS run (y %.1f-%.1f), %d plane voids under pads"
-              % (len(strips), y0, y1, len(voids)))
+    def keepouts(self, b, fps):
+        """The TMDS pairs' keep-outs (kit/tmds_layout.py), and In1 and In2 voided under all the
+        lanes' AC capacitors' pads (two layers deep, TI SPRAAR7 3.10): the pads' capacitance cut
+        back."""
+        RevC.keepouts(self, b, fps)
+        caps = self.ser_caps().values()
+        for c in caps:
+            for q in fps[c].Pads():
+                self.pad_void(b, q, 1.0, "SER void")
+        print("SerDes: In1/In2 voided under %d capacitors' pads" % (2 * len(caps)))
 
     def tx_fanout(self, b, fps):
         self.serdes(b, fps)
         self.refclk(b, fps)
         self.tmds_fanout(b, fps)
-        self.hdmi_keepouts(b, fps)
 
     def fanout_skip(self):
         return RevC.fanout_skip(self) | {"U2"}

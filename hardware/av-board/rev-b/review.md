@@ -4,7 +4,9 @@ Every part checked against its own document, for being inside the limits with ma
 inside them. Sources as in design.md: [DS] ADV7181D data sheet Rev C, [HWG] ADV7511 hardware
 user's guide Rev D, [TI-LDO] TPS7A7001 (SBVS134F), [TI-BUCK] TLV62569 (SLVSD87), [TI-ESD]
 TPD1E05U06/TPD4E05U06 (SLVSBO7O), [TI-ADC] PCM1808 (SLES177), [AN-1260], [PSU] ADI's HDMI RX supply note, and JLCPCB's
-part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this review changed.
+part data (rated current, DCR, voltage, dielectric); for the HDMI layout [TI-AR7] TI SPRAAR7J,
+High-Speed Interface Layout Guidelines (HDMI among its signals; rev-c/review.md's HDMI rows for the
+rest). **Fixed** marks what this review changed.
 
 ## Supplies and sequencing
 
@@ -52,6 +54,7 @@ part data (rated current, DCR, voltage, dielectric). **Fixed** marks what this r
 | TMDS impedance | 100 R differential [HWG 6.3.2] | was Freerouting's: a third of each line on B.Cu over an In2 signal layer (no plane), 8-28 % coupled | **Fixed**: pairs laid by the generator on F.Cu over In1, 0.25/0.25 mm at the pins' 0.5 mm pitch: 103 R (IPC-2141), coupled from pin to connector, corners keeping the spacing |
 | TMDS skew | match intra- and inter-pair [HWG 6.3.2] | measured: 0.83 mm (6 ps) inside every pair, no vias, F.Cu only; between pairs 12.7-20.5 mm (53 ps, against HDMI's 0.2 Tpixel = 1.35 ns at 148.5 MHz) | OK |
 | TMDS ESD | < 0.6 pF, close to the lines [HWG 6.3.2.1] | TPD4E05U06 0.42-0.5 pF, flow-through, at the connector [TI-ESD] | OK |
+| TMDS layout | other lines 30 mil off, pairs 30 mil apart, 5 W along a run; 1.5 W from plane voids; In1 and In2 voided under 60 % of an ESD array's pads; nearer within 0.25 in of a package, where its pins stand beside the pairs [TI-AR7 3.1-3.4, 3.14] | the lines 12.7-21.4 mm, all but 2.9 mm of TMDS_CK's (0.4 mm of D0's) within 0.25 in of the ADV7511's or the arrays' pads; a 3V3 track and via 0.22 and 0.26 mm from TMDS_CK_N, the via's antipad in In1 0.11 mm from it; nothing voided under the arrays | **Fixed**: keep-outs beside and between the pairs from their corners to 1 mm before the arrays (kit/tmds_layout.py), 3V3 routed again round them (and under the pairs on B.Cu); In1 and In2 voided under 60 % of the arrays' TMDS pads. kit/hdmi_audit.py rev-b leaves the pairs 0.75 mm (3 W) apart on CK's 2.9 mm, against 3.4's 0.76: too short a run to spread them (C-A and C-B: 5 W) |
 | Pins between the pairs | | AVDD 34/41, GND 37, PD 38 leave inwards to vias under the package; the ESD arrays' GND pads to 0.4/0.2 mm vias between the pairs | OK |
 | Pixel clock | controlled impedance, solid reference, short, nothing beside it [HWG 7.2] | stack-up changed: In2 a ground plane, every signal on F or B over its own plane; CLOCK class 0.19 mm clearance; CLK 18.9 mm, no via | **Fixed** (stack-up) |
 | Video data | match lengths [HWG 7.2] | J9 to the ADV7511: 18.1-28.7 mm (70 ps spread in a 6.7 ns period, SDR); the FPGA's output delays can trim it | OK |
@@ -149,7 +152,7 @@ layer, closer than 1 mm; tracks on the other outer layer are shielded by both gr
 | TMDS | 12.7-21.4 mm, no vias, laid (above) |
 | Video inputs | Y 40.8, Pb 38.7, Pr 58.7, SCART sync 46.2 mm; VGA R 76.4, G 56.8, B 28.5 mm; one or two vias each |
 | Doubled routes | none: the prune pass takes up copper laid twice; kit/doubled.py's 1.3 mm of VGA_G is two of its branches side by side from R43 (to U19 and to the via), not a copy |
-| Small vias | 22 at 0.4/0.2 mm (the ESD arrays' GND, REFOUT, CML, AVDD; JLCPCB's four-layer minimum is 0.3/0.15 mm); 584 at 0.5/0.3 |
+| Small vias | 22 at 0.4/0.2 mm (the ESD arrays' GND, REFOUT, CML, AVDD; JLCPCB's four-layer minimum is 0.3/0.15 mm); 587 at 0.5/0.3 |
 | Assembly | 228 parts on the top, J9/J10 (through-hole) underneath |
 
 Tooling found on the way: KiCad's session import gives every via the default size (the 0.4 mm
