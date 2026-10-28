@@ -334,6 +334,24 @@
         "line_style": 0,
         "microvia_diameter": 0.3,
         "microvia_drill": 0.1,
+        "name": "REFCLK",
+        "pcb_color": "rgba(0, 0, 0, 0.000)",
+        "priority": -1,
+        "schematic_color": "rgba(0, 0, 0, 0.000)",
+        "track_width": 0.2,
+        "via_diameter": 0.5,
+        "via_drill": 0.3,
+        "wire_width": 6
+      },
+      {
+        "bus_width": 12,
+        "clearance": 0.15,
+        "diff_pair_gap": 0.15,
+        "diff_pair_via_gap": 0.25,
+        "diff_pair_width": 0.2,
+        "line_style": 0,
+        "microvia_diameter": 0.3,
+        "microvia_drill": 0.1,
         "name": "SERDES",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
         "priority": -1,
@@ -500,7 +518,19 @@
       },
       {
         "netclass": "CLOCK",
+        "pattern": "IN_BCK"
+      },
+      {
+        "netclass": "CLOCK",
         "pattern": "IN_LLC"
+      },
+      {
+        "netclass": "CLOCK",
+        "pattern": "IN_LRCK"
+      },
+      {
+        "netclass": "CLOCK",
+        "pattern": "IN_SCKI"
       },
       {
         "netclass": "CLOCK",
@@ -685,6 +715,30 @@
       {
         "netclass": "SERDES",
         "pattern": "SER_D2_P"
+      },
+      {
+        "netclass": "REFCLK",
+        "pattern": "PLL_CLK0"
+      },
+      {
+        "netclass": "REFCLK",
+        "pattern": "PLL_CLK0_S"
+      },
+      {
+        "netclass": "REFCLK",
+        "pattern": "PLL_CLK1"
+      },
+      {
+        "netclass": "REFCLK",
+        "pattern": "PLL_CLK1_S"
+      },
+      {
+        "netclass": "REFCLK",
+        "pattern": "SER_REFCLK_N"
+      },
+      {
+        "netclass": "REFCLK",
+        "pattern": "SER_REFCLK_P"
       }
     ]
   },

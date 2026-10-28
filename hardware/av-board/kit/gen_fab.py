@@ -91,14 +91,19 @@ def main():
         rows.append([ref, "%.3f" % (ToMM(pos.x) - ox), "%.3f" % (oy - ToMM(pos.y)),
                      "Bottom" if fp.IsFlipped() else "Top",
                      "%.1f" % ((fp.GetOrientationDegrees() + JLC_TURN.get(lcsc, 0)) % 360)])
+    def ref_key(r):                                     # C2 before C10
+        return r.rstrip("0123456789"), int("0" + r.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+
     def write(suffix, omit=()):
-        g = {k: [r for r in refs if r not in omit] for k, refs in groups.items()}
+        g = {k: sorted((r for r in refs if r not in omit), key=ref_key) for k, refs in groups.items()}
         g = {k: refs for k, refs in g.items() if refs}
         with open(os.path.join(FAB, NAME + suffix + "-bom.csv"), "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["Comment", "Designator", "Footprint", "LCSC Part #"])
-            for (val, fpn, lcsc), refs in sorted(g.items(), key=lambda kv: kv[1][0]):
-                w.writerow([val, ",".join(sorted(refs, key=lambda r: (r.rstrip("0123456789"), int("0" + r.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))))), fpn, lcsc])
+            # (lines in the order of their first designator: the same whatever order the board
+            # file keeps its parts in, which a new route changes)
+            for (val, fpn, lcsc), refs in sorted(g.items(), key=lambda kv: ref_key(kv[1][0])):
+                w.writerow([val, ",".join(refs), fpn, lcsc])
         with open(os.path.join(FAB, NAME + suffix + "-cpl.csv"), "w", newline="") as f:
             w = csv.writer(f)
             w.writerow(["Designator", "Mid X", "Mid Y", "Layer", "Rotation"])

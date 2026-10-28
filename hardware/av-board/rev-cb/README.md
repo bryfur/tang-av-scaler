@@ -61,7 +61,10 @@ As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers an
   control on.
 - The four transceiver TX pairs (J21 to the SN65DP159) and the TMDS pairs: 100 R differential on
   F.Cu over In1 (the TMDS pairs 0.25/0.25 mm, as rev B; the 7 mm TX lanes 0.2 mm lines at the
-  SOM connector's 0.4 mm pitch). Confirm in JLCPCB's impedance calculator.
+  SOM connector's 0.4 mm pitch). Confirm in JLCPCB's impedance calculator. The HDMI lines follow
+  TI's layout rules (SN65DP159 data sheet, SPRAAR7): rev-c/review.md's HDMI rows, checked by
+  `kit/hdmi_audit.py rev-cb`; the voids under the AC capacitors' and ESD arrays' pads in In1 and
+  In2 are meant.
 
 - Minimum clearance 0.1 mm (the USB-C receptacle's own GND/VBUS pads; JLCPCB's four-layer minimum
   is 0.09 mm); 0.4/0.2 mm vias at the SOM receptacles' ground pads and the ESD arrays.

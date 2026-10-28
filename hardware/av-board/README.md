@@ -60,6 +60,7 @@ the KiCad files. On a machine with KiCad 9 (here: the build host), from this dir
 | a router's result for some nets | `python3 kit/sesgraft.py BOARD x.ses PREFIX` | those nets' copper from a session added to a routed board |
 | placement check | `python3 kit/placecheck.py rev-b [--min 8]` | the small parts' signal pins far from the rest of their net (a part by the wrong anchor); `gen_pcb.py` itself prints the crossings left in each header bus |
 | analog isolation | `python3 kit/xtalk.py rev-b` | each analog line's digital neighbours within 1 mm on its layer: the closest gap, how far they run within 1 mm and within 0.5 mm |
+| HDMI layout | `python3 kit/hdmi_audit.py rev-cb` | the TMDS pairs (and on rev C-B the transceivers' lanes and reference clock) against TI's layout rules (SN65DP159 12.1, SPRAAR7) and the HDMI skew budgets: lengths, skew, vias, turns, other copper along the run, crystals, switchers and holes nearby, the ground plane's edges and voids under the lines, the planes voided under parts on them; each finding with its rule |
 | renders | `python3 kit/render.py rev-b` | `rev-b/img/`: a 3D view and a top view (KiCad's raytracer; models from `fetch_lib.sh` and `kit/fetch_3d.py`) |
 | picture | `python3 kit/snap.py BOARD out.png` | a PNG of the board (needs PyMuPDF in `~/tools/eda-venv`) |
 | DRC | `kicad-cli pcb drc BOARD` | |

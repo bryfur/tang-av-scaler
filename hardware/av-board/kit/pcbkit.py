@@ -1388,6 +1388,28 @@ class Layout:
             o.Append(FromMM(x), FromMM(y))
         b.Add(z)
 
+    def rule_area(self, b, pts, layers, tracks=False, vias=False, fills=False):
+        """A rule area over pts [(x, y)] on the layers given (KiCad layer ids), keeping out what is
+        named: tracks, vias, zone fills (a void in a plane: under a pad on a fast line, TI SPRAAR7
+        3.10). Freerouting reads the track and via keep-outs from the DSN; KiCad's DRC checks them."""
+        z = pcbnew.ZONE(b)
+        z.SetIsRuleArea(True)
+        z.SetDoNotAllowTracks(tracks)
+        z.SetDoNotAllowVias(vias)
+        z.SetDoNotAllowPads(False)
+        z.SetDoNotAllowFootprints(False)
+        (z.SetDoNotAllowZoneFills if hasattr(z, "SetDoNotAllowZoneFills") else z.SetDoNotAllowCopperPour)(fills)
+        ls = pcbnew.LSET()
+        for layer in layers:
+            ls.AddLayer(layer)
+        z.SetLayerSet(ls)
+        o = z.Outline()
+        o.NewOutline()
+        for x, y in pts:
+            o.Append(FromMM(x), FromMM(y))
+        b.Add(z)
+        return z
+
     def full(self):
         return [(self.X0 + 0.3, self.Y0 + 0.3), (self.X1 - 0.3, self.Y0 + 0.3),
                 (self.X1 - 0.3, self.Y1 - 0.3), (self.X0 + 0.3, self.Y1 - 0.3)]
@@ -1412,10 +1434,17 @@ class Layout:
         self.rail_planes(b, fps)
 
     def stitch(self, b, pitch=2.5, gap=0.3):
-        """Ground vias on a grid wherever they clear every pad, track, via, edge and the window: they
-        tie the outer pours to the ground planes (and the islands the tracks cut out of them)."""
+        """Ground vias on a grid wherever they clear every pad, track, via, edge and the window, and
+        no rule area keeps vias out there (a fast line's keep-out): they tie the outer pours to the
+        ground planes (and the islands the tracks cut out of them)."""
         VIA_D = self.VIA_D
         gnd = b.FindNet("GND")
+        no_via = [z.Outline() for z in b.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
+        reach = VIA_D / 2 + 0.05
+
+        def kept_out(x, y):
+            return any(o.Contains(VECTOR2I(FromMM(x + dx), FromMM(y + dy)))
+                       for o in no_via for dx, dy in ((0, 0), (reach, 0), (-reach, 0), (0, reach), (0, -reach)))
         pts, segs = [], []
         for fp in b.GetFootprints():
             for p in fp.Pads():
@@ -1438,6 +1467,7 @@ class Layout:
                 # (the standoffs' keepouts are 6 mm squares, see planes())
                 ok = ok and all(abs(x - hx) > 3.0 + VIA_D / 2 or abs(y - hy) > 3.0 + VIA_D / 2 for hx, hy in self.HOLES)
                 ok = ok and all(((x - hx) ** 2 + (y - hy) ** 2) ** 0.5 > 4.5 for hx, hy in self.BUTTONS)
+                ok = ok and not kept_out(x, y)
                 if ok:
                     for px, py, r in pts:
                         if abs(px - x) < 4 and abs(py - y) < 4 and ((x - px) ** 2 + (y - py) ** 2) ** 0.5 < VIA_D / 2 + gap + r:
@@ -1709,14 +1739,24 @@ class Layout:
             # once laid a track over another net's; the same connection routed again came out clean)
             shutil.copy(self.OUT, before_pcb)
             before = self.copper_errors()
-            try:
-                # (KiCad's zone filler, run once the path is laid, has hung on one board, a worker
-                # of its thread pool spinning: the path is taken back, rather than the run waiting)
-                subprocess.run([sys.executable, mz, "apply", self.OUT, p], check=True, env=env,
-                               stdout=subprocess.DEVNULL, timeout=600)
-            except subprocess.TimeoutExpired:
-                shutil.copy(before_pcb, self.OUT)
-                raise SystemExit("mazeroute: %s - %s: the zone fill hung (KiCad), taken back" % (a, z))
+            for attempt in (1, 2):
+                try:
+                    # (KiCad's zone filler, run once the path is laid, has hung on one board, a worker
+                    # of its thread pool spinning, and pcbnew has crashed in apply (SIGSEGV, 3 of 12
+                    # routes once): the board as it was put back, once more after a crash, then the path
+                    # given up rather than the whole run)
+                    subprocess.run([sys.executable, mz, "apply", self.OUT, p], check=True, env=env,
+                                   stdout=subprocess.DEVNULL, timeout=600)
+                    break
+                except subprocess.TimeoutExpired:
+                    shutil.copy(before_pcb, self.OUT)
+                    raise SystemExit("mazeroute: %s - %s: the zone fill hung (KiCad), taken back" % (a, z))
+                except subprocess.CalledProcessError as e:
+                    shutil.copy(before_pcb, self.OUT)       # (a crash can leave the board half saved)
+                    how = "killed by %s" % signal.Signals(-e.returncode).name if e.returncode < 0 else "exit %d" % e.returncode
+                    if e.returncode >= 0 or attempt == 2:
+                        raise SystemExit("mazeroute: %s - %s: apply %s, taken back" % (a, z, how))
+                    print("mazeroute: %s - %s: apply %s, once more" % (a, z, how))
             after = self.copper_errors()
             if after > before:
                 shutil.copy(before_pcb, self.OUT)

@@ -228,10 +228,13 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
     def som_fanout(self, b, fps):
         """The SOM receptacles' ground pads: a stub straight out of the row (the inner row's under
         the SOM, the outer row's away from it) to a via, staggered 0.8 / 1.4 mm so that the vias of
-        neighbouring ground pads (0.4 mm apart) clear each other."""
+        neighbouring ground pads (0.4 mm apart) clear each other. Two inward ones facing each other
+        across a receptacle (the same stagger) share one via: the second pad's stub runs to the
+        first's (their drills would stand 0.08 mm apart)."""
         g = b.FindNet("GND")
         n = 0
         inward = self.som_inward_gnd(fps)
+        placed = []
         for ref in ("J20", "J21", "J22"):
             fp = fps[ref]
             cx, cy = ToMM(fp.GetPosition().x), ToMM(fp.GetPosition().y)
@@ -247,6 +250,12 @@ class RevC(ADV7181D, TMDSLayout, pcbkit.Layout):
                     v = (x + out * (d if x > cx else -d), y)
                 else:
                     v = (x, y + out * (d if y > cy else -d))
+                if out == -1:
+                    near = [p for p in placed if abs(p[0] - v[0]) + abs(p[1] - v[1]) < 0.8]
+                    if near:
+                        self.track(b, (x, y), near[0], 0.2, pcbnew.F_Cu, g)
+                        continue
+                    placed.append(v)
                 self.track(b, (x, y), v, 0.2, pcbnew.F_Cu, g)
                 self.via(b, v[0], v[1], g, *self.MIN_VIA)
                 n += 1

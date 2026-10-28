@@ -38,6 +38,12 @@ class TMDSLayout:
     # neighbouring pin's pad (rev C-B's receptacle 1 mm further left turned D2+ 0.2 mm out of its
     # pin, its diagonal 0.19 mm from pin 36)
     TMDS_OUT = 0.8
+    # more room between the pairs along their run than the ESD arrays' pins give (0.75 mm between
+    # pairs, 3 W at 0.25 mm lines): TI SPRAAR7 3.1 asks for 5 W. The pairs spread by this much each
+    # (centred on the bundle) after the chip's corner and close up again just before the arrays,
+    # within the receptacle's break-out (3.3: within 0.25 in). 0: as the arrays' pins (rev B, C-A)
+    TMDS_SPREAD = 0.0
+    TMDS_CONVERGE = 0.3     # the straight left before the arrays' pads once the pairs have closed up
 
     def to_frame(self, p):
         return _rot(p[0], p[1], -self.TMDS_ANGLE)
@@ -59,19 +65,54 @@ class TMDSLayout:
                 lines.append(("TMDS_%s_%s" % (pr, s_), pos(self.TMDS_CHIP, upin), pos(u, ein), pos(u, eout),
                               pos(self.TMDS_CONN, jpin)))
         lines.sort(key=lambda ln: -ln[1][0])            # the innermost (rightmost on the chip) first
+        # (TMDS_SPREAD) each line's run, yr, off its array pad's line, yi: the pairs spread about the
+        # bundle's middle; then where each closes up again (its 45-degree jog's start, a): the line
+        # in front (towards which the lines move) first; behind it the next starts as much later as
+        # keeps the two the smaller of their spacings apart on the diagonals (within a pair at
+        # 0.5 mm: 0.21 mm later; between pairs: together)
+        pairs = []
+        for ln in lines:
+            if ln[0][:-2] not in pairs:
+                pairs.append(ln[0][:-2])
+        off = {p: (k - (len(pairs) - 1) / 2) * self.TMDS_SPREAD for k, p in enumerate(pairs)}
+        # the innermost line keeps its TMDS_OUT out of its pin and a corner of 0.3 mm at least
+        # (0.6 as laid unspread): the spread shifted outwards as much as that needs
+        name0, (x00, y00), (_, yi0) = lines[0][0], lines[0][1], lines[0][2]
+        room = yi0 + off[name0[:-2]] - y00 - self.TMDS_OUT
+        d0 = min(0.6, room)
+        if d0 < 0.3:
+            off = {p: v + 0.3 - d0 for p, v in off.items()}
+            d0 = 0.3
+        yr = {ln[0]: ln[2][1] + off[ln[0][:-2]] for ln in lines}
+        a = {}
+        for movers in ([ln for ln in reversed(lines) if off[ln[0][:-2]] < 0], [ln for ln in lines if off[ln[0][:-2]] > 0]):
+            for front, back in zip([None] + movers, movers):
+                if front is None:
+                    a[back[0]] = 0.0
+                    continue
+                p0, pf = abs(yr[front[0]] - yr[back[0]]), abs(front[2][1] - back[2][1])
+                a[back[0]] = a[front[0]] + max(0.0, min(p0, pf) * math.sqrt(2) - p0)
+        if a:
+            x_end = min(ln[2][0] for ln in lines) - self.TMDS_CONVERGE
+            base = x_end - max(a[n] + abs(off[n[:-2]]) for n in a)
         c_prev, prev = None, None
         w = self.TMDS_W
         for name, (x0, y0), (xi, yi), (xo, yo), (xj, yj) in lines:
+            yrun = yr[name]
             if prev is None:
-                d = 0.6
-                c = x0 - yi + d
+                d = d0
+                c = x0 - yrun + d
             else:
-                sp = ((prev[0] - x0) + (yi - prev[1])) / 2      # its spacing to the line inside it
+                sp = ((prev[0] - x0) + (yrun - prev[1])) / 2    # its spacing to the line inside it
                 c = c_prev - math.sqrt(2) * sp
-                d = c - x0 + yi
-            assert 0 < d < min(yi - y0, xi - x0) and yi - d - y0 >= self.TMDS_OUT, (name, d, yi - d - y0)
+                d = c - x0 + yrun
+            assert 0 < d < min(yrun - y0, xi - x0) and yrun - d - y0 >= self.TMDS_OUT - 1e-6, (name, d, yrun - d - y0)
             net = b.FindNet(name)
-            pts = [(x0, y0), (x0, yi - d), (x0 + d, yi), (xi, yi), (xo, yo)]
+            pts = [(x0, y0), (x0, yrun - d), (x0 + d, yrun)]
+            if name in a:                       # (closing up onto the array's pad line)
+                assert base + a[name] > x0 + d, (name, "the pairs close up before the chip's corner ends")
+                pts += [(base + a[name], yrun), (base + a[name] + abs(yi - yrun), yi)]
+            pts += [(xi, yi), (xo, yo)]
             # to the connector: straight on, then 45 degrees onto its pin's line
             dy = yj - yo
             xk = xj - 1.4 - abs(dy)
@@ -80,8 +121,9 @@ class TMDSLayout:
             for a_, z_ in zip(pts, pts[1:]):
                 if abs(a_[0] - z_[0]) + abs(a_[1] - z_[1]) > 1e-6:
                     self.track(b, a_, z_, w, pcbnew.F_Cu, net)
-            c_prev, prev = c, (x0, yi)
-        print("TMDS: %d lines laid" % len(lines))
+            c_prev, prev = c, (x0, yrun)
+        print("TMDS: %d lines laid%s" % (len(lines), ", spread %.2f mm between pairs on their run" % self.TMDS_SPREAD
+                                         if self.TMDS_SPREAD else ""))
 
     def tmds_fanout(self, b, fps):
         """The chip's pins between the pairs: out inwards, under the package, to a via each; the
