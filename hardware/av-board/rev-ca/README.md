@@ -22,7 +22,10 @@ As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers an
 `hand-jacks` BOM/CPL leaves the six RCA jacks for hand soldering. Settings the files do not carry:
 
 - 4 layers, 1.6 mm, stack-up **JLC04161H-7628** (F.Cu / In1 GND / In2 GND / B.Cu), impedance
-  control on.
+  control on: the TMDS pairs 0.25 mm lines 0.25 mm apart on F.Cu over In1, 103 R differential by
+  IPC-2141, as rev B; confirm in JLCPCB's impedance calculator. The HDMI lines follow TI's
+  layout rules (SPRAAR7: ../rev-c/review.md's HDMI rows, checked by `kit/hdmi_audit.py rev-ca`);
+  the voids in In1 and In2 under the ESD arrays' TMDS pads are meant.
 - Minimum clearance 0.1 mm (the USB-C receptacle's own GND/VBUS pads; JLCPCB's four-layer minimum
   is 0.09 mm); 0.4/0.2 mm vias at the SOM receptacles' ground pads and the ESD arrays.
 - Top-side assembly only. Fitted by hand: the SOM's four M2 x 3 mm spacers and M2 screws, the XIAO

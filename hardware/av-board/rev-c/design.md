@@ -79,7 +79,8 @@ GND / B.Cu).
   receptacle's I/O pins (its 24-bit bus crosses that gap; nothing digital passes the audio block
   above), C-B's retimer 7 mm from the transceivers' TX pins. The TMDS lines leave its right side and
   run up the right edge to rev B's ESD arrays and receptacle on the back edge, laid by the
-  generator (kit/tmds_layout.py) as on rev B.
+  generator (kit/tmds_layout.py) as on rev B, but 5 W apart along that run, with keep-outs beside
+  and between the pairs (TI's HDMI layout rules: review.md's HDMI rows).
 - The front edge: the XIAO (its USB-C out of the front), the JTAG header, the buttons.
 - The 3V6 buck and the 3V3 LDO at the right front, away from both analog front ends and clear of
   the TMDS lines (C-B: below its retimer's 1V1 buck); the 1V8A LDO by the ADV7181D; the clock
@@ -154,17 +155,20 @@ with the XIAO out of its sockets.
 **C-A**: rev B's ADV7511 circuit, its input now 24-bit RGB 4:4:4 (input ID 0: R on D35-D28, G on
 D23-D16, B on D11-D4 [HWG Table 5]), every pixel at full colour. CEC by its own engine. The chip
 beside J21: the bus crosses 7 mm (the receptacle's two rows fan out on the two layers), the TMDS
-lines leave its right side and run up the right edge (1080p60: 1.485 Gb/s a lane).
+lines leave its right side and run up the right edge (1080p60: 1.485 Gb/s a lane), 1.27 mm (5 W)
+apart up the run; the first 15-17 mm out of the chip keep its pin pitch (the HPD and OUT_INT pins'
+lines beside them).
 
 **C-B**: the FPGA's four transceiver TX lanes (J21) through 100 nF each into an SN65DP159 (RGZ)
 [TI-DP159 Fig. 33]: lanes 0, 3, 2, 1 to its D2, D1, D0 and CLK inputs (the order they leave J21,
 so no pair crosses; the gateware maps channels to lanes). The retimer beside J21: the lanes run
 7 mm, straight out of J21's pads, through their capacitors, into its pins (gen_pcb.py serdes();
 0.2 mm lines 0.2 mm apart over ground 0.21 mm down: about 105 R differential, at the pairs' 100 R
-whatever their length). Its TMDS outputs to the ESD arrays and the receptacle: 49.6-57.9 mm, with
+whatever their length). Its TMDS outputs to the ESD arrays and the receptacle: 49.3-59.0 mm, with
 the connector the 2 to 3 inches of board trace and connector its driver is made for [10.2.2] (the
 receptacle in the coax jack's place, 25.5 mm left of rev C-A's); intra-pair skew under 1 mm (5 ps),
-between pairs 8 mm (50 ps, of HDMI's 337 ps at 5.94 Gb/s); its pre-emphasis and swing are set over
+between pairs 8.8 mm (55 ps, of HDMI's 337 ps at 5.94 Gb/s), the pairs 5 W apart along their run;
+its pre-emphasis and swing are set over
 I2C. Vsadj 7.06 k 0.5 % [10.3.1]; I2C control (I2C_EN high, A0/A1 low); OE from the FPGA with
 100 nF; DDC passed through (2 k each side); HPD out to the FPGA. CEC from the FPGA: one open-drain
 pin through a 2N7002 in the bidirectional level-shifter arrangement (gate at 3.3 V): with the

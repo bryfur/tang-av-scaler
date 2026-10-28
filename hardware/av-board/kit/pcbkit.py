@@ -1455,11 +1455,12 @@ class Layout:
         VIA_D = self.VIA_D
         gnd = b.FindNet("GND")
         no_via = [z.Outline() for z in b.Zones() if z.GetIsRuleArea() and z.GetDoNotAllowVias()]
-        reach = VIA_D / 2 + 0.05
+        reach = FromMM(VIA_D / 2 + 0.05)
 
         def kept_out(x, y):
-            return any(o.Contains(VECTOR2I(FromMM(x + dx), FromMM(y + dy)))
-                       for o in no_via for dx, dy in ((0, 0), (reach, 0), (-reach, 0), (0, reach), (0, -reach)))
+            # (the via's whole disc against the area: sampling its middle and four points round it
+            # let a strip's corner in between, on rev C-A a GND via 0.12 mm over a TMDS keep-out)
+            return any(o.Collide(VECTOR2I(FromMM(x), FromMM(y)), reach) for o in no_via)
         pts, segs = [], []
         for fp in b.GetFootprints():
             for p in fp.Pads():

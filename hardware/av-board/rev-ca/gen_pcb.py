@@ -29,6 +29,12 @@ class RevCA(RevC):
             ("D0", "36", "35", "U10", "1", "10", "2", "9", "7", "9"),
             ("CK", "33", "32", "U10", "4", "7", "5", "6", "10", "12")]
     TMDS_INWARD = {"34": 1.7, "37": 1.7, "38": 2.4, "41": 1.7}
+    # 1.27 mm between the pairs up their 55 mm run (5 W at 0.25 mm: TI SPRAAR7 3.1), as rev C-B's;
+    # the keep-outs along their first leg too, the 15-17 mm from the ADV7511 to the corner (past its
+    # break-out). That leg keeps the chip's pitch: spread there, the outer pairs would cross the
+    # HPD and OUT_INT pins' lines beside them (pins 30 and 45, out of the chip alongside CK and D2)
+    TMDS_SPREAD = 0.52
+    TMDS_KEEP_OUT = True
 
     TX_CHIP = (floor.ADV7511_AT, 8.0)
 
