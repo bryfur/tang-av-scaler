@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """smaa.py: the anti-aliasing: SMAA 1x's three steps (Jimenez et al., "SMAA: Enhanced Subpixel
-Morphological Antialiasing"; the orthogonal patterns only, no diagonals or corners: its LOW/MEDIUM
-presets), in whole numbers as the hardware does them (rtl/smaa.v), on the 720 x 480 picture before
+Morphological Antialiasing"; the orthogonal patterns and, as
+options, the diagonal ones and the corners: its LOW/MEDIUM presets, or near its HIGH), in whole numbers as the hardware does them (rtl/smaa.v), on the 720 x 480 picture before
 it is scaled.
 
 1. Edges, by luma (y): a pixel has a left edge if |y - y(left)| >= T, a top edge if
@@ -195,7 +195,15 @@ def lookup(pat, left, right):
     return _tab[k]
 
 
-def weights(e, w, h, n=N, diag=False):
+def corner_round(wv, d1, d2, a1, a2):
+    """[SMAA: SMAADetectHorizontalCornerPattern, SMAA_CORNER_ROUNDING 25] a weight less where the edge
+    crossing at the line's nearer end (a1 at the first, a2 at the second; both ends if as near) goes on
+    a pixel further: there the line ends in a corner, not in a step.  x 1/4, or x 5/8 with one of two"""
+    k = (a1 + a2 if d1 == d2 else 2 * a1 if d1 < d2 else 2 * a2)
+    return wv if k == 0 else (5 * wv + 4) >> 3 if k == 1 else (wv + 2) >> 2
+
+
+def weights(e, w, h, n=N, diag=False, corner=False):
     """[row][col] -> (top, up_of_top, left, left_of_left): with a top edge, top: how much the pixel
     takes of the one above, up_of_top: how much the one above takes of it; the same for a left
     edge"""
@@ -225,6 +233,9 @@ def weights(e, w, h, n=N, diag=False):
                 pr = E(x + i + 1, r - 1)[0] | E(x + i + 1, r)[0] << 1
                 above, below = lookup(pl | pr << 2, d1, d2)
                 wt, wu = below, above
+                if corner:
+                    wt = corner_round(wt, d1, d2, E(x - d1, r + 1)[0], E(x + d2 + 1, r + 1)[0])
+                    wu = corner_round(wu, d1, d2, E(x - d1, r - 2)[0], E(x + d2 + 1, r - 2)[0])
             if el:
                 i = 0
                 while i < n and not (E(x, r - i)[1] or E(x - 1, r - i)[1]) and E(x, r - i - 1)[0]:
@@ -238,6 +249,9 @@ def weights(e, w, h, n=N, diag=False):
                 pd = E(x - 1, r + i + 1)[1] | E(x, r + i + 1)[1] << 1
                 other, own = lookup(pu | pd << 2, d1, d2)
                 wl, wo = own, other
+                if corner:
+                    wl = corner_round(wl, d1, d2, E(x + 1, r - d1)[1], E(x + 1, r + d2 + 1)[1])
+                    wo = corner_round(wo, d1, d2, E(x - 2, r - d1)[1], E(x - 2, r + d2 + 1)[1])
             line.append((wt, wu, wl, wo))
         out.append(line)
     return out
@@ -269,7 +283,7 @@ def blend(pix, wts, w, h):
     return out
 
 
-def smaa_words(lines, thr=T, n=N, dbg=False, diag=False):
+def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False):
     """rtl/smaa.v: the picture as lines of 4:2:2 words (cb, y0, cr, y1) -> the same: luma mixed as
     blend() does; a chroma sample mixed only with the one above or below it (a pixel carries one:
     Cb the even pixels, Cr the odd)"""
@@ -277,7 +291,7 @@ def smaa_words(lines, thr=T, n=N, dbg=False, diag=False):
     y = [[v for wd in line for v in (wd[1], wd[3])] for line in lines]
     c = [[v for wd in line for v in (wd[0], wd[2])] for line in lines]
     e = edges(y, w, h, thr)
-    wts = weights(e, w, h, n, diag)
+    wts = weights(e, w, h, n, diag, corner)
     W = lambda x, r: wts[r][x] if 0 <= x < w and 0 <= r < h else (0, 0, 0, 0)
     mix = lambda a, b, k: a + (((b - a) * k + 128) >> 8)
     out = []
@@ -311,9 +325,9 @@ def smaa_words(lines, thr=T, n=N, dbg=False, diag=False):
     return out
 
 
-def smaa(pix, w, h, thr=T, n=N, diag=False):
+def smaa(pix, w, h, thr=T, n=N, diag=False, corner=False):
     e = edges([[p[0] for p in row] for row in pix], w, h, thr)
-    return blend(pix, weights(e, w, h, n, diag), w, h), e
+    return blend(pix, weights(e, w, h, n, diag, corner), w, h), e
 
 
 def main():
@@ -324,7 +338,7 @@ def main():
         im = Image.open(a[1]).convert("RGB")
         w, h = im.size
         pix = [[fsr.to_ycc(im.getpixel((x, y))) for x in range(w)] for y in range(h)]
-        out, e = smaa(pix, w, h, diag="diag" in a)
+        out, e = smaa(pix, w, h, diag="diag" in a, corner="corner" in a)
         res = Image.new("RGB", (w, h))
         if len(a) > 3 and a[3] == "edges":
             res.putdata([(255 * el, 255 * et, 0) for row in e for el, et in row])

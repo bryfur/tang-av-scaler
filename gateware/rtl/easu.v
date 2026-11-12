@@ -238,6 +238,7 @@ module easu (
     reg        swp12b, opp12b;
     reg [2:0]  li12b;
     reg [7:0]  ge;
+    reg        dz1, dz2, dz3;           // no direction at all (the greater part nothing), beside the products
     reg [12:0] ta;
     function [9:0] tanq(input integer n);
         case (n)
@@ -273,9 +274,10 @@ module easu (
         {li12, li11} <= {li11, li10};
         for (i = 0; i < 8; i = i + 1) begin                         // (a register after each multiplier)
             mtq[i] <= mt[i][27:0];
-            ge[i] <= nn13 >= mtq[i] && mtq[i] != 28'd0;             // (no direction at all: bin 0)
+            ge[i] <= nn13 >= mtq[i] && !dz3;                        // (no direction at all: bin 0)
         end
         nn13 <= nn12;
+        {dz3, dz2, dz1} <= {dz2, dz1, dm == 18'd0};
         {swp13, swp12b} <= {swp12b, swp12};
         {opp13, opp12b} <= {opp12b, opp12};
         {li13, li12b} <= {li12b, li12};

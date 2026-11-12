@@ -35,7 +35,7 @@
 //   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
 //                    15:8 the motion threshold
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
-//                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too,
+//                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
 //   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state,
 //                    31:16 frames it has begun
@@ -446,7 +446,7 @@ module top (
                    .c_ack(dm_ack), .c_rvalid(dm_rvalid));
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
-    reg  [31:0]  dcfg = 32'h14050600;
+    reg  [31:0]  dcfg = 32'h140D0600;
     always @(posedge clk)
         if (we && addr == 8'h35)
             dcfg <= wdata;
@@ -485,7 +485,7 @@ module top (
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
                    .state_o(d_state));
     lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .hold(d_hold), .r_we(r_we),
-                  .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_thr(dcfg[31:24]),
+                  .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),
                   .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     generate

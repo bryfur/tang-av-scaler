@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [diag] [aadbg] [sharp=N] [pic=FILE]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
-against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; aadbg: what it finds shown);
+against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
 pic=FILE: a still picture's fields in the moving test picture's place."""
 import os
 import subprocess
@@ -46,12 +46,13 @@ def main():
     sharp = int(next((a[6:] for a in args if a.startswith("sharp=")), 0))
     dbg = "aadbg" in args
     diag = "diag" in args
+    corner = "corner" in args
     pic = next((a[4:] for a in args if a.startswith("pic=")), None)
     fields = [(t & 1, model.field(t)) for t in range(nf)]
     if pic:
         fields = [(t & 1, f) for t, f in enumerate(model.picture_fields(pic, nf))]
     data = stream(fields)
-    tag = "d%d%s_%d_%d%s_s%d" % (nf, "p" if pic else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else ""), sharp)
+    tag = "d%d%s_%d_%d%s_s%d" % (nf, "p" if pic else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     tb = '''`timescale 1ns/1ps
@@ -91,7 +92,7 @@ module tb;
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
-    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .hold(hold), .aa_en(1'b%(aa_en)d), .aa_dbg(1'b%(aa_dbg)d), .aa_diag(1'b%(aa_diag)d),
+    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .hold(hold), .aa_en(1'b%(aa_en)d), .aa_dbg(1'b%(aa_dbg)d), .aa_diag(1'b%(aa_diag)d), .aa_corner(1'b%(aa_corner)d),
                   .aa_thr(8'd%(aa_thr)d), .r_we(r_we), .r_slot_d(sd[1:0]),
                   .r_slot_i(si[1:0]), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
                   .w_x(w_x), .w_d(w_d));
@@ -130,7 +131,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_thr=aa or 0, sharp=sharp, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, aa_thr=aa or 0, sharp=sharp, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v")]
     import fsr
@@ -153,10 +154,10 @@ endmodule
     # (the dump begins at the end of the frame before: its last row is still coming out)
     first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
     start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag)
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner)
     ana = fsr.analysis([[p[0] for p in row] for row in pix], 720, 480)
     line, prev, rb = -1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):

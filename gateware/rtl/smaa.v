@@ -60,6 +60,7 @@ module smaa #(
     input      [7:0]  thr,
     input             dbg,
     input             diag,             // the diagonal patterns too
+    input             corner,           // less mixed where a line ends in a corner
     input             i_v,
     input      [9:0]  i_x,
     input      [9:0]  i_j,
@@ -221,13 +222,15 @@ module smaa #(
     end
     // the columns before: all their lines for the last N + 11 (cv[k]: column w1_x - 1 - k; the
     // diagonals look nine columns to the middle one's left); the
-    // middle line's {top, left} and the line above's left for the last 2N + 3 (hk)
+    // middle line's {top, left}, the line above's left, and the lefts of the line below and of the
+    // line two above (for the corners) for the last 2N + 3 (hk)
     reg [65:0] cv [0:25] /* synthesis syn_ramstyle = "registers" */;
-    reg [2:0]  hk [0:32] /* synthesis syn_ramstyle = "registers" */;
+    reg [4:0]  hk [0:32] /* synthesis syn_ramstyle = "registers" */;
     // the middle column: w1_x - 17, hk[16], cv[16]; the one before it cv[17]
     // hz(o): column middle + o, -16 <= o <= 16: {top, left, left of the line above}
     reg [15:0] ls, rs, us, ds;          // each search's stops
-    reg [31:0] lc, rc, uc, dc;          // each's turns ({down or own, up or other}) at each step
+    reg [63:0] lc, rc, uc, dc;          // at each step: the edge that crosses a pixel further on the
+                                        // pixel's side, on the other side; the turns {down or own, up or other}
     reg        s_v = 1'b0, s_et, s_el;
     // the diagonals: along "/" (a) and "\\" (b), to the left and to the right, the eight pixels that
     // carry the line on; the pixels that start them; at each distance the two edges crossing there
@@ -244,7 +247,7 @@ module smaa #(
         s_v <= 1'b0;
         if (w1_v) begin
             cv[0] <= vm;
-            hk[0] <= {vm[32], vm[33], vm[35]};
+            hk[0] <= {vm[37], vm[31], vm[32], vm[33], vm[35]};
             for (i = 1; i <= 25; i = i + 1)
                 cv[i] <= cv[i - 1];
             for (i = 1; i <= 32; i = i + 1)
@@ -258,14 +261,14 @@ module smaa #(
             for (i = 0; i < 16; i = i + 1) begin
                 // left: the boundary on the left of column -i; right: on the right of column +i
                 ls[i] <= hk[16 + i][1] | hk[16 + i][0] | !hk[16 + i + 1][2] | (i == 15);
-                lc[2 * i +: 2] <= {hk[16 + i][1], hk[16 + i][0]};
+                lc[4 * i +: 4] <= {hk[16 + i][3], hk[16 + i][4], hk[16 + i][1], hk[16 + i][0]};
                 rs[i] <= hk[16 - i - 1][1] | hk[16 - i - 1][0] | !hk[16 - i - 1][2] | (i == 15);
-                rc[2 * i +: 2] <= {hk[16 - i - 1][1], hk[16 - i - 1][0]};
+                rc[4 * i +: 4] <= {hk[16 - i - 1][3], hk[16 - i - 1][4], hk[16 - i - 1][1], hk[16 - i - 1][0]};
                 // up: the boundary above line -i; down: below line +i
                 us[i] <= `ET(cv[16], -i) | `ET(cv[17], -i) | !`EL(cv[16], -i - 1) | (i == 15);
-                uc[2 * i +: 2] <= {`ET(cv[16], -i), `ET(cv[17], -i)};
+                uc[4 * i +: 4] <= {`ET(cv[15], -i), `ET(cv[18], -i), `ET(cv[16], -i), `ET(cv[17], -i)};
                 ds[i] <= `ET(cv[16], i + 1) | `ET(cv[17], i + 1) | !`EL(cv[16], i + 1) | (i == 15);
-                dc[2 * i +: 2] <= {`ET(cv[16], i + 1), `ET(cv[17], i + 1)};
+                dc[4 * i +: 4] <= {`ET(cv[15], i + 1), `ET(cv[18], i + 1), `ET(cv[16], i + 1), `ET(cv[17], i + 1)};
             end
             // (cv[16 - o]: the column o to the middle one's right)
             sa <= `EL(cv[16], 0);
@@ -287,19 +290,32 @@ module smaa #(
         end
     end
     // the first stop of each, and the turn there
-    function [5:0] first(input [15:0] stop, input [31:0] turn);
+    function [7:0] first(input [15:0] stop, input [63:0] turn);
         integer n;
         begin
-            first = {turn[31:30], 4'd15};
+            first = {turn[63:60], 4'd15};
             for (n = 14; n >= 0; n = n - 1)
                 if (stop[n])
-                    first = {turn[2 * n +: 2], n[3:0]};
+                    first = {turn[4 * n +: 4], n[3:0]};
         end
     endfunction
+    // the corners [SMAA_CORNER_ROUNDING 25]: where the edge crossing at the line's nearer end (both
+    // ends, if as near) goes on a pixel further, the weight x 1/4 (2), or x 5/8 with one of two (1)
+    function [1:0] cnr(input [3:0] d1, input [3:0] d2, input a1, input a2);
+        cnr = d1 == d2 ? (a1 && a2 ? 2'd2 : a1 || a2 ? 2'd1 : 2'd0) : (d1 < d2 ? a1 : a2) ? 2'd2 : 2'd0;
+    endfunction
+    function [7:0] rnd(input [7:0] w, input [1:0] c);
+        reg [10:0] t;
+        begin
+            t = c[1] ? {3'd0, w} + 11'd2 : {1'b0, w, 2'b00} + {3'd0, w} + 11'd4;
+            rnd = c == 2'd0 ? w : c[1] ? t[9:2] : t[10:3];
+        end
+    endfunction
+    reg [1:0]  n_ht, n_hu, n_vl, n_vo, n3_ht, n3_hu, n3_vl, n3_vo;
     reg        q_v = 1'b0, q_et, q_el, q2_v = 1'b0, q2_et, q2_el, q3_v = 1'b0, q3_et, q3_el;
     reg [10:0] q_x, q2_x, q3_x;
     reg [9:0]  q_r, q2_r, q3_r;
-    reg [5:0]  fl, fr, fu, fd;
+    reg [7:0]  fl, fr, fu, fd;
     // a diagonal search: {the line goes on past the eighth pixel, pixels before it stops (0-7)}
     function [3:0] dsearch(input [8:1] on);
         integer n;
@@ -356,6 +372,11 @@ module smaa #(
         gb <= diag && {1'b0, d1b} + {1'b0, d2b} > 5'd2;
         {ga3, ga2} <= {ga2, ga};
         {gb3, gb2} <= {gb2, gb};
+        n_ht <= corner ? cnr(fl[3:0], fr[3:0], fl[7], fr[7]) : 2'd0;
+        n_hu <= corner ? cnr(fl[3:0], fr[3:0], fl[6], fr[6]) : 2'd0;
+        n_vl <= corner ? cnr(fu[3:0], fd[3:0], fu[7], fd[7]) : 2'd0;
+        n_vo <= corner ? cnr(fu[3:0], fd[3:0], fu[6], fd[6]) : 2'd0;
+        {n3_ht, n3_hu, n3_vl, n3_vo} <= {n_ht, n_hu, n_vl, n_vo};
         {q3_v, q2_v} <= {q2_v, q_v};
         {q3_x, q2_x} <= {q2_x, q_x};
         {q3_r, q2_r} <= {q2_r, q_r};
@@ -365,10 +386,10 @@ module smaa #(
         k_x <= q3_x;
         k_r <= q3_r;
         k_e <= {q3_el, q3_et};
-        k_wt <= q3_et ? ah[7:0] : 8'd0;         // the pixel takes this much of the one above
-        k_wu <= q3_et ? ah[15:8] : 8'd0;        // the one above this much of it
-        k_wl <= q3_el ? av[7:0] : 8'd0;         // the pixel of the one to its left
-        k_wo <= q3_el ? av[15:8] : 8'd0;        // the one to its left of it
+        k_wt <= q3_et ? rnd(ah[7:0], n3_ht) : 8'd0;         // the pixel takes this much of the one above
+        k_wu <= q3_et ? rnd(ah[15:8], n3_hu) : 8'd0;        // the one above this much of it
+        k_wl <= q3_el ? rnd(av[7:0], n3_vl) : 8'd0;         // the pixel of the one to its left
+        k_wo <= q3_el ? rnd(av[15:8], n3_vo) : 8'd0;        // the one to its left of it
         // the diagonals' (the table's {first, second}: the second diagonal's the other way round)
         dwr = (ga3 ? {1'b0, ada[15:8]} : 9'd0) + (gb3 ? {1'b0, adb[7:0]} : 9'd0);
         dwg = (ga3 ? {1'b0, ada[7:0]} : 9'd0) + (gb3 ? {1'b0, adb[15:8]} : 9'd0);

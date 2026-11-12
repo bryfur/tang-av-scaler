@@ -99,8 +99,9 @@ module hdmi_audio (
     reg [7:0]  he;
     reg [55:0] spq [0:3];
     reg [3:0]  ph = 4'd0;
-    wire [23:0] al = fl[rp], ar = fr[rp], bl = fl[rp + 2'd1], br = fr[rp + 2'd1];
-    wire [7:0]  an = fn[rp], bn = fn[rp + 2'd1];
+    // (the two samples at the front: a clock late, but they wait there since before the line's start)
+    reg [23:0] al, ar, bl, br;
+    reg [7:0]  an, bn;
     function [7:0] status(input [23:0] l, input [23:0] r, input [7:0] n);   // {P C U V of right, of left}
         reg c;
         begin
@@ -118,6 +119,8 @@ module hdmi_audio (
         hs_q2 <= hs_q;
         vs_q2 <= vs_q;
         take_s <= 1'b0;
+        {al, ar, an} <= {fl[rp], fr[rp], fn[rp]};
+        {bl, br, bn} <= {fl[rp + 2'd1], fr[rp + 2'd1], fn[rp + 2'd1]};
         if (t1 != t2 && cnt != 3'd4) begin
             fl[wp] <= s_l;
             fr[wp] <= s_r;
