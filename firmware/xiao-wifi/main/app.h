@@ -42,6 +42,7 @@ struct scaler_settings {
     uint8_t aa_thr;     /* its edge threshold */
     uint8_t sharp;      /* RCAS sharpening, 0 (none) to 16 */
     bool swap, top1, pattern, freeze;
+    bool audio;         /* HDMI's data islands: the sound and the InfoFrames (else DVI's plain blanking) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */

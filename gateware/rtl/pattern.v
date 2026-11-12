@@ -47,7 +47,14 @@ module pattern #(
     // of the row: is the next one picture; where VSYNC is (rows begin at the picture's first pixel,
     // VSYNC turns HA + HF into its rows)
     reg next_act, vs_first, vs_row, vs_last;
+    reg row_act, row_edge, row_box, row_ramp;       // (the test picture's rows, likewise ahead)
+    reg [12:0] box_end;
     always @(posedge clk) begin
+        row_act <= y < VA;
+        row_edge <= y == 0 || y == VA - 1;
+        row_box <= y >= VA / 2 - BOX / 2 && y < VA / 2 + BOX / 2;
+        row_ramp <= y >= VA - VA / 8;
+        box_end <= box + BOX[12:0];
         next_act <= y == VT - 1 || y < VA - 1;
         vs_first <= y == VA + VF - 1;
         vs_row <= y >= VA + VF && y < VA + VF + VS - 1;
@@ -67,7 +74,7 @@ module pattern #(
         oy <= y_q;
         for (k = 0; k < PPC; k = k + 1) begin
             px = x_q + k[12:0];
-            de[k] <= px < HA && y_q < VA;
+            de[k] <= px < HA && row_act;
             hs[k] <= px >= HA + HF && px < HA + HF + HS;
             vs[k] <= vs_row || (vs_first && px >= HA + HF) || (vs_last && px < HA + HF);
             pre[k] <= next_act && px >= HT - 10 && px < HT - 2;
@@ -77,10 +84,9 @@ module pattern #(
                   (px >= 6 * BAR) + (px >= 7 * BAR);
             rgb = ~bar;                 // {g, r, b}: white yellow cyan green magenta red blue black
             grey = HA > 2048 ? px[11:4] : px[10:3];
-            if (px == 0 || px == HA - 1 || y_q == 0 || y_q == VA - 1 ||
-                (px >= box && px < box + BOX && y_q >= VA / 2 - BOX / 2 && y_q < VA / 2 + BOX / 2)) begin
+            if (px == 0 || px == HA - 1 || row_edge || (px >= box && px < box_end && row_box)) begin
                 r[8 * k +: 8] <= 8'hFF; g[8 * k +: 8] <= 8'hFF; b[8 * k +: 8] <= 8'hFF;
-            end else if (y_q >= VA - VA / 8) begin
+            end else if (row_ramp) begin
                 r[8 * k +: 8] <= grey; g[8 * k +: 8] <= grey; b[8 * k +: 8] <= grey;
             end else begin
                 g[8 * k +: 8] <= rgb[2] ? 8'd191 : 8'd0;

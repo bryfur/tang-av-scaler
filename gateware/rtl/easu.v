@@ -81,7 +81,7 @@ module easu (
     output     [7:0]  o_cb,
     output     [7:0]  o_cr
 ) /* synthesis syn_dspstyle = "logic" */;       // (small multipliers: in DSP blocks they are far apart)
-    localparam LAT = 25;
+    localparam LAT = 26;
     localparam W = 720, H = 480;
 
     // the row: fy the source row above its place (-1 to H - 1), py its place below it (2 py + 1
@@ -166,11 +166,11 @@ module easu (
     // 3: the four rows' words; 4: the window, four columns of four rows, a new column at each odd pixel
     reg [53:0] cd [0:3] /* synthesis syn_ramstyle = "registers" */;
     reg [53:0] win [0:15] /* synthesis syn_ramstyle = "registers" */;     // [row][col]: col 3 the newest
-    reg [28:0] odd, inw;                // ([k]: of the pixel k + 1 clocks on)
+    reg [29:0] odd, inw;                // ([k]: of the pixel k + 1 clocks on)
     integer    i, j;
     always @(posedge clk) begin
-        odd <= {odd[27:0], x[0]};
-        inw <= {inw[27:0], de && x >= 13'd240 && x < 13'd1680};
+        odd <= {odd[28:0], x[0]};
+        inw <= {inw[28:0], de && x >= 13'd240 && x < 13'd1680};
         for (i = 0; i < 4; i = i + 1) begin
             cd[i] <= q[slot[i]];
             if (odd[4]) begin
@@ -233,7 +233,10 @@ module easu (
     reg        swp, opp, swp11, opp11, swp12, opp12, swp13, opp13;
     reg [2:0]  li9, li10, li11, li12, li13;
     wire signed [29:0] mt [0:7];
-    reg [27:0] nn11, nn12;
+    reg [27:0] nn11, nn12, nn13;
+    reg [27:0] mtq [0:7] /* synthesis syn_preserve = 1 */;
+    reg        swp12b, opp12b;
+    reg [2:0]  li12b;
     reg [7:0]  ge;
     reg [12:0] ta;
     function [9:0] tanq(input integer n);
@@ -268,16 +271,19 @@ module easu (
         {swp12, swp11} <= {swp11, swp};
         {opp12, opp11} <= {opp11, opp};
         {li12, li11} <= {li11, li10};
-        for (i = 0; i < 8; i = i + 1)
-            ge[i] <= {2'd0, nn12} >= mt[i] && mt[i] != 30'sd0;      // (no direction at all: bin 0)
-        swp13 <= swp12;
-        opp13 <= opp12;
-        li13 <= li12;
+        for (i = 0; i < 8; i = i + 1) begin                         // (a register after each multiplier)
+            mtq[i] <= mt[i][27:0];
+            ge[i] <= nn13 >= mtq[i] && mtq[i] != 28'd0;             // (no direction at all: bin 0)
+        end
+        nn13 <= nn12;
+        {swp13, swp12b} <= {swp12b, swp12};
+        {opp13, opp12b} <= {opp12b, opp12};
+        {li13, li12b} <= {li12b, li12};
         t = ge[0] + ge[1] + ge[2] + ge[3] + ge[4] + ge[5] + ge[6] + ge[7];
         if (swp13)
             t = 5'd16 - t;
         bin = opp13 ? 5'd0 - t : t;
-        ta <= {py, odd[14], bin, li13};
+        ta <= {py, odd[15], bin, li13};
     end
 
     // 15 to 17: the table; the twelve pixels wait for it
@@ -286,10 +292,10 @@ module easu (
     easu_rom #(.FILE(`EASU_HEX1)) u_rom1 (.clk(clk), .a(ta), .q(wt[59:30]));
     easu_rom #(.FILE(`EASU_HEX2)) u_rom2 (.clk(clk), .a(ta), .q(wt[89:60]));
     easu_rom #(.FILE(`EASU_HEX3)) u_rom3 (.clk(clk), .a(ta), .q(wt[119:90]));
-    reg [287:0] tp [5:17] /* synthesis syn_srlstyle = "registers" */;
+    reg [287:0] tp [5:18] /* synthesis syn_srlstyle = "registers" */;
     always @(posedge clk) begin
         tp[5] <= taps4;
-        for (i = 6; i <= 17; i = i + 1)
+        for (i = 6; i <= 18; i = i + 1)
             tp[i] <= tp[i - 1];
     end
 
@@ -300,7 +306,7 @@ module easu (
     generate
         for (gc = 0; gc < 3; gc = gc + 1) begin : g_ch
             for (gt = 0; gt < 12; gt = gt + 1) begin : g_tap
-                easu_mul #(.AW(9), .BW(10)) u_mul (.clk(clk), .a({1'b0, tp[17][24 * gt + 8 * (2 - gc) +: 8]}),
+                easu_mul #(.AW(9), .BW(10)) u_mul (.clk(clk), .a({1'b0, tp[18][24 * gt + 8 * (2 - gc) +: 8]}),
                                                    .b(wt[10 * gt +: 10]), .p(pr[12 * gc + gt]));
             end
         end
@@ -329,10 +335,10 @@ module easu (
         for (c = 0; c < 3; c = c + 1) begin
             // (the nearest four: taps 3 f, 4 g, 7 j, 8 k; a channel c of tap t at 24 t + 8 (2 - c)):
             // 17: two and two; 18: the four
-            mnp[2 * c] <= min2(tp[16][24 * 3 + 8 * (2 - c) +: 8], tp[16][24 * 4 + 8 * (2 - c) +: 8]);
-            mnp[2 * c + 1] <= min2(tp[16][24 * 7 + 8 * (2 - c) +: 8], tp[16][24 * 8 + 8 * (2 - c) +: 8]);
-            mxp[2 * c] <= max2(tp[16][24 * 3 + 8 * (2 - c) +: 8], tp[16][24 * 4 + 8 * (2 - c) +: 8]);
-            mxp[2 * c + 1] <= max2(tp[16][24 * 7 + 8 * (2 - c) +: 8], tp[16][24 * 8 + 8 * (2 - c) +: 8]);
+            mnp[2 * c] <= min2(tp[17][24 * 3 + 8 * (2 - c) +: 8], tp[17][24 * 4 + 8 * (2 - c) +: 8]);
+            mnp[2 * c + 1] <= min2(tp[17][24 * 7 + 8 * (2 - c) +: 8], tp[17][24 * 8 + 8 * (2 - c) +: 8]);
+            mxp[2 * c] <= max2(tp[17][24 * 3 + 8 * (2 - c) +: 8], tp[17][24 * 4 + 8 * (2 - c) +: 8]);
+            mxp[2 * c + 1] <= max2(tp[17][24 * 7 + 8 * (2 - c) +: 8], tp[17][24 * 8 + 8 * (2 - c) +: 8]);
             mn[18][c] <= min2(mnp[2 * c], mnp[2 * c + 1]);
             mx[18][c] <= max2(mxp[2 * c], mxp[2 * c + 1]);
             for (i = 19; i <= 22; i = i + 1) begin

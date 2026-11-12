@@ -25,8 +25,9 @@
 //   22-23 R GT_ST    lanes 1,0 and 3,2: STAT (13 bits) at 12:0 and 28:16
 //   24 R   GT_AST    the lanes' ASTAT, six bits each
 //   26 RW  HDMI      0 characters scrambled [HDMI 2.0], 1 the video preamble and guard band sent (else
-//                    DVI's plain blanking), 7:4 the scrambler's open choices (hdmi_scr.v opt); set
-//                    before the lanes are started
+//                    DVI's plain blanking), 2 data islands: the sound and the InfoFrames
+//                    (hdmi_audio.v: with bit 1; 1080p60 only), 7:4 the scrambler's open choices
+//                    (hdmi_scr.v opt); 0 and 7:4 set before the lanes are started
 //   30 RW  VID       0 the picture is the component input's (else pattern.v's), 1 the fields in the
 //                    DDR3 are left as they are, 2 the pixel port is 16 bits wide (the CP core's:
 //                    vcap.v), 3 Cb and Cr the other way round, 20:16 the sharpening (rcas.v: 0 none
@@ -239,7 +240,7 @@ module top (
     // the component input: the ADV7181D's fields decoded on its clock (vcap.v), kept in the DDR3
     // (cap_ddr.v), made a progressive picture (deint.v, lstream.v), scaled (easu.v) and sharpened (rcas.v: 1080p60 only), LAT
     // clocks behind pattern.v's pixel: its timing and its picture wait that long
-    localparam LAT_E = 25, LAT = LAT_E + 2200 + 23;      // (easu.v; rcas.v: a row and 23)
+    localparam LAT_E = 26, LAT = LAT_E + 2200 + 24;      // (easu.v; rcas.v: a row and 23)
     reg [31:0] vid = 32'd0;
     reg        raw_arm = 1'b0;
     reg [1:0]  raw_mode = 2'd0;
@@ -287,24 +288,45 @@ module top (
     assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {l_r, l_g, l_b} : dl_p;
     // the channels' control bits: 0 {VSYNC, HSYNC}; 1 {CTL1, CTL0}, 2 {CTL3, CTL2}: the video preamble
     // is CTL0 alone [HDMI 1.4 5.2.1.1], sent with the guard band
-    wire [2 * PPC - 1:0]  c0, c1;
+    // a data island's preamble is CTL0 and CTL2 [5.2.1.1]; its characters go to the encoders in the
+    // control tokens' place (hdmi_audio.v, further down: a_*), two clocks on as hdmi_scr.v's
+    wire                  a_pre, a_act;
+    wire [9:0]            a_k0, a_k1, a_k2;
+    reg  [30:0]           a_d1, a_d2;
+    always @(posedge tx_clk) begin
+        a_d1 <= {a_act, a_k2, a_k1, a_k0};
+        a_d2 <= a_d1;
+    end
+    wire [2 * PPC - 1:0]  c0, c1, c2;
     genvar gk;
     generate
         for (gk = 0; gk < PPC; gk = gk + 1) begin : g_c
             assign c0[2 * gk +: 2] = {v_vs[gk], v_hs[gk]};
-            assign c1[2 * gk +: 2] = {1'b0, v_pre[gk] & hd[1]};
+            assign c1[2 * gk +: 2] = {1'b0, (v_pre[gk] & hd[1]) | (PPC == 1 && a_pre)};
+            assign c2[2 * gk +: 2] = {1'b0, PPC == 1 && a_pre};
         end
     endgenerate
     wire [8 * PPC - 1:0]  s_r, s_g, s_b;
     wire [PPC - 1:0]      s_r_de, s_g_de, s_b_de;
-    wire [10 * PPC - 1:0] k_r, k_g, k_b, t_r, t_g, t_b;
+    wire [10 * PPC - 1:0] q_r, q_g, q_b, k_r, k_g, k_b, t_r, t_g, t_b;
     hdmi_scr #(.N(PPC), .CH(0)) u_s0 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_b), .c(c0),
-                                     .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_b), .de_o(s_b_de), .tok(k_b));
+                                     .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_b), .de_o(s_b_de), .tok(q_b));
     hdmi_scr #(.N(PPC), .CH(1)) u_s1 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_g), .c(c1),
-                                     .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_g), .de_o(s_g_de), .tok(k_g));
+                                     .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_g), .de_o(s_g_de), .tok(q_g));
     hdmi_scr #(.N(PPC), .CH(2)) u_s2 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_r),
-                                     .c({2 * PPC{1'b0}}), .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_r),
-                                     .de_o(s_r_de), .tok(k_r));
+                                     .c(c2), .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_r),
+                                     .de_o(s_r_de), .tok(q_r));
+    generate
+        if (PPC == 1) begin : g_isl
+            assign k_b = a_d2[30] ? a_d2[9:0] : q_b;
+            assign k_g = a_d2[30] ? a_d2[19:10] : q_g;
+            assign k_r = a_d2[30] ? a_d2[29:20] : q_r;
+        end else begin : g_noisl
+            assign k_b = q_b;
+            assign k_g = q_g;
+            assign k_r = q_r;
+        end
+    endgenerate
     tmds_enc #(.N(PPC)) u_t2 (.clk(tx_clk), .d(s_r), .tok(k_r), .de(s_r_de), .q(t_r));
     tmds_enc #(.N(PPC)) u_t1 (.clk(tx_clk), .d(s_g), .tok(k_g), .de(s_g_de), .q(t_g));
     tmds_enc #(.N(PPC)) u_t0 (.clk(tx_clk), .d(s_b), .tok(k_b), .de(s_b_de), .q(t_b));
@@ -499,6 +521,9 @@ module top (
     wire        au_tick;
     audio_in u_au (.clk(pll_clk2), .scki(in_scki), .bck(in_bck), .lrck(in_lrck), .dout(in_dout), .l(au_l), .r(au_r),
                    .tick(au_tick));
+    // (to HDMI: the samples as they come, the word clock's side taking them by the tick)
+    hdmi_audio u_ha (.clk(tx_clk), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]), .s_tick(au_tick), .s_l(au_l[30:7]),
+                     .s_r(au_r[30:7]), .pre(a_pre), .act(a_act), .k0(a_k0), .k1(a_k1), .k2(a_k2));
     reg         au_t0, au_t1, au_t2;
     reg  [31:0] au_ls, au_rs;
     reg  [15:0] au_pl = 16'd0, au_pr = 16'd0;

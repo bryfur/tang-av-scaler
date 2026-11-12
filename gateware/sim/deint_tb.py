@@ -12,7 +12,7 @@ sys.path.insert(0, HERE)
 import model
 
 WORK = os.path.join(HERE, "build")
-LAT, LINES = 25 + 2200 + 23, 240
+LAT, LINES = 26 + 2200 + 24, 240
 
 
 def stream(fields):
@@ -95,7 +95,7 @@ module tb;
     wire [7:0] e_y, e_cb, e_cr; wire [24:0] e_xy;
     easu u_easu (.clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
                  .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
-    dline #(.W(25), .D(25)) u_dxy (.clk(clk), .d({ox, oy}), .q(e_xy));
+    dline #(.W(25), .D(26)) u_dxy (.clk(clk), .d({ox, oy}), .q(e_xy));
     rcas u_rcas (.clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d),
                  .r(r), .g(g), .b(b));
     wire de_d;

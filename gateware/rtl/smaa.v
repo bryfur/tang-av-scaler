@@ -105,7 +105,8 @@ module smaa #(
     // ---- edges ----
     // each column's luma of the three lines before
     reg [23:0] am [0:1023];
-    reg [23:0] a_r1, a_q;               // (the RAM's register, then one beside the logic: as each RAM here)
+    reg [23:0] a_r1;                    // (the RAM's register, then one beside the logic: as each RAM here)
+    reg [23:0] a_q /* synthesis syn_preserve = 1 */;
     reg        e0_v = 1'b0, e0_b, e1_v = 1'b0, e1_b;
     reg [10:0] e0_x, e1_x;
     reg [9:0]  e0_j, e1_j;
@@ -180,7 +181,8 @@ module smaa #(
     // ---- weights ----
     // each column's edges of the 2N + 2 lines before (64 bits: line e - 1 lowest; a line {left, top})
     reg [63:0] bm [0:1023];
-    reg [63:0] b_r1, b_q;
+    reg [63:0] b_r1;
+    reg [63:0] b_q /* synthesis syn_preserve = 1 */;
     reg        w0_v = 1'b0, w0_el, w0_et, w1_v = 1'b0, w1_el, w1_et;
     reg [10:0] w0_x, w1_x;
     reg [9:0]  w0_e, w1_e;
@@ -298,9 +300,11 @@ module smaa #(
     // above the one the weights are of ({the nearer, the further})
     reg [23:0] cm [0:1023];
     reg [31:0] fm [0:1023];
-    reg [23:0] c_r1, c_q;
-    reg [31:0] f_r1, f_q;
-    reg [15:0] p_d;
+    reg [23:0] c_r1;
+    reg [31:0] f_r1;
+    reg [23:0] c_q /* synthesis syn_preserve = 1 */;
+    reg [31:0] f_q /* synthesis syn_preserve = 1 */;
+    reg [15:0] p_d /* synthesis syn_preserve = 1 */;
     reg        b0_v = 1'b0, b1_v = 1'b0, b1_in;
     reg [10:0] b0_x, b1_x;
     reg [9:0]  b0_r, b1_r;

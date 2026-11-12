@@ -21,7 +21,7 @@ module rcas (
     output reg [7:0]  g,
     output reg [7:0]  b
 ) /* synthesis syn_dspstyle = "logic" */;
-    localparam LAT = 23;
+    localparam LAT = 24;
     localparam P = 219;
     integer i;
     function [7:0] min2(input [7:0] a, input [7:0] b);
@@ -136,22 +136,23 @@ module rcas (
     easu_mul #(.AW(9), .BW(14)) u_t2 (.clk(clk), .a({1'b0, pmx}), .b({1'b0, r2}), .p(t2));
     reg [5:0]  l10, ls;
     reg [10:0] lsm;
-    reg [9:0]  s8, s9, s10, s11;
-    reg [7:0]  e8, e9, e10, e11;
-    reg [15:0] c8, c9, c10, c11;
-    reg        ok8, ok9, ok10, ok11;
-    wire [16:0] u1 = t1[22:6], u2 = t2[22:6];
-    wire [16:0] um = u1 < u2 ? u1 : u2;
+    reg [9:0]  s8, s9, s9b, s10, s11;
+    reg [7:0]  e8, e9, e9b, e10, e11;
+    reg [15:0] c8, c9, c9b, c10, c11;
+    reg        ok8, ok9, ok9b, ok10, ok11;
+    reg [6:0]  u1, u2;                  // (each limit held to 64 first: a clock of its own after the multiplier)
     always @(posedge clk) begin
-        {s9, s8} <= {s8, s7};
-        {e9, e8} <= {e8, e7};
-        {c9, c8} <= {c8, c7};
-        {ok9, ok8} <= {ok8, ok7};
-        l10 <= um > 17'd48 ? 6'd48 : um[5:0];
-        s10 <= s9;
-        e10 <= e9;
-        c10 <= c9;
-        ok10 <= ok9;
+        {s9b, s9, s8} <= {s9, s8, s7};
+        {e9b, e9, e8} <= {e9, e8, e7};
+        {c9b, c9, c8} <= {c9, c8, c7};
+        {ok9b, ok9, ok8} <= {ok9, ok8, ok7};
+        u1 <= |t1[22:12] ? 7'd64 : t1[12:6];
+        u2 <= |t2[22:12] ? 7'd64 : t2[12:6];
+        l10 <= (u1 < u2 ? u1 : u2) > 7'd48 ? 6'd48 : u1 < u2 ? u1[5:0] : u2[5:0];
+        s10 <= s9b;
+        e10 <= e9b;
+        c10 <= c9b;
+        ok10 <= ok9b;
         lsm = l10 * sharp;
         ls <= lsm[9:4];
         s11 <= s10;

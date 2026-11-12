@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""hdmi.py [--ntsc] [--retimer] [--no-scramble] [--frame] [--opt N] [--load [FS]]: the test picture out of the HDMI port, from a loaded bring-up
+"""hdmi.py [--ntsc] [--audio] [--retimer] [--no-scramble] [--frame] [--opt N] [--load [FS]]: the test picture out of the HDMI port, from a loaded bring-up
 image (or after loading it): the MS5351M's 148.5 MHz to the transceivers, the lanes out of reset,
 their PLL checked, the PCS resets pulsed, data valid, then the SN65DP159's outputs on. Prints what
 it finds, with an HDMI 2.0 sink its lock and character errors over 5 s (SCDC).
@@ -61,11 +61,12 @@ def main():
     # an HDMI 2.0 sink is told the clock's ratio and whether characters are scrambled before any are
     # sent [HDMI 2.0 6.1.3.2, 10.4.1.4: SCDC TMDS_Config]; the retimer hears the same write on DDC
     scramble = mode == 4 and "--no-scramble" not in sys.argv
-    frame = scramble or "--frame" in sys.argv   # the video preamble and guard band (else DVI's blanking)
+    audio = "--audio" in sys.argv               # data islands: the sound and the InfoFrames (1080p60)
+    frame = scramble or audio or "--frame" in sys.argv   # the video preamble and guard band (else DVI's blanking)
     opt = int(sys.argv[sys.argv.index("--opt") + 1], 0) if "--opt" in sys.argv else 0
     config = (2 if mode == 4 else 0) | (1 if scramble else 0)
     has_scdc = m.i2c_probe(2, 0x54)
-    m.w(0x26, (1 if scramble else 0) | (2 if frame else 0) | opt << 4)
+    m.w(0x26, (1 if scramble else 0) | (2 if frame else 0) | (4 if audio else 0) | opt << 4)
     if has_scdc:
         m.i2c_write(2, 0x54, [0x02, 0x01])      # Source Version 1
         m.i2c_write(2, 0x54, [0x20, config])

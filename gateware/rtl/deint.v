@@ -81,7 +81,7 @@ module deint #(
     end
 
     localparam S_IDLE = 0, S_RQ = 1, S_WAIT = 2, S_C1 = 3, S_C2 = 4, S_W = 5, S_NEXT = 6, S_C1B = 7, S_C2B = 8,
-               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13;
+               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13, S_C2A = 14;
     reg [3:0]  st = S_IDLE;
     reg        active = 1'b0, pc, hist;
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
@@ -142,7 +142,7 @@ module deint #(
     endfunction
 
     // C1: new and old as used, the three differences' greatest
-    reg [127:0] dn, m, dnr, dwr, md, dor, mab, dw2;
+    reg [127:0] dn, m, dnr, dwr, md, dor, mab, dw2, mlc, mrr;
     reg         rdv = 1'b0;
     reg [255:0] rdq;
     reg [7:0]   carry;                  // m of the pixel before these sixteen
@@ -255,7 +255,9 @@ module deint #(
                 st <= S_C1D;
             S_C1D:
                 st <= S_C2;
-            S_C2: begin
+            S_C2:                                   // (carry is still the sixteen pixels before's)
+                st <= S_C2A;
+            S_C2A: begin
                 carry <= m[8 * 15 +: 8];
                 st <= S_C2B;
             end
@@ -316,8 +318,9 @@ module deint #(
             dw2[8 * n +: 8] <= dwr[8 * n +: 8];
             m[8 * n +: 8] <= max2(mab[8 * n +: 8], dw2[8 * n +: 8]);
             t_l = n == 0 ? carry : m[8 * (n - 1) +: 8];
-            t_r = n == 15 ? m[8 * 15 +: 8] : m[8 * (n + 1) +: 8];
-            md[8 * n +: 8] <= max2(max2(t_l, m[8 * n +: 8]), t_r);
+            mlc[8 * n +: 8] <= max2(t_l, m[8 * n +: 8]);
+            mrr[8 * n +: 8] <= n == 15 ? m[8 * 15 +: 8] : m[8 * (n + 1) +: 8];
+            md[8 * n +: 8] <= max2(mlc[8 * n +: 8], mrr[8 * n +: 8]);
         end
         // the second stage: the word made, and the word as it is
         r_wa <= s1_wa;

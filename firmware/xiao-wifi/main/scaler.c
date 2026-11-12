@@ -246,6 +246,7 @@ static void picture(void)
     dirty = false;
     xSemaphoreGive(lock);
     wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (s.top1 ? 4 : 0) | (s.mode & 3));
+    wr(R_HDMI, s.audio ? 6 : 0);        /* the video guard band and the data islands, or DVI's blanking */
     wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
     flush();
 }
@@ -272,7 +273,7 @@ static bool bringup(void)
     i2c_set(BUS_DP, 0x5E, 0x09, 0x02);
     i2c_set(BUS_DP, 0x5E, 0x0B, mode == 1 ? 0x00 : mode == 2 ? 0x08 : 0x18);
     pause_ms(300);
-    wr(R_HDMI, 0);                      /* DVI's blanking, nothing scrambled (1080p60, 2160p30) */
+    wr(R_HDMI, 0);                      /* DVI's blanking, nothing scrambled; picture() sets the sound's */
     if (i2c_set(BUS_DDC, 0x54, 0x02, 0x01))     /* an HDMI 2.0 sink: source version 1, clock 1/10, plain */
         i2c_set(BUS_DDC, 0x54, 0x20, 0x00);
     wr(R_GT_CTRL, 0x00F);               /* the lanes released: the quad's PLL locks */
@@ -294,7 +295,7 @@ static bool bringup(void)
 
 static void task(void *arg)
 {
-    bool hpd_was = false;
+    bool hpd_was = false, up_ok = false;
     uint32_t fields_was = 0, frames_was = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -316,13 +317,11 @@ static void task(void *arg)
             if (s.fpga) {
                 bool hpd = stat >> 2 & 1;
                 if (redo || gt != 0xF0F || (ctrl & (IN_RESET_N | DP_OE)) != (IN_RESET_N | DP_OE) || (hpd && !hpd_was)) {
-                    s.ok = bringup();
+                    up_ok = bringup();
                     s.ups++;
-                } else {
-                    s.ok = state.ok;
-                    if (dirty)
-                        picture();
-                }
+                } else if (dirty)
+                    picture();
+                s.ok = up_ok;
                 hpd_was = hpd;
                 rd(R_GT_STAT, &gt);
                 rd(R_CAP, &cap);
