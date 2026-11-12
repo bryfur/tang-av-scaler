@@ -3,14 +3,19 @@
 # into a running board).  On fpga: make
 
 CROSS ?= $(HOME)/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-
-CFLAGS = -march=rv32imac_zicsr_zifencei -mabi=ilp32 -Os -g -ffreestanding -nostdlib -Wall -Wextra \
+SRC = boot.S main.c board.c i2c.c osd.c time.c
+DEP = $(SRC) hw.h link.h link.ld
+# (BUILD: the newest source's time: the link gives the CPU the newer of its own copy and the bitstream's,
+# and the same sources are the same program)
+BUILD := $(shell stat -c %Y $(DEP) | sort -n | tail -1)
+CFLAGS = -DBUILD=$(BUILD) -march=rv32imac_zicsr_zifencei -mabi=ilp32 -Os -g -ffreestanding -nostdlib -Wall -Wextra \
          -ffunction-sections -fdata-sections
 B = build
 
 all: $(B)/cpu.hex
 
-$(B)/cpu.elf: boot.S main.c link.ld | $(B)
-	$(CROSS)gcc $(CFLAGS) -Wl,--gc-sections -T link.ld -o $@ boot.S main.c -lgcc
+$(B)/cpu.elf: $(DEP) | $(B)
+	$(CROSS)gcc $(CFLAGS) -Wl,--gc-sections -T link.ld -o $@ $(SRC) -lgcc
 	$(CROSS)size $@
 
 $(B)/cpu.bin: $(B)/cpu.elf

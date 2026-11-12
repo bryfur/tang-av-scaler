@@ -100,6 +100,9 @@ module hdmi_audio (
     reg [7:0]  he;
     reg [55:0] spq [0:3];
     reg [3:0]  ph = 4'd0;
+    // (the next clock's place in the line, for what is wide: the subpackets kept and shifted)
+    wire [7:0] xn = hs_q2 && !hs_q ? 8'd0 : x != 8'd255 ? x + 8'd1 : x;
+    reg        x_keep = 1'b0, x_shift = 1'b0;
     // (the two samples at the front: a clock late, but they wait there since before the line's start)
     reg [23:0] al, ar, bl, br;
     reg [7:0]  an, bn;
@@ -187,7 +190,9 @@ module hdmi_audio (
                 e1[i] <= ecc(e1[i], {10'd0, spq[i][13:0]}, 14);
                 spq[i] <= {14'd0, spq[i][55:14]};
             end
-        if (x == 8'd9) begin
+        x_keep <= xn == 8'd9;
+        x_shift <= xn >= 8'd22 && xn < 8'd54;
+        if (x_keep) begin
             hdr <= {he, hb};
             for (i = 0; i < 4; i = i + 1)
                 sub[i] <= {e1[i], sp[i]};
@@ -205,7 +210,7 @@ module hdmi_audio (
             k1 <= terc4({sub[3][0], sub[2][0], sub[1][0], sub[0][0]});
             k2 <= terc4({sub[3][1], sub[2][1], sub[1][1], sub[0][1]});
         end
-        if (x >= 8'd22 && x < 8'd54) begin
+        if (x_shift) begin
             hdr <= {1'b0, hdr[31:1]};
             for (i = 0; i < 4; i = i + 1)
                 sub[i] <= {2'b00, sub[i][63:2]};

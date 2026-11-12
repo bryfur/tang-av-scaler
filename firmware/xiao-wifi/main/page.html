@@ -90,7 +90,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 </form>
 <section class="full"><h2>Screen capture</h2>
 <div class="f"><span>The picture going out, read back from the FPGA<small>the picture is held still while it is read</small></span>
- <span class="seg"><label><input type="radio" name="gs" value="4" checked><span>480 &times; 270 &middot; 7 s</span></label><label><input type="radio" name="gs" value="2"><span>960 &times; 540 &middot; 25 s</span></label><label><input type="radio" name="gs" value="1"><span>1920 &times; 1080 &middot; 90 s</span></label></span>
+ <span class="seg"><label><input type="radio" name="gs" value="4" checked><span>480 &times; 270 &middot; 2 s</span></label><label><input type="radio" name="gs" value="2"><span>960 &times; 540 &middot; 6 s</span></label><label><input type="radio" name="gs" value="1"><span>1920 &times; 1080 &middot; 25 s</span></label></span>
  <button class="pri" id="gb" onclick="grab()">Capture</button></div>
 <div id="gw" style="display:none"><img id="gi" alt="capture" style="width:100%;border-radius:8px;display:block;background:#000"><div class="btns"><a id="gl" download="avscaler.png"><button type="button">Save as PNG</button></a><small id="gt" style="align-self:center;color:var(--dim)"></small></div></div>
 </section>
@@ -151,7 +151,7 @@ async function vstat(){
     row('Input',v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
       yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out')+
     row('Delay',sig?v.delay_ms.toFixed(1)+' ms from a field captured to its lines shown ('+(v.delay_ms/16.68).toFixed(2)+' frames)':'-')+
-    row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run'))+
+    row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+new Date(v.cpu_build*1000).toISOString().slice(0,16).replace('T',' ')+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+
     row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'));
   if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;
     if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}outs()}

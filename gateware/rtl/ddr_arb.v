@@ -52,7 +52,8 @@ module ddr_arb (
     // whose each read in flight is
     reg [63:0] who;
     reg [5:0]  wp = 6'd0, rp = 6'd0;
-    reg        rv = 1'b0;
+    reg        rv = 1'b0, rv_b = 1'b0, rv_c = 1'b0;     // (whose the word is: registers: what they gate is wide)
+    wire [5:0] rp_n = rv ? rp + 6'd1 : rp;
     always @(posedge clk) begin
         cmd_en <= 1'b0;
         wr_data_en <= 1'b0;
@@ -73,9 +74,11 @@ module ddr_arb (
             wp <= wp + 6'd1;
         end
         rv <= rd_data_valid;
+        rv_b <= rd_data_valid && !who[rp_n];
+        rv_c <= rd_data_valid && who[rp_n];
         if (rv)
             rp <= rp + 6'd1;
     end
-    assign b_rvalid = rv && !who[rp];
-    assign c_rvalid = rv && who[rp];
+    assign b_rvalid = rv_b;
+    assign c_rvalid = rv_c;
 endmodule

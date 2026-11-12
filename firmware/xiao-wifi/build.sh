@@ -3,6 +3,8 @@
 # 6.x: ~/esp/env.sh).  Each chip has its own build directory, build-<chip>/, with its sdkconfig
 # (made from sdkconfig.defaults: after a change there, delete build-*/sdkconfig).
 cd "$(dirname "$0")" || exit 1
+# (the scaler's CPU's program goes into the firmware: gateware/sw)
+make -C ../../gateware/sw > /dev/null || { echo "gateware/sw: make failed"; exit 1; }
 . "$HOME/esp/env.sh" > /dev/null || exit 1
 [ $# -eq 0 ] && set -- c5
 rc=0

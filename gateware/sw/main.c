@@ -1,221 +1,164 @@
-/* The scaler's CPU (the SOM's hard core, an Andes A25: rtl/cpu.v): what need not be logic.  For
- * now: the on-screen text (rtl/osd.v): what comes in and goes out, what is done to the picture and
- * how long it takes, from the scaler's own registers (rtl/top.v: at 0xE8000000 + 4 x the register),
- * four times a second.  Register 64 counts up while this runs, 65 says what it is.
+/* The scaler's CPU (the SOM's hard core, an Andes A25: rtl/cpu.v): what need not be logic.  It
+ * brings the board up and looks after it (board.c), holds the settings (the link keeps a copy for
+ * when the power is off), writes the on-screen text (osd.c), and answers the link (the XIAO, over
+ * rtl/spis.v's SPI port: link.h).  No operating system: a loop, and waits that keep answering.
+ *
+ * For a host on the monitor: register 64 counts up while this runs, 65 says what it is, 66 and 67
+ * a trap's cause and place (boot.S).
  */
+#include "hw.h"
 
-#include <stdint.h>
+#ifndef BUILD
+#define BUILD 0
+#endif
 
-#define REG(n)      (*(volatile uint32_t *)(0xe8000000u + 4u * (n)))
-#define CORE_HZ     400000000u          /* rtl/sys_pll.v */
+static uint8_t rq[256];                 /* a request */
+static uint32_t txw;                    /* the answer's bytes, a word at a time */
+static int txn;
 
-enum { R_BUILD = 0x01, R_STAT = 0x03, R_FREQ = 0x10, R_GT_STAT = 0x21, R_HDMI = 0x26, R_LAT = 0x27, R_OSD = 0x28,
-       R_OSDW = 0x29, R_TEMP = 0x2a, R_VID = 0x30, R_CAP = 0x31, R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36,
-       R_GEOM = 0x3a, R_CPUM = 0x64 };
-
-#define COLS 48
-#define ROWS 8
-
-static const char *const noise[4] = {"off", "low", "medium", "high"};
-static char want[ROWS][COLS];           /* the text as it should be */
-static char shown[ROWS][COLS];          /* ... as the RAM has it */
-static int row, col;
-
-static uint32_t cycles(void)
+static void tx_begin(void)
 {
-    uint32_t c;
-    __asm__ volatile ("csrr %0, mcycle" : "=r"(c));
-    return c;
+    REG(R_SPITXA) = 0;
+    txn = 0;
+    txw = 0;
 }
 
-static void put(char c)
+static void tx(uint8_t b)
 {
-    if (col < COLS)
-        want[row][col++] = c;
+    txw |= (uint32_t)b << 8 * (txn & 3);
+    if ((++txn & 3) == 0) {
+        REG(R_SPITXD) = txw;
+        txw = 0;
+    }
 }
 
-static void str(const char *s)
+static void tx_bytes(const void *p, int n)
 {
-    while (*s)
-        put(*s++);
+    for (int k = 0; k < n; k++)
+        tx(((const uint8_t *)p)[k]);
 }
 
-/* a number, at least w digits wide (blanks before it) */
-static void num(uint32_t v, int w)
+/* (the answer there, the request done with) */
+static void tx_end(void)
 {
-    char b[10];
-    int n = 0;
-    do {
-        b[n++] = '0' + v % 10;
-        v /= 10;
-    } while (v);
-    while (w-- > n)
-        put(' ');
-    while (n)
-        put(b[--n]);
+    if (txn & 3)
+        REG(R_SPITXD) = txw;
+    REG(R_SPIS) = 3u | (uint32_t)txn << 16;
 }
 
-/* v / 10^d with d decimals */
-static void fix(uint32_t v, int d)
+/* pixels of the picture as it goes out (rtl/grab.v takes eight rows of a frame: row, row + step,
+ * ...): the eight with this row in them asked for if they are not the ones there */
+static void grab(int step, int y, int x, int n)
 {
-    uint32_t p = 1;
-    for (int k = 0; k < d; k++)
-        p *= 10;
-    num(v / p, 1);
-    put('.');
-    for (p /= 10; p; p /= 10)
-        put('0' + v / p % 10);
+    static int have_y = -1, have_step;
+    int first = y - y % 8;
+    board_grab_seen();
+    if (have_step != step || have_y != first) {
+        uint32_t t = ms();
+        REG(R_GRAB) = (uint32_t)step << 12 | (uint32_t)(first * step);
+        while (!(REG(R_GRAB) >> 31) && ms() - t < 100)
+            ;
+        have_step = step;
+        have_y = first;
+    }
+    for (int k = 0; k < n; k++) {
+        REG(R_GRABD) = (uint32_t)(y - first) << 11 | (uint32_t)((x + k) * step);
+        uint32_t p = REG(R_GRABD);
+        tx(p);
+        tx(p >> 8);
+        tx(p >> 16);
+    }
 }
 
-static void line(int r)
+void service(void)
 {
-    row = r;
-    col = 0;
-    for (int k = 0; k < COLS; k++)
-        want[r][k] = ' ';
-}
-
-static void text(uint32_t up_s, uint32_t fields_s, uint32_t frames_s)
-{
-    uint32_t vid = REG(R_VID), de = REG(R_DEINT), cap = REG(R_CAP), hd = REG(R_HDMI), lat = REG(R_LAT),
-             temp = REG(R_TEMP), llc = REG(R_FREQ + 1), txc = REG(R_FREQ + 2), dst = REG(R_DSTAT);
-    int32_t xr = (int32_t)REG(R_GEOM), ys = (int32_t)REG(R_GEOM + 2);
-    uint32_t dxr = REG(R_GEOM + 1), dy = REG(R_GEOM + 3) & 0x1ffff, dx = dxr & 0x1ffff;
-    int wide = dxr >> 31, ow = wide ? 1920 : 1440, ox0 = wide ? 0 : 240;
-    /* (fmeter.v's count is the clock / 23.84 Hz: 16 x 50 MHz / 2^25) */
-    uint32_t llc_hz = (uint32_t)((uint64_t)llc * 800000000u >> 25), tx_hz = (uint32_t)((uint64_t)txc * 800000000u >> 25);
-    uint32_t pix = cap & 0x7ff, lines = cap >> 11 & 0x3ff;
-    int in = fields_s >= 45 && pix != 0;
-
-    line(0);
-    str("IN   ");
-    if (in) {
-        num(2 * lines, 1);
-        str("i ");
-        /* (a field is 858 x 262.5 samples of the decoder's clock) */
-        fix(llc_hz * 100 / 225225, 2);
-        str(" Hz  YPbPr  ");
-        num(pix, 1);
-        put('x');
-        num(2 * lines, 1);
-    } else
-        str("no signal");
-
-    line(1);
-    str("OUT  1080p ");
-    fix(tx_hz / 24750, 2);              /* (2200 x 1125 pixels a frame: Hz x 100) */
-    str(" Hz  ");
-    str(wide ? "16:9" : "4:3 ");
-    str(hd & 4 ? "  HDMI + sound" : "  DVI");
-
-    line(2);
-    str("SHOWN ");
-    num((dx * ow + 32768) >> 16, 1);
-    put('x');
-    num((dy * 1080 + 32768) >> 16, 1);
-    str(" from ");
-    num((uint32_t)((xr + (int32_t)((ox0 + 120) * dx) - (int32_t)(dx / 2) + 32768 - 4096 + 32768) >> 16), 1);
-    put(',');
-    num((uint32_t)((ys - (int32_t)(dy / 2) + 32768 + 32768) >> 16), 1);
-    str(" of 720x480");
-
-    line(3);
-    str("DEINT ");
-    str((de & 3) == 1 ? "bob" : (de & 3) == 2 ? "weave" : dst >> 14 & 1 ? "motion adaptive" : "bob (no history)");
-    str("   NOISE ");
-    str(noise[de >> 4 & 3]);
-
-    line(4);
-    str("SMAA ");
-    if (de >> 16 & 1) {
-        str("on  edge ");
-        num(de >> 24, 1);
-        if (de >> 18 & 1)
-            str("  diagonals");
-        if (de >> 19 & 1)
-            str("  corners");
-    } else
-        str("off");
-
-    line(5);
-    str("FSR 1  EASU + RCAS ");
-    num(vid >> 16 & 31, 1);
-    str("/16");
-    if (vid >> 4 & 1)
-        str("  noise aware");
-    if (vid >> 1 & 1)
-        str("  FROZEN");
-
-    line(6);
-    str("DELAY ");
-    if (in) {
-        /* (the field's end to the frame's start, then a field's time to the picture's lines: 16.3 ms) */
-        uint32_t us10 = (lat & 0xfff) + 1630;
-        fix(us10 / 10, 1);
-        str(" ms  ");
-        fix(us10 * 100 / 1668, 2);      /* (in frames of 16.68 ms) */
-        str(" frames  ");
-        num(frames_s, 1);
-        str(" fps");
-    } else
-        str("-");
-
-    line(7);
-    str("FPGA ");
-    if (temp >> 31) {
-        int32_t t4 = (int32_t)(temp << 18) >> 18;
-        if (t4 < 0) {
-            put('-');
-            t4 = -t4;
+    static bool busy;
+    uint32_t s = REG(R_SPIS);
+    int n = s >> 8 & 0xFF;
+    if (!(s & 1) || busy)
+        return;
+    busy = true;
+    for (int k = 0; k < (n + 3) / 4; k++) {
+        uint32_t w;
+        REG(R_SPIRX) = k;
+        w = REG(R_SPIRX);
+        rq[4 * k] = w;
+        rq[4 * k + 1] = w >> 8;
+        rq[4 * k + 2] = w >> 16;
+        rq[4 * k + 3] = w >> 24;
+    }
+    tx_begin();
+    tx(rq[0] | 0x80);
+    switch (rq[0]) {
+    case LINK_STATUS:
+        st.set = set;
+        tx_bytes(&st, sizeof st);
+        break;
+    case LINK_SET_ALL:
+        if (n == 1 + (int)sizeof set) {
+            struct link_settings was = set;
+            __builtin_memcpy(&set, rq + 1, sizeof set);
+            board_apply(&was);
         }
-        num(t4 / 4, 1);
-        put('.');
-        put("0257"[t4 & 3]);
-        str("\x7f" "C");
-    } else
-        str("--");
-    str("   CPU A25 400 MHz  up ");
-    num(up_s / 3600, 1);
-    put(':');
-    put('0' + up_s / 600 % 6);
-    put('0' + up_s / 60 % 10);
-    put(':');
-    put('0' + up_s / 10 % 6);
-    put('0' + up_s % 10);
+        break;
+    case LINK_SET_ONE:
+        if (n == 5 && rq[1] + rq[2] <= sizeof set && (rq[2] == 1 || rq[2] == 2)) {
+            struct link_settings was = set;
+            ((uint8_t *)&set)[rq[1]] = rq[3];
+            if (rq[2] == 2)
+                ((uint8_t *)&set)[rq[1] + 1] = rq[4];
+            board_apply(&was);
+        }
+        break;
+    case LINK_CMD:
+        if (n == 2)
+            board_cmd(rq[1]);
+        break;
+    case LINK_GRAB: {
+        int step = rq[1], y = rq[2] | rq[3] << 8, x = rq[4] | rq[5] << 8, px = rq[6] | rq[7] << 8;
+        if (n == 8 && step >= 1 && step <= 8 && px <= 680)
+            grab(step, y, x, px);
+        break;
+    }
+    default:
+        tx_begin();
+        tx(LINK_BAD);
+    }
+    tx_end();
+    busy = false;
+}
+
+void *memcpy(void *d, const void *s, size_t n)
+{
+    for (size_t k = 0; k < n; k++)
+        ((uint8_t *)d)[k] = ((const uint8_t *)s)[k];
+    return d;
 }
 
 int main(void)
 {
-    uint32_t t0 = cycles(), n = 0, up = 0, q = 0, fields_was = REG(R_FIELDS), frames_was = REG(R_DSTAT) >> 16,
-             fields_s = 0, frames_s = 0;
+    uint32_t t_sec, t_osd, n = 0;
 
-    REG(R_CPUM + 1) = 0x31435641;       /* "AVC1" */
-    for (int r = 0; r < ROWS; r++)
-        for (int c = 0; c < COLS; c++) {
-            shown[r][c] = ' ';
-            REG(R_OSDW) = (uint32_t)(r * 64 + c) << 8 | ' ';
-        }
+    REG(R_CPUM + 1) = LINK_MAGIC;
+    REG(R_SPIS) = 1;                    /* (a request from before this began: gone) */
+    st.build = BUILD;
+    osd_init();
+    board_init();
+    t_sec = t_osd = ms();
     for (;;) {
-        /* a quarter of a second */
-        while (cycles() - t0 < CORE_HZ / 4)
-            ;
-        t0 += CORE_HZ / 4;
-        REG(R_CPUM) = ++n;
-        if (++q == 4) {
-            uint32_t f = REG(R_FIELDS), d = REG(R_DSTAT) >> 16;
-            q = 0;
-            up++;
-            fields_s = (f - fields_was) & 0xffff;
-            frames_s = (d - frames_was) & 0xffff;
-            fields_was = f;
-            frames_was = d;
+        service();
+        if (ms() - t_osd >= 250) {
+            t_osd += 250;
+            REG(R_CPUM) = ++n;
+            osd_update();
         }
-        text(up, fields_s, frames_s);
-        for (int r = 0; r < ROWS; r++)
-            for (int c = 0; c < COLS; c++)
-                if (want[r][c] != shown[r][c]) {
-                    shown[r][c] = want[r][c];
-                    REG(R_OSDW) = (uint32_t)(r * 64 + c) << 8 | (uint8_t)want[r][c];
-                }
+        if (ms() - t_sec >= 1000) {
+            /* (after something long, e.g. the phase's tuning: the seconds missed are counted, not made up) */
+            do {
+                t_sec += 1000;
+                st.up_s++;
+            } while (ms() - t_sec >= 1000);
+            board_second();
+        }
     }
 }

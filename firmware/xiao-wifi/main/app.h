@@ -72,8 +72,19 @@ struct scaler_state {
     int16_t temp4;      /* the FPGA's temperature, degrees C x 4 (-32768: not measured) */
     uint16_t delay_us10;/* the picture's delay, in 10 us (a field's end to its lines shown) */
     bool cpu;           /* the FPGA's CPU runs its program */
+    bool relay;         /* ... and the scaler: the link relays (else the link runs it itself, the old way) */
+    uint32_t cpu_build; /* the program's time (gateware/sw) */
 };
+/* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
+void link_start(void);
+bool link_reg_read(uint8_t addr, uint32_t *v);
+bool link_reg_write(uint8_t addr, const uint32_t *words, size_t n);
+/* a request and its answer (max bytes of it at most, 2048 the most there is); its length, -1: none in ms */
+int link_msg(const uint8_t *req, size_t n, uint8_t *reply, size_t max, int ms);
+bool link_program(const uint8_t *bin, size_t bytes);
+
 void scaler_start(void);
+bool scaler_cpu(void);          /* the FPGA's CPU runs the scaler (the link relays) */
 void scaler_get(struct scaler_state *s, struct scaler_settings *v);
 void scaler_set(const struct scaler_settings *v);
 void scaler_again(void);

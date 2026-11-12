@@ -1,4 +1,13 @@
-/* The scaler kept running by the link, with no host: what gateware/tools/hdmi.py, clkgen.py, adv.py
+/* The scaler and the link.
+ *
+ * With the FPGA's own CPU there (gateware/rtl/cpu.v, its program gateware/sw): the CPU brings the
+ * board up, looks after it and holds the settings; the link relays over the SPI port (link.c,
+ * gateware/sw/link.h): the settings kept in NVS given to a CPU that has just begun, the web page's
+ * changes and commands passed on, what the CPU says shown; and the CPU's program itself, if the
+ * copy built into this firmware is newer than the one that runs (cpu_second()).
+ *
+ * With an FPGA image that has no CPU (an older one, e.g. the SOM's flash): the link does it all
+ * itself, as before: what gateware/tools/hdmi.py, clkgen.py, adv.py
  * and video.py do from a PC, done here through the FPGA's monitor (gateware/rtl/top.v: its
  * registers over the UART, 'W' addr data and 'R' addr):
  *
@@ -26,6 +35,7 @@
 
 #include "app.h"
 #include "esp_log.h"
+#include "link.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -49,6 +59,7 @@ static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr =
                                       .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480, .nr = 2, .dn = true};
 static SemaphoreHandle_t lock;          /* set, state, dirty */
 static bool dirty, again, measure, tune;
+static bool cpu_mode;                   /* the FPGA's CPU runs the scaler */
 
 /* ---- the monitor ---- */
 static uint8_t out[2048];
@@ -407,6 +418,148 @@ static bool bringup(void)
     return ok;
 }
 
+/* ---- the FPGA's CPU runs the scaler: the link relays ---- */
+extern const uint8_t cpu_bin_start[] asm("_binary_cpu_bin_start");
+extern const uint8_t cpu_bin_end[] asm("_binary_cpu_bin_end");
+
+static struct link_settings to_link(const struct scaler_settings *v)
+{
+    struct link_settings l = {.on = v->on, .ntsc = v->ntsc, .mode = v->mode, .thr = v->thr, .aa = v->aa,
+                              .aa_thr = v->aa_thr, .sharp = v->sharp, .swap = v->swap, .top1 = v->top1,
+                              .pattern = v->pattern, .freeze = v->freeze, .audio = v->audio, .aa_dbg = v->aa_dbg,
+                              .aa_diag = v->aa_diag, .aa_corner = v->aa_corner, .crop = v->crop, .wide = v->wide,
+                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .crop_x = v->crop_x,
+                              .crop_w = v->crop_w, .crop_y = v->crop_y, .crop_h = v->crop_h};
+    return l;
+}
+
+static struct scaler_settings from_link(const struct link_settings *l)
+{
+    struct scaler_settings v = {.on = l->on, .ntsc = l->ntsc, .mode = l->mode, .thr = l->thr, .aa = l->aa,
+                                .aa_thr = l->aa_thr, .sharp = l->sharp, .swap = l->swap, .top1 = l->top1,
+                                .pattern = l->pattern, .freeze = l->freeze, .audio = l->audio, .aa_dbg = l->aa_dbg,
+                                .aa_diag = l->aa_diag, .aa_corner = l->aa_corner, .crop = l->crop, .wide = l->wide,
+                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .crop_x = l->crop_x,
+                                .crop_w = l->crop_w, .crop_y = l->crop_y, .crop_h = l->crop_h};
+    return v;
+}
+
+static void save(const struct scaler_settings *v)
+{
+    nvs_handle_t h;
+    if (nvs_open("av", NVS_READWRITE, &h) == ESP_OK) {
+        nvs_set_blob(h, "video", v, sizeof *v);
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+static bool cmd(uint8_t c)
+{
+    const uint8_t rq[2] = {LINK_CMD, c};
+    uint8_t a[4];
+    return link_msg(rq, 2, a, sizeof a, 500) >= 1 && a[0] == (LINK_CMD | 0x80);
+}
+
+static bool set_all(const struct scaler_settings *v)
+{
+    uint8_t rq[1 + sizeof(struct link_settings)], a[4];
+    struct link_settings l = to_link(v);
+    rq[0] = LINK_SET_ALL;
+    memcpy(rq + 1, &l, sizeof l);
+    return link_msg(rq, sizeof rq, a, sizeof a, 500) >= 1 && a[0] == (LINK_SET_ALL | 0x80);
+}
+
+/* a second of it; false: this FPGA image has no SPI port (no CPU): the old way */
+static bool cpu_second(struct scaler_state *s)
+{
+    static uint32_t up_was;
+    static int silent;
+    static bool given;                  /* this CPU run has our settings */
+    const uint8_t rq = LINK_STATUS;
+    uint8_t a[1 + sizeof(struct link_status)];
+    struct link_status ls;
+    struct scaler_settings mine;
+    uint32_t id, built = 0;
+    bool redo, meas, tun, host = console_busy();
+    if (!link_reg_read(R_ID, &id) || id != MAGIC)
+        return false;
+    s->fpga = true;
+    s->host = host;
+    memcpy(&built, cpu_bin_start + 8, 4);
+    bool alive = link_msg(&rq, 1, a, sizeof a, 300) == (int)sizeof a && a[0] == (LINK_STATUS | 0x80);
+    if (alive)
+        memcpy(&ls, a + 1, sizeof ls);
+    /* the CPU's program: ours if none answers (two seconds running), or the one that does is older */
+    /* (not while a host tool is at it: it may be loading one itself: gateware/tools/cpu.py) */
+    if (host)
+        silent = 0;
+    else if (alive ? ls.magic != LINK_MAGIC || ls.build < built : ++silent >= 2) {
+        link_program(cpu_bin_start, cpu_bin_end - cpu_bin_start);
+        silent = 0;
+        given = false;
+        return true;
+    }
+    if (!alive)
+        return true;
+    silent = 0;
+    if (host != (ls.host != 0))
+        cmd(host ? LINK_CMD_HOST_ON : LINK_CMD_HOST_OFF);
+    /* the settings: ours to a CPU that has just begun; after that the CPU's are the ones that count
+     * (a tuned sampling phase): kept */
+    xSemaphoreTake(lock, portMAX_DELAY);
+    mine = set;
+    redo = again, meas = measure, tun = tune;
+    again = measure = tune = false;
+    xSemaphoreGive(lock);
+    if (!given || ls.up_s < up_was || ls.gen == 0) {
+        given = set_all(&mine);
+        ESP_LOGI(TAG, "the CPU (program %u): the settings %s", (unsigned)ls.build, given ? "given" : "NOT taken");
+    } else {
+        struct link_settings l = to_link(&mine);
+        if (memcmp(&l, &ls.set, sizeof l)) {
+            mine = from_link(&ls.set);
+            xSemaphoreTake(lock, portMAX_DELAY);
+            set = mine;
+            xSemaphoreGive(lock);
+            save(&mine);
+        }
+    }
+    up_was = ls.up_s;
+    if (redo)
+        cmd(LINK_CMD_AGAIN);
+    if (meas)
+        cmd(LINK_CMD_MEASURE);
+    if (tun)
+        cmd(LINK_CMD_TUNE);
+    s->cpu = true;
+    s->relay = true;
+    s->cpu_build = ls.build;
+    s->ok = ls.up_ok;
+    s->hpd = ls.hpd;
+    s->pll = ls.pll;
+    s->hist = ls.hist;
+    s->host = host || ls.host;
+    s->build = ls.fpga_build;
+    s->ups = ls.ups;
+    s->pix = ls.pix;
+    s->lines = ls.lines;
+    s->fields_s = ls.fields_s;
+    s->frames_s = ls.frames_s;
+    s->llc_khz = ls.llc_hz / 1000;
+    s->show_x = ls.show_x, s->show_w = ls.show_w, s->show_y = ls.show_y, s->show_h = ls.show_h;
+    s->tune = tun ? 1 : ls.tune;
+    s->tune_gain = ls.tune_gain;
+    s->temp4 = ls.temp4;
+    s->delay_us10 = ls.delay_us10;
+    return true;
+}
+
+bool scaler_cpu(void)
+{
+    return cpu_mode;
+}
+
 static void task(void *arg)
 {
     bool up_ok = false, seen = false;
@@ -420,6 +573,14 @@ static void task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(1000));
         struct scaler_state s = {0};
         bool on_now, redo;
+        cpu_mode = cpu_second(&s);
+        if (cpu_mode) {
+            xSemaphoreTake(lock, portMAX_DELAY);
+            state = s;
+            xSemaphoreGive(lock);
+            seen = false;
+            continue;
+        }
         xSemaphoreTake(lock, portMAX_DELAY);
         on_now = set.on;
         redo = again;
@@ -472,16 +633,11 @@ static void task(void *arg)
                     int best = phase_tune(&tune_gain);
                     tune_st = best >= 0 ? 2 : best == -1 ? 3 : 4;
                     if (best >= 0) {
-                        nvs_handle_t h;
                         xSemaphoreTake(lock, portMAX_DELAY);
                         set.phase = c.phase = best;
                         c = set;
                         xSemaphoreGive(lock);
-                        if (nvs_open("av", NVS_READWRITE, &h) == ESP_OK) {
-                            nvs_set_blob(h, "video", &c, sizeof c);
-                            nvs_commit(h);
-                            nvs_close(h);
-                        }
+                        save(&c);
                     }
                     phase_set(c.phase);
                     phase_was = c.phase;
@@ -563,7 +719,8 @@ void scaler_start(void)
             set = s;
         nvs_close(h);
     }
-    xTaskCreate(task, "scaler", 6144, NULL, 4, NULL);
+    link_start();
+    xTaskCreate(task, "scaler", 8192, NULL, 4, NULL);
 }
 
 void scaler_get(struct scaler_state *s, struct scaler_settings *v)
@@ -576,18 +733,17 @@ void scaler_get(struct scaler_state *s, struct scaler_settings *v)
 
 void scaler_set(const struct scaler_settings *v)
 {
-    nvs_handle_t h;
+    /* (to the CPU first: it applies them, and they are its own from here; then our copy, which
+     * follows the CPU's) */
+    if (cpu_mode)
+        set_all(v);
     xSemaphoreTake(lock, portMAX_DELAY);
-    if (v->ntsc != set.ntsc || (v->on && !set.on))
+    if (!cpu_mode && (v->ntsc != set.ntsc || (v->on && !set.on)))
         again = true;                   /* the clocks change: everything again */
     set = *v;
     dirty = true;
     xSemaphoreGive(lock);
-    if (nvs_open("av", NVS_READWRITE, &h) == ESP_OK) {
-        nvs_set_blob(h, "video", v, sizeof *v);
-        nvs_commit(h);
-        nvs_close(h);
-    }
+    save(v);
 }
 
 void scaler_tune(void)

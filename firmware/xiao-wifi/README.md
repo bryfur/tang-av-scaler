@@ -13,7 +13,12 @@ serial port too when a cable is in.
 
 ## The scaler run by the link
 
-With the bring-up image in the FPGA (`gateware/`), the link brings the board up by itself and keeps
+With the FPGA's own CPU there (`gateware/rtl/cpu.v`, `gateware/sw`) the CPU runs the scaler and
+the link relays over its SPI port (`main/link.c`, `gateware/sw/link.h`): the settings kept in
+flash given to the CPU when it begins, the page's changes and commands passed on, what the CPU
+says shown, and the CPU's program itself (a copy is built into this firmware: `build.sh` makes it;
+the CPU gets it if the one it runs is older). With an FPGA image that has no CPU (an older one),
+as before: the link brings the board up by itself and keeps
 it up (`main/scaler.c`): the clock chip, the HDMI redriver, the display's SCDC, the transceiver
 lanes, the ADV7181D for 480i component, the picture's settings; again after the FPGA is reloaded or
 a display is plugged in. No host and no script: power, a source, a display.
@@ -27,7 +32,7 @@ picture rate (59.94 or 60 Hz), Cb/Cr swapped, the field order, the test picture,
 settings are kept in flash. The same over HTTP: `GET /api/video`, `POST /api/video` (a form:
 `mode=1&aa=0`, ...; `again=1` brings everything up again, `measure=1` finds the picture's border
 again). **Screen capture**: the picture going out, read back from the FPGA (`GET /api/grab?step=N`,
-a BMP: 480 x 270 in 7 s, 960 x 540 in 24 s, 1920 x 1080 in 92 s).
+a BMP: 480 x 270 in 2 s, 960 x 540 in 6 s through the CPU).
 
 While a host is on the console port (`gateware/tools/*.py`), the link leaves the scaler to it.
 

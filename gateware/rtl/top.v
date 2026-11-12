@@ -10,7 +10,8 @@
 //                    (sticky, cleared by reading)
 //   04 RW  I2C       the four buses' lines, open drain, one bit each: a 1 written pulls the line
 //                    low.  Bits 0 PLL_SCL, 1 PLL_SDA, 2 DP_SCL, 3 DP_SDA, 4 DDC_SCL, 5 DDC_SDA,
-//                    6 IN_SCL, 7 IN_SDA; read: 7:0 as written, 15:8 the lines themselves.
+//                    6 IN_SCL, 7 IN_SDA; read: 7:0 as written, 15:8 the lines themselves, 16 the
+//                    lines are still settling (the CPU waits for it; the monitor is held).
 //                    A write holds the next command until the lines have settled and every SCL let
 //                    go has risen (a device stretching the clock; 84 ms at most).
 //   05-08 R I2C_SH   bus 0-3's SDA at each of its SCL's rises, shifted in from bit 0: a byte read is
@@ -39,6 +40,8 @@
 //   62 W   CPUD     a word of the CPU's program (0x80000000 + 4 x CPUA)
 //   64-67 RW CPUM   four words the CPU's program leaves for the host (sw/main.c: 64 counts up while
 //                    it runs, 65 says what it is)
+//   70-74    SPIS     the link's SPI port (spis.v): the CPU's program's side of its messages, and (74) the
+//                    port's lines as they are
 //   30 RW  VID       0 the picture is the component input's (else pattern.v's), 1 the fields in the
 //                    DDR3 are left as they are, 2 the pixel port is 16 bits wide (the CP core's:
 //                    vcap.v), 3 Cb and Cr the other way round, 4 the sharpening leaves noise alone
@@ -96,6 +99,12 @@
 module top (
     input  sys_clk,                 // the SOM's 50 MHz
     input  esp_tx,                  // the XIAO's TX
+    // the XIAO's SPI port (spis.v): registers, and messages for the CPU's program
+    input  esp_cs,
+    input  esp_sck,
+    input  esp_mosi,
+    output esp_miso,
+    output esp_irq,
     output esp_rx,                  // the XIAO's RX
     output in_led,
     input  in_key1,
@@ -145,13 +154,14 @@ module top (
     wire clk, core_clk, pll_lock;
     sys_pll u_pll (.clkin(sys_clk), .clk(clk), .core(core_clk), .lock(pll_lock));
 
-    // the register bus: the monitor's, and between its words the CPU's
-    wire [7:0]  m_addr, c_addr;
-    wire [31:0] m_wdata, c_wdata;
-    wire        m_we, c_we, c_own, m_stall, m_busy;
-    wire [7:0]  addr = c_own ? c_addr : m_addr;
-    wire [31:0] wdata = c_own ? c_wdata : m_wdata;
-    wire        we = c_own ? c_we : m_we;
+    // the register bus: the monitor's, and between its words the CPU's and the link's SPI port's
+    wire [7:0]  m_addr, c_addr, s_addr;
+    wire [31:0] m_wdata, c_wdata, s_wdata;
+    wire        m_we, c_we, c_own, s_we, s_own, c_stall, s_stall, m_busy;
+    wire        m_stall = c_stall || s_stall;
+    wire [7:0]  addr = c_own ? c_addr : s_own ? s_addr : m_addr;
+    wire [31:0] wdata = c_own ? c_wdata : s_own ? s_wdata : m_wdata;
+    wire        we = c_own ? c_we : s_own ? s_we : m_we;
     reg  [31:0] rdata;
     wire        hold;
     mon #(.DIV(50)) u_mon (.clk(clk), .rx(esp_tx), .tx(esp_rx), .addr(m_addr), .wdata(m_wdata), .we(m_we),
@@ -179,9 +189,15 @@ module top (
             cpu_m3 <= wdata;
     end
     cpu #(.HEX(`CPU_HEX)) u_cpu (.clk(clk), .core_clk(core_clk), .rst_n(pll_lock && cpu_run), .pm_we(cpu_pwe),
-                                .pm_wa(cpu_pa), .pm_wd(wdata), .stall(m_stall), .mon_busy(m_busy), .c_own(c_own),
+                                .pm_wa(cpu_pa), .pm_wd(wdata), .stall(c_stall), .mon_busy(m_busy), .other(s_own), .c_own(c_own),
                                 .c_we(c_we), .c_addr(c_addr), .c_wdata(c_wdata), .rdata(rdata), .txd(), .rxd(1'b1),
                                 .wfi());
+
+    wire [31:0] sp_stat, sp_rx, sp_pins;
+    spis u_spi (.clk(clk), .cs_n(esp_cs), .sck(esp_sck), .mosi(esp_mosi), .miso(esp_miso), .irq_n(esp_irq),
+                .stall(s_stall), .mon_busy(m_busy), .other(c_stall), .s_own(s_own), .s_we(s_we), .s_addr(s_addr),
+                .s_wdata(s_wdata), .rdata(rdata), .we(we), .addr(addr), .wdata(wdata), .q_stat(sp_stat), .q_rx(sp_rx),
+                .q_pins(sp_pins));
 
     // the chip's temperature (the ADC in its corner, in temperature mode: Gowin UG299): asked for
     // every 0.67 s (beat), the answer some tens of ms later
@@ -713,7 +729,7 @@ module top (
             8'h01: rdata <= `AVB_BUILD;
             8'h02: rdata <= {27'd0, ctrl};
             8'h03: rdata <= {23'd0, stuck, 3'd0, stat};
-            8'h04: rdata <= {16'd0, i2c_in, i2c_drv};
+            8'h04: rdata <= {15'd0, waiting, i2c_in, i2c_drv};
             8'h05: rdata <= i2c_sh[0];
             8'h06: rdata <= i2c_sh[1];
             8'h07: rdata <= i2c_sh[2];
@@ -738,6 +754,9 @@ module top (
             8'h27: rdata <= {20'd0, lat_s};
             8'h28: rdata <= {31'd0, osd_on};
             8'h2A: rdata <= {temp[14], 17'd0, temp[13:0]};
+            8'h70: rdata <= sp_stat;
+            8'h71: rdata <= sp_rx;
+            8'h74: rdata <= sp_pins;
             8'h60: rdata <= {31'd0, cpu_run};
             8'h61: rdata <= {19'd0, cpu_pa};
             8'h64: rdata <= cpu_m0;

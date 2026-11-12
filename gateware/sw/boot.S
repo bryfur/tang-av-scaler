@@ -7,6 +7,13 @@
     .section .text.start, "ax"
     .global _start
 _start:
+    j       1f
+    .balign 4
+    .word   0x32435641              /* "AVC2": at 4 */
+    .global build_stamp
+build_stamp:
+    .word   BUILD                   /* at 8: when it was built */
+1:
     .option push
     .option norelax
     la      gp, __global_pointer$

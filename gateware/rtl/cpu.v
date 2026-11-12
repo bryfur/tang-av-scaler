@@ -25,6 +25,7 @@ module cpu #(
     input      [31:0] pm_wd,
     output            stall,
     input             mon_busy,
+    input             other,            // (another's turn: the link's SPI port)
     output reg        c_own = 1'b0,
     output reg        c_we = 1'b0,
     output reg [7:0]  c_addr,
@@ -117,7 +118,7 @@ module cpu #(
         c_we <= 1'b0;
         case (cs)
             2'd0:
-                if (pend && pend_q && !mon_busy) begin
+                if (pend && pend_q && !mon_busy && !other) begin
                     c_own <= 1'b1;
                     c_addr <= s_a;
                     c_wdata <= s_wd;

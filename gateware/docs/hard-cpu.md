@@ -64,13 +64,30 @@ for is whatever happens once a line, once a field, or once in a while.
 - The core runs (`rtl/cpu.v`): the fpc console's configuration, the core clock 400 MHz from
   PLL_R[0]'s CLKOUT1 (the system clock's PLL, placed there), the buses on the system's 50 MHz. Its
   program is 32 KB of block RAM at 0x80000000, the bitstream's `sw/build/cpu.hex` in it; the
-  register bus can write it (`tools/cpu.py load`: 1.3 s). Its data is the core's own DLM.
+  register bus can write it. Its data is the core's own DLM. No operating system: a loop
+  (`sw/main.c`), and waits that keep answering the link.
 - The register bus at 0xE8000000 + 4 x the register: the CPU takes a turn between the monitor's
-  words (`sim/cpu_tb.py`). So anything the ESP32 or a host tool does through the monitor, the
-  program can do.
-- The on-screen text (item 5 above, done first because it was asked for): `rtl/osd.v` shows a grid
-  of characters; `sw/main.c` writes them from the scaler's registers four times a second.
-- Cost: 21 block RAMs (74 % used now), a few hundred LUTs, the system clock's Fmax 75 -> 58 MHz
-  (50 needed).
-- Not yet: its UART has no pins (the XIAO's spare lines would do); the ESP32 still brings the board
-  up and holds the settings. Next by the order above: the bring-up and the settings on the CPU.
+  words (`sim/cpu_tb.py`).
+- **The CPU runs the scaler** (`sw/board.c`: item 1 above): the bring-up (the clock chip, the
+  redriver, the display's SCDC, the lanes, the decoder: 0.8 s, the link took 2), the settings into
+  the registers, each second's looking after (the part shown, the sampling phase and its tuning,
+  what comes in and goes out). The settings are the CPU's; the link keeps a copy for when the
+  power is off and gives it to a CPU that has just begun.
+- **The link talks to it over SPI** (`rtl/spis.v`, `sw/link.h`, `firmware/xiao-wifi/main/link.c`):
+  a request, an answer: what the scaler does, the settings (all, or one), a command (again, find
+  the border, tune, a host tool has it), pixels of the picture as it goes out (a screen capture:
+  480 x 270 in 2 s; it was 7 through the monitor). The same port reaches the registers with no
+  program on the other side: so the link loads the CPU's program (its own copy, built into the
+  firmware, if the one that runs is older or does not answer): a new CPU program is a firmware
+  update, no bitstream.
+- The on-screen text (`rtl/osd.v`, `sw/osd.c`).
+- With an FPGA image that has no CPU (the SOM's flash, until it is written again) the link does
+  it all itself as before (`scaler.c`: it asks the SPI port for the ID register first).
+- A host tool on the monitor (`tools/*.py`): the link tells the CPU, which leaves the scaler alone
+  meanwhile; `tools/cpu.py load` puts a program in from the host.
+- Cost: 25 block RAMs (75 % used now), some 800 LUTs, the system clock's Fmax 75 -> 58 MHz (50
+  needed).
+- Not yet: the CPU's own UART has no pins; the settings are not kept on the FPGA's side (no
+  flash of its own: with no XIAO the CPU starts with its defaults). Next: the output locked to the
+  input (the clock chip trimmed by the CPU against LAT), then the picture begun before the field
+  is all in.

@@ -100,7 +100,10 @@ module easu (
     reg signed [10:0] yph;
     reg signed [26:0] ypn;
     wire signed [10:0] fy = yp[26:16];
-    wire [2:0] ky = yp[15:13];          // below fy: (2 ky + 1) sixteenths
+    // (ky a register of its own: yp changes between rows only, and what ky gates is wide and far)
+    reg  [2:0] ky = 3'd0;               // below fy: (2 ky + 1) sixteenths
+    always @(posedge clk)
+        ky <= yp[15:13];
     wire       mir = ky[2];             // the lower half: the table's entry for the mirror image
     wire [1:0] kyt = mir ? ~ky[1:0] : ky[1:0];
     reg        eol = 1'b0, eol_q = 1'b0, eol_q2 = 1'b0, last = 1'b0, row = 1'b0;

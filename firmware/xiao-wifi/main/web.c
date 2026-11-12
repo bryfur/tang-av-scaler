@@ -29,6 +29,7 @@
 
 #include "app.h"
 #include "board.h"
+#include "link.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_http_server.h"
@@ -390,6 +391,40 @@ static esp_err_t get_grab(httpd_req_t *req)
     struct scaler_settings v;
     uint32_t vid, x;
     scaler_get(&t, &v);
+    if (scaler_cpu()) {
+        /* the FPGA's CPU reads it out (gateware/sw/main.c), a row a message: some 3 s for 480 x 270 */
+        int w = 1920 / step, h = 1080 / step;
+        uint32_t size = 54 + 3u * w * h;
+        uint8_t hd[54] = {'B', 'M', size, size >> 8, size >> 16, size >> 24, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0,
+                          w, w >> 8, 0, 0, -h, -h >> 8, 0xFF, 0xFF, 1, 0, 24, 0};
+        uint8_t rq[8] = {LINK_CMD, LINK_CMD_GRAB_BEGIN}, a[4];
+        bool ok = link_msg(rq, 2, a, sizeof a, 1000) >= 1;
+        httpd_resp_set_type(req, "image/bmp");
+        httpd_resp_set_hdr(req, "Cache-Control", "no-store");
+        httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=\"avscaler.bmp\"");
+        esp_err_t e = httpd_resp_send_chunk(req, (const char *)hd, sizeof hd);
+        for (int y = 0; y < h && e == ESP_OK; y++) {
+            for (int x0 = 0; x0 < w; x0 += 600) {
+                int n = w - x0 < 600 ? w - x0 : 600;
+                rq[0] = LINK_GRAB, rq[1] = step, rq[2] = y, rq[3] = y >> 8, rq[4] = x0, rq[5] = x0 >> 8, rq[6] = n, rq[7] = n >> 8;
+                /* (the answer's first byte, then the pixels: into the line a byte early, the byte before kept) */
+                uint8_t keep = x0 ? line[3 * x0 - 1] : 0;
+                if (link_msg(rq, 8, x0 ? line + 3 * x0 - 1 : rx, 1 + 3 * n, 500) != 1 + 3 * n) {
+                    memset(line + 3 * x0, 0, 3 * n);
+                    ok = false;
+                } else if (!x0)
+                    memcpy(line, rx + 1, 3 * n);
+                if (x0)
+                    line[3 * x0 - 1] = keep;
+            }
+            e = httpd_resp_send_chunk(req, (const char *)line, 3 * w);
+        }
+        rq[0] = LINK_CMD, rq[1] = LINK_CMD_GRAB_END;
+        link_msg(rq, 2, a, sizeof a, 500);
+        if (!ok)
+            ESP_LOGW("web", "grab: the CPU did not answer all of it");
+        return e == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : e;
+    }
     if (t.host || !t.fpga || !mon_rd(VID, &vid)) {
         httpd_resp_set_status(req, "503 Service Unavailable");
         return httpd_resp_sendstr(req, "the FPGA is not the link's to ask\n");
@@ -447,11 +482,11 @@ static esp_err_t get_video(httpd_req_t *req)
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
                      "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
                      "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
-                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d},\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"shown\":[%u,%u,%u,%u]}",
+                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d},\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u]}",
                      B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
                      v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
-                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.show_x, t.show_w, t.show_y, t.show_h);
+                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h);
 #undef B
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, out, n);
