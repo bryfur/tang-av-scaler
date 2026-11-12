@@ -143,9 +143,11 @@ void osd_update(void)
         str(" fr ");
         num(st.frames_s, 1);
         str(" fps");
+        if (st.ll)
+            str(" LL");
         if (st.lock >= 2) {
             int p = st.lock_ppm10;
-            str(st.lock == 3 ? "  LOCKED " : "  locking ");
+            str(st.lock == 3 ? " LOCKED " : " locking ");
             put(p < 0 ? '-' : '+');
             fix(p < 0 ? -p : p, 1);
             str("ppm");

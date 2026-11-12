@@ -80,6 +80,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 </section>
 <section><h2>Output</h2>
 <div class="f"><span>Frame lock<small id="lk">the output kept in step with the input</small></span><input class="sw" type="checkbox" name="lock"></div>
+<div class="f"><span>Low latency<small id="llt">the picture begun while the field is still coming in (needs frame lock)</small></span><input class="sw" type="checkbox" name="lowlat"></div>
 <div class="f"><span>On-screen display<small>what comes in, what is done to it, the delay</small></span><input class="sw" type="checkbox" name="osd"></div>
 <div class="f"><span>Sound over HDMI<small>off sends DVI framing</small></span><input class="sw" type="checkbox" name="audio"></div>
 <div class="f"><span>Frame rate</span><span class="seg"><label><input type="radio" name="ntsc" value="1"><span>59.94 Hz</span></label><label><input type="radio" name="ntsc" value="0"><span>60 Hz</span></label></span></div>
@@ -144,6 +145,7 @@ async function vstat(){
   $('tn').textContent=['where in a pixel the decoder samples; Tune tries each on a still picture (pause the game)','tuning: about ten seconds...','tuned: the sharpest is '+(v.tune_gain-100)+' % sharper than the worst','the picture moved while tuning: pause the game and try again','no picture to tune on'][v.tune]||'';
   if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
   $('lk').textContent=['the output kept in step with the input','no input to follow','getting in step: '+(v.lock_us/1000).toFixed(2)+' ms to go, clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm','in step (clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm): every field shown once, the delay steady'][v.relay?v.lock:0];
+  $('llt').textContent=v.set.lowlat?(v.ll?'on: a frame is begun with '+v.ll_lines+' lines of its field in':'on, but not in use yet (the output must be in step first)'):'the picture begun while the field is still coming in (needs frame lock)';
   $('shown').textContent='showing '+v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2];
   $('vs').innerHTML=
     row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':
@@ -152,7 +154,7 @@ async function vstat(){
     row('Output','1080p &middot; transceiver PLL '+yes(v.pll,'locked','not locked')+' &middot; display '+yes(v.hpd,'present','not seen'))+
     row('Input',v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
       yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out')+
-    row('Delay',sig?v.delay_ms.toFixed(1)+' ms from a field captured to its lines shown ('+(v.delay_ms/16.68).toFixed(2)+' frames)':'-')+
+    row('Delay',sig?v.delay_ms.toFixed(1)+' ms from a line captured to it shown ('+(v.delay_ms/16.68).toFixed(2)+' frames)':'-')+
     row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+new Date(v.cpu_build*1000).toISOString().slice(0,16).replace('T',' ')+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+
     row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'));
   if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;

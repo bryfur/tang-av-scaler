@@ -21,6 +21,11 @@
 // and less of the older one from there, none from 2 T on (sim/model.py tnr()).  What moves is still
 // seen in the fields as they are.
 //
+// ll: a frame begun while a field is still coming in is made from that field (C the one coming in,
+// P1 to P3 the three before it) if ll_min of its lines are in already (cap_ddr.v's prog): the
+// output a few lines behind the input, not a field (the output's clock must be in step for it to
+// stay so: the CPU's frame lock); a line of C is waited for if it is not in yet.
+//
 // At the picture's edge the missing one of old, new is the other.  mode 1: bob everywhere; 2: weave
 // everywhere; bob too until four fields of alternating parity are there (hist).  top_f: the F of
 // the top field.
@@ -53,6 +58,10 @@ module deint #(
     input      [1:0]   mode,
     input      [7:0]   thr,
     input      [1:0]   nr,              // temporal noise reduction: 0 none, 1 to 3
+    input              ll,
+    input      [7:0]   ll_min,
+    input      [9:0]   prog,
+    input      [2:0]   prog_slot,
     input              top_f,
 
     output reg         b_valid = 1'b0,
@@ -90,7 +99,12 @@ module deint #(
     localparam S_IDLE = 0, S_RQ = 1, S_WAIT = 2, S_C1 = 3, S_C2 = 4, S_W = 5, S_NEXT = 6, S_C1B = 7, S_C2B = 8,
                S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13, S_C2A = 14;
     reg [3:0]  st = S_IDLE;
-    reg        active = 1'b0, pc, hist;
+    reg        active = 1'b0, pc, hist, ll_used = 1'b0;
+    // (a frame from the field coming in: four fields before it in order, and enough of it there)
+    wire [2:0] nxt = latest + 3'd1;
+    wire       ll_now = ll && nfields >= 3'd4 && prog_slot == nxt && prog >= {2'd0, ll_min} &&
+                        par[latest - 3'd1] != par[latest] && par[latest - 3'd2] == par[latest];
+    reg        line_ok = 1'b1;          // (C's line of this step is in the memory)
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
     reg [9:0]  nl;                      // a field's lines
     reg [9:0]  k;                       // the step
@@ -107,7 +121,8 @@ module deint #(
     reg [9:0]  row_new, row_w, line_i, line_d;
     reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
     always @(posedge clk) begin
-        can <= active && !hold && k <= kmax && emitted <= goal;
+        line_ok <= !ll_used || latest == fc || (prog_slot == fc && k < prog) || k >= nl;
+        can <= active && !hold && k <= kmax && emitted <= goal && line_ok;
         new_ok <= k < nl;
         old_ok <= k != 10'd0;
         emit <= pc ? 1'b1 : k != 10'd0;
@@ -250,13 +265,23 @@ module deint #(
                     start_clr <= 1'b1;
                     fstart <= 1'b1;
                     frames <= frames + 16'd1;
-                    fc <= latest;
-                    f1 <= latest - 3'd1;
-                    f2 <= latest - 3'd2;
-                    f3 <= latest - 3'd3;
-                    pc <= par[latest] != top_f;
-                    hist <= nfields >= 3'd4 && par[latest - 3'd1] != par[latest] &&
-                            par[latest - 3'd2] == par[latest] && par[latest - 3'd3] != par[latest];
+                    ll_used <= ll_now;
+                    if (ll_now) begin
+                        fc <= nxt;
+                        f1 <= latest;
+                        f2 <= latest - 3'd1;
+                        f3 <= latest - 3'd2;
+                        pc <= par[latest] == top_f;         // (the field coming in: the other parity)
+                        hist <= 1'b1;
+                    end else begin
+                        fc <= latest;
+                        f1 <= latest - 3'd1;
+                        f2 <= latest - 3'd2;
+                        f3 <= latest - 3'd3;
+                        pc <= par[latest] != top_f;
+                        hist <= nfields >= 3'd4 && par[latest - 3'd1] != par[latest] &&
+                                par[latest - 3'd2] == par[latest] && par[latest - 3'd3] != par[latest];
+                    end
                     nl <= flines;
                     k <= 10'd0;
                     emitted <= 10'd0;
@@ -371,6 +396,6 @@ module deint #(
         r_wd_d <= s1_d;
         r_wd_i <= {blend(s1_w[31:24], s1_bob[31:24], s1_ac), blend(s1_w[23:16], s1_bob[23:16], s1_ay0),
                    blend(s1_w[15:8], s1_bob[15:8], s1_ac), blend(s1_w[7:0], s1_bob[7:0], s1_ay1)};
-        state_o <= {active, hist, pc, 1'b0, st};
+        state_o <= {active, hist, pc, ll_used, st};
     end
 endmodule

@@ -428,7 +428,7 @@ static struct link_settings to_link(const struct scaler_settings *v)
                               .aa_thr = v->aa_thr, .sharp = v->sharp, .swap = v->swap, .top1 = v->top1,
                               .pattern = v->pattern, .freeze = v->freeze, .audio = v->audio, .aa_dbg = v->aa_dbg,
                               .aa_diag = v->aa_diag, .aa_corner = v->aa_corner, .crop = v->crop, .wide = v->wide,
-                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock,
+                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat,
                               .crop_x = v->crop_x, .crop_w = v->crop_w, .crop_y = v->crop_y, .crop_h = v->crop_h};
     return l;
 }
@@ -439,7 +439,7 @@ static struct scaler_settings from_link(const struct link_settings *l)
                                 .aa_thr = l->aa_thr, .sharp = l->sharp, .swap = l->swap, .top1 = l->top1,
                                 .pattern = l->pattern, .freeze = l->freeze, .audio = l->audio, .aa_dbg = l->aa_dbg,
                                 .aa_diag = l->aa_diag, .aa_corner = l->aa_corner, .crop = l->crop, .wide = l->wide,
-                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock,
+                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat,
                                 .crop_x = l->crop_x, .crop_w = l->crop_w, .crop_y = l->crop_y, .crop_h = l->crop_h};
     return v;
 }
@@ -555,6 +555,8 @@ static bool cpu_second(struct scaler_state *s)
     s->lock = ls.lock;
     s->lock_err = ls.lock_err;
     s->lock_ppm10 = ls.lock_ppm10;
+    s->ll = ls.ll;
+    s->ll_lines = ls.ll_lines;
     return true;
 }
 

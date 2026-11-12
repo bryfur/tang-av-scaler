@@ -51,7 +51,9 @@ struct link_settings {
     uint8_t phase;          /* the decoder's sampling phase, 0 to 31 */
     uint8_t osd;            /* the on-screen text */
     uint8_t flock;          /* the output's frames kept in step with the input's fields (the clock trimmed) */
-    uint8_t rsvd[2];
+    uint8_t lowlat;         /* a frame made from the field still coming in: the output a few lines behind
+                             * the input (with flock: without it only when it happens to fit) */
+    uint8_t rsvd[1];
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
 
@@ -77,10 +79,10 @@ struct link_status {
     int16_t temp4;          /* the chip's temperature, degrees C x 4 (-32768: not measured) */
     uint16_t delay_us10;    /* a field's end to its lines shown, in 10 us */
     uint8_t lock;           /* the frame lock: 0 off, 1 no input to follow, 2 getting there, 3 in step */
-    uint8_t rsvd;
+    uint8_t ll;             /* the frame now shown is made from the field coming in */
     int16_t lock_err;       /* how far the frame's start is from where it should be, in 10 us */
     int16_t lock_ppm10;     /* the clock's trim, in tenths of a ppm */
-    uint16_t rsvd2;
+    uint16_t ll_lines;      /* lines of that field in the memory when the frame was begun */
     struct link_settings set;
 };
 

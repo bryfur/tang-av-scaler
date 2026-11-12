@@ -31,7 +31,8 @@
 //                    (hdmi_audio.v: with bit 1; 1080p60 only), 7:4 the scrambler's open choices
 //                    (hdmi_scr.v opt); 0 and 7:4 set before the lanes are started
 //   27 R   LAT      11:0 how old the newest field was when the frame now shown was begun (from the
-//                    field's last line), in 10 us
+//                    field's last line), in 10 us; 25:16 how many lines of the field coming in were
+//                    in the memory then
 //   28 RW  OSD      0 the on-screen text shown (osd.v)
 //   29 W   OSDW     a character of it: 16:8 where (line * 64 + column), 7:0 the character
 //   2A R   TEMP     the chip's temperature: 13:0 degrees C x 4 (signed), 31 measured
@@ -48,7 +49,8 @@
 //                    (rcas.v dn), 20:16 the sharpening (rcas.v: 0 none to 16)
 //   37 R   FOCUS    focus.v: 27:0 the last field's sharpness across a line, 31:28 a count of fields
 //   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
-//                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3)
+//                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3),
+//                    6 a frame made from the field still coming in (deint.v ll: not while frozen)
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
 //                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
@@ -58,7 +60,10 @@
 //                    luma a pixel of picture is above); read: 8:0 the first pair of pixels, 24:16 the
 //                    last, 31 there was picture
 //   3F R   BORDERL  9:0 the first line of a field with picture, 25:16 the last
-//   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state,
+//   2B RW  LLMIN    7:0 the lines of a field that must be in for a frame to be made from it (deint.v
+//                    ll_min)
+//   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state (12:
+//                    the frame is made from the field coming in),
 //                    31:16 frames it has begun
 //   31 R   CAP       vcap.v: 10:0 the Y samples of a line, 20:11 the lines of picture of a field,
 //                    21 its F, 31 the raw capture is done
@@ -559,6 +564,9 @@ module top (
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
     reg  [31:0]  dcfg = 32'h140D0620;
+    reg  [7:0]   ll_min = 8'd16;
+    wire [9:0]   f_prog;
+    wire [2:0]   f_pslot;
     reg  [27:0]  g_xr = -28'sd11808768;
     reg          g_wide = 1'b0;
     reg  [16:0]  g_dx = 17'd32768;
@@ -567,6 +575,8 @@ module top (
     always @(posedge clk) begin
         if (we && addr == 8'h35)
             dcfg <= wdata;
+        if (we && addr == 8'h2B)
+            ll_min <= wdata[7:0];
         if (we && addr == 8'h3A)
             g_xr <= wdata[27:0];
         if (we && addr == 8'h3B) begin
@@ -605,9 +615,10 @@ module top (
     cap_ddr u_capd (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
                     .eof_f(cap_field), .eof_lines(cap_lines), .freeze(vid[1]), .pclk(pclk), .a_valid(ca_valid),
                     .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
-                    .nfields(f_n), .flines(f_lines));
+                    .nfields(f_n), .flines(f_lines), .prog(f_prog), .prog_slot(f_pslot));
     deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .goal(s_goal[9:0]), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
@@ -618,7 +629,9 @@ module top (
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     // how old the newest field is when a frame is begun: from the field's end (latest changes), in 10 us
     reg  [9:0]   lt_div = 10'd0;
-    reg  [11:0]  lt_age = 12'd0, lt_f = 12'd0, lat_s0, lat_s;
+    reg  [11:0]  lt_age = 12'd0, lt_f = 12'd0;
+    reg  [9:0]   lt_p = 10'd0;
+    reg  [21:0]  lat_s0, lat_s;
     reg  [2:0]   lt_l;
     always @(posedge pclk) begin
         lt_l <= f_latest;
@@ -628,11 +641,13 @@ module top (
             lt_div <= 10'd0;
         end else if (lt_div == 10'd999 && !(&lt_age))
             lt_age <= lt_age + 12'd1;
-        if (d_fstart)
+        if (d_fstart) begin
             lt_f <= lt_age;
+            lt_p <= f_pslot == f_latest + 3'd1 ? f_prog : 10'd0;
+        end
     end
     always @(posedge clk) begin
-        lat_s0 <= lt_f;
+        lat_s0 <= {lt_p, lt_f};
         lat_s <= lat_s0;
     end
     generate
@@ -751,7 +766,8 @@ module top (
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
-            8'h27: rdata <= {20'd0, lat_s};
+            8'h27: rdata <= {6'd0, lat_s[21:12], 4'd0, lat_s[11:0]};
+            8'h2B: rdata <= {24'd0, ll_min};
             8'h28: rdata <= {31'd0, osd_on};
             8'h2A: rdata <= {temp[14], 17'd0, temp[13:0]};
             8'h70: rdata <= sp_stat;

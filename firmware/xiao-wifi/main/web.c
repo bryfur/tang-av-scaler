@@ -473,7 +473,7 @@ static esp_err_t get_grab(httpd_req_t *req)
 
 static esp_err_t get_video(httpd_req_t *req)
 {
-    static char out[1400];
+    static char out[1500];
     struct scaler_state t;
     struct scaler_settings v;
     scaler_get(&t, &v);
@@ -483,11 +483,11 @@ static esp_err_t get_video(httpd_req_t *req)
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
                      "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
                      "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
-                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d},\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u]}",
+                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u]}",
                      B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
                      v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
-                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, !v.nolock, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h);
+                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, !v.nolock, v.lowlat, t.ll ? "true" : "false", t.ll_lines, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h);
 #undef B
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, out, n);
@@ -535,6 +535,7 @@ static esp_err_t post_video(httpd_req_t *req)
     NUM("dn", v.dn, 1)
     NUM("phase", v.phase, 31)
     NUM("osd", v.osd, 1)
+    NUM("lowlat", v.lowlat, 1)
     if (field(body, "lock", f, sizeof f))
         v.nolock = !atoi(f);
 #undef NUM

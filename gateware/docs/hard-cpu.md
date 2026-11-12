@@ -87,7 +87,13 @@ for is whatever happens once a line, once a field, or once in a while.
   meanwhile; `tools/cpu.py load` puts a program in from the host.
 - Cost: 25 block RAMs (75 % used now), some 800 LUTs, the system clock's Fmax 75 -> 58 MHz (50
   needed).
+- **The frame lock** (`sw/board.c` board_lock()): ten times a second the clock chip's frequency
+  trimmed (0.028 ppm a step, 300 ppm at most) so that a frame is begun a set time after a field's
+  end (the scaler's LAT register). On the board: in step within 10 us, the clock at -57 ppm, the
+  delay 16.8 ms all the time.
+- **The picture begun before the field is all in** (`rtl/deint.v` ll, `rtl/cap_ddr.v` prog): a
+  frame is made from the field coming in when enough of its lines are in the memory; the lock then
+  holds the frame's start 21 lines into the field (half the part shown's first line, and 14).
+  On the board: 2.0 ms from a line captured to it shown.
 - Not yet: the CPU's own UART has no pins; the settings are not kept on the FPGA's side (no
-  flash of its own: with no XIAO the CPU starts with its defaults). Next: the output locked to the
-  input (the clock chip trimmed by the CPU against LAT), then the picture begun before the field
-  is all in.
+  flash of its own: with no XIAO the CPU starts with its defaults).

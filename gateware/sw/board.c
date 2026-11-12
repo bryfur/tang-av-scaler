@@ -132,7 +132,7 @@ static void picture(void)
     const struct link_settings *s = &set;
     REG(R_DEINT) = (uint32_t)s->aa_thr << 24 | (s->aa_corner ? 1u : 0) << 19 | (s->aa_diag ? 1u : 0) << 18 |
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
-                   (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
+                   (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
     REG(R_OSD) = s->osd ? 1 : 0;
     REG(R_HDMI) = s->audio ? 6 : 0;     /* the video guard band and the data islands, or DVI's blanking */
     REG(R_VID) = (uint32_t)(s->sharp > 16 ? 16 : s->sharp) << 16 | (s->dn ? 16 : 0) | (s->swap ? 8 : 0) | 4 |
@@ -225,6 +225,16 @@ static int settle;                      /* seconds until the decoder's picture i
 
 /* ---- the frame lock ---- */
 #define LOCK_AT    50                   /* a frame begun this long after a field's end: 0.5 ms (in 10 us) */
+/* ... or, made from the field coming in (lowlat), when some lines of that are in: its picture begins
+ * 1.43 ms after the last one's end (22.5 lines of blanking), a line is 63.56 us.  The lines that must
+ * be in (the scaler's LLMIN): what the picture's first rows need of the field (half the part shown's
+ * first line and 24 more: the anti-aliasing looks 18 ahead) less the 8 that come in before the first
+ * row is sent, and 5 to spare; the frame is begun 4 lines after that. */
+#define LL_BLANK   143
+static int ll_min(void)
+{
+    return st.show_y / 2 + 10;
+}
 #define LOCK_MAX   300                  /* ppm either way at most */
 static int32_t lock_i;                  /* the errors' sum */
 static int32_t lock_u;                  /* the trim now, ppm x 256 */
@@ -248,7 +258,7 @@ void board_lock(void)
         return;
     }
     /* how far the frame's start is from where it should be: the nearer way round a field's time */
-    e = (int32_t)(lat & 0xFFF) - LOCK_AT;
+    e = (int32_t)(lat & 0xFFF) - (set.lowlat && st.hist ? LL_BLANK + (ll_min() + 4) * 636 / 100 : LOCK_AT);
     while (e > 834)
         e -= 1668;
     while (e < -834)
@@ -374,8 +384,15 @@ void board_second(void)
     /* (fmeter.v's count is the clock / 23.84 Hz: 16 x 50 MHz / 2^25) */
     st.llc_hz = (uint32_t)((uint64_t)REG(R_FREQ + 1) * 800000000u >> 25);
     st.temp4 = temp >> 31 ? (int16_t)((int32_t)(temp << 18) >> 18) : -32768;
-    /* (the field's end to the frame's start, and a field's time to its lines: 16.3 ms) */
-    st.delay_us10 = (REG(R_LAT) & 0xFFF) + 1630;
+    /* (the field's end to the frame's start, and a field's time to its lines: 16.3 ms; or, made from
+     * the field coming in: from its first line in to the first row out, 0.67 ms after the frame's start) */
+    {
+        uint32_t lat = REG(R_LAT);
+        st.ll = dstat >> 12 & 1;
+        st.ll_lines = lat >> 16 & 0x3FF;
+        st.delay_us10 = st.ll ? (lat & 0xFFF) + 67 - LL_BLANK : (lat & 0xFFF) + 1630;
+        REG(R_LLMIN) = ll_min();
+    }
 
     if (grabbing && ms() - grab_ms > 3000) {
         grabbing = false;

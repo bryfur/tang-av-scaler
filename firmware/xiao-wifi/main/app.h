@@ -55,8 +55,9 @@ struct scaler_settings {
     uint8_t phase;      /* the decoder's sampling phase (its DLL: 0 to 31) */
     bool osd;           /* the on-screen text (the FPGA's CPU writes it) */
     bool nolock;        /* the output NOT kept in step with the input (so said because this byte was
-                         * padding in what older firmware kept: 0, the lock on) (new settings go at the
-                         * end: the ones kept in flash are read as far as they go) */
+                         * padding in what older firmware kept: 0, the lock on) */
+    bool lowlat;        /* a frame made from the field still coming in (new settings go at the end: the
+                         * ones kept in flash are read as far as they go) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
@@ -78,6 +79,8 @@ struct scaler_state {
     uint8_t lock;       /* the frame lock: 0 off, 1 no input to follow, 2 getting there, 3 in step */
     int16_t lock_err;   /* how far the frame's start is from where it should be, in 10 us */
     int16_t lock_ppm10; /* the clock's trim, in tenths of a ppm */
+    bool ll;            /* the frame shown is made from the field coming in */
+    uint16_t ll_lines;  /* ... with this many of its lines in when it was begun */
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
 void link_start(void);

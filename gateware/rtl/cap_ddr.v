@@ -7,6 +7,9 @@
 // Fields go to the slots in turn.  When one is all in, on pclk: latest its slot, par[slot] its F,
 // nfields how many there have been (to 7), flines its lines.  freeze: the fields in the memory are
 // left as they are (a field begun or ended under it is not counted).
+//
+// And of the field coming in now: prog of its lines are in the memory (prog_slot: its slot): the
+// picture can be made from it before it is all there (deint.v's ll).
 
 module cap_ddr (
     input              llc,
@@ -27,7 +30,9 @@ module cap_ddr (
     output reg [2:0]   latest = 3'd0,
     output reg [7:0]   par = 8'd0,
     output reg [2:0]   nfields = 3'd0,
-    output reg [9:0]   flines = 10'd0
+    output reg [9:0]   flines = 10'd0,
+    output reg [9:0]   prog = 10'd0,
+    output reg [2:0]   prog_slot = 3'd0
 );
     // the pixel clock's side
     reg [2:0]   slot = 3'd0, e_slot;
@@ -84,6 +89,11 @@ module cap_ddr (
             fifo[wp[3:0]] <= {hold_a, hold};
         wp <= wp_n;
         rp <= rp_n;
+        // (a line's last sixteen pixels taken: the line is in)
+        if (a_ack && head[261:256] == 6'd44) begin
+            prog <= head[272:263] + 10'd1;
+            prog_slot <= head[275:273];
+        end
         av <= wp_n != rp_n;
         if (u1 != u2) begin
             latest <= e_slot;
