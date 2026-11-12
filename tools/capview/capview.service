@@ -1,0 +1,10 @@
+[Unit]
+Description=USB capture dongle on a web page (port 8090)
+
+[Service]
+ExecStart=/usr/bin/python3 /home/bryan/devel/git/tang-av-scaler/tools/capview/capview.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

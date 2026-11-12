@@ -6,7 +6,7 @@
  *    the transceivers' reference (148.5 MHz, or 148.5/1.001 for a 59.94 Hz picture), the SN65DP159
  *    a redriver, the sink's SCDC, the lanes out of reset; the ADV7181D to 480i component through
  *    its CP core; the picture's settings (deinterlacing, anti-aliasing, sharpening);
- *  - each second: is it still up (a reload, a display plugged in: again), and what the capture and
+ *  - each second: is it still up (after a reload: again), and what the capture and
  *    the deinterlacer say, for the web page;
  *  - the settings (kept in NVS), changed from the web page: POST /api/video.
  *
@@ -297,7 +297,7 @@ static bool bringup(void)
 
 static void task(void *arg)
 {
-    bool hpd_was = false, up_ok = false;
+    bool up_ok = false;
     uint32_t fields_was = 0, frames_was = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -318,13 +318,15 @@ static void task(void *arg)
                      rd(R_STAT, &stat);
             if (s.fpga) {
                 bool hpd = stat >> 2 & 1;
-                if (redo || gt != 0xF0F || (ctrl & (IN_RESET_N | DP_OE)) != (IN_RESET_N | DP_OE) || (hpd && !hpd_was)) {
+                /* (not again on hot plug: at these rates a display needs nothing told, the output
+                 * runs with or without one, and a capture dongle drops and raises hot plug each
+                 * time the signal restarts: it would never end) */
+                if (redo || gt != 0xF0F || (ctrl & (IN_RESET_N | DP_OE)) != (IN_RESET_N | DP_OE)) {
                     up_ok = bringup();
                     s.ups++;
                 } else if (dirty)
                     picture();
                 s.ok = up_ok;
-                hpd_was = hpd;
                 rd(R_GT_STAT, &gt);
                 rd(R_CAP, &cap);
                 rd(R_FIELDS, &fields);
