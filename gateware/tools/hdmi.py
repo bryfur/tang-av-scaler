@@ -53,7 +53,9 @@ def main():
         m.i2c_write(1, 0x5E, [0x09, 0x0A])
         m.flush()
         time.sleep(0.1)
-        m.i2c_write(1, 0x5E, [0x09, 0x02])
+        # (bit 2, HPD_AUTO_PWRDWN_DISABLE: the outputs stay on with hot plug low: a capture dongle
+        # raises hot plug only once it sees a signal)
+        m.i2c_write(1, 0x5E, [0x09, 0x06])
     # its outputs' termination by rate [SLLSEJ2G Table 8]: none to 2 Gb/s, 150-300 R to 3.4, 75-150 R above
     m.i2c_write(1, 0x5E, [0x0B, {1: 0x00, 2: 0x08}.get(mode, 0x18)])
     m.flush()

@@ -270,7 +270,9 @@ static bool bringup(void)
     i2c_set(BUS_DP, 0x5E, 0x0A, 0x38);  /* a redriver (as a retimer it corrupts 2.97 Gb/s); PD_EN toggled, it takes */
     i2c_set(BUS_DP, 0x5E, 0x09, 0x0A);
     pause_ms(100);
-    i2c_set(BUS_DP, 0x5E, 0x09, 0x02);
+    /* (bit 2: its outputs stay on with hot plug low: a capture dongle raises hot plug only once it
+     * sees a signal, and the redriver waits for hot plug before it sends one) */
+    i2c_set(BUS_DP, 0x5E, 0x09, 0x06);
     i2c_set(BUS_DP, 0x5E, 0x0B, mode == 1 ? 0x00 : mode == 2 ? 0x08 : 0x18);
     pause_ms(300);
     wr(R_HDMI, 0);                      /* DVI's blanking, nothing scrambled; picture() sets the sound's */
