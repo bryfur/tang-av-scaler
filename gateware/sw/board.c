@@ -244,7 +244,9 @@ void board_lock(void)
 {
     uint32_t lat = REG(R_LAT);
     int32_t e, u;
-    if (!set.flock || !set.on || st.host) {
+    if (st.host)
+        return;                         /* (a host tool has the scaler: the clock as it is) */
+    if (!set.flock || !set.on) {
         if (lock_u) {
             lock_u = lock_i = 0;
             pll_trim(0);

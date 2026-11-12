@@ -54,6 +54,7 @@ openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in t
 | `rtl/easu.v` | the scaler: FSR 1's EASU with the kernel from a table by the pixel's place between source pixels (8 x 8 places), the edge's direction (32 bins) and strength (8 levels); the part of the source shown set by a start and a step each way (registers 3A-3D): 55 dB from the shader on a real frame (`sim/fsr.py`) |
 | `rtl/ddr3/`, `ddr_arb.v` | the DDR3: our own PHY, calibration and controller (from the fpc console; `pll_init.v` is Sipeed's, Apache 2.0), its port shared by the capture, the picture and the host |
 | `rtl/grab.v` | rows of the picture as sent, for the host to read: `tools/grab.py OUT.png` shows the output with no display |
+| `tools/still.py` | stills of one frozen frame for comparing: the 480i fields as the console sent them (out of the DDR3), woven; that stretched to 1080p the plain way; the scaler's 1080p, every pixel as sent; and parts of the two side by side |
 | `gowin/` | the build: `avb.tcl` makes the project, `csr_result.py` hands it the transceivers' register file, `run.tcl` runs it; pins `avb.cst`, clocks `avb.sdc` |
 | `tools/avb.py` | the monitor from the host: registers, the four I2C buses, the meters |
 | `tools/audio.py` | the audio converter's words and peaks |
