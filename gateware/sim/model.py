@@ -110,5 +110,21 @@ def scale_nearest(prog):
     return rows
 
 
+def upsample(line):
+    """lstream.v: a line of words (cb, y0, cr, y1) -> pixels (y, cb, cr); a word's second pixel
+    has the mean of its chroma and the next word's"""
+    out = []
+    for q, (cb, y0, cr, y1) in enumerate(line):
+        out.append((y0, cb, cr))
+        nb, nr = (line[q + 1][0], line[q + 1][2]) if q + 1 < len(line) else (cb, cr)
+        out.append((y1, mean(cb, nb), mean(cr, nr)))
+    return out
+
+
 def frame_1080(fields, pars, mode=0, thr=6):
-    return scale_nearest(deinterlace(fields, pars, mode, thr))
+    """deint.v, lstream.v, easu.v: 1080 rows of 1920 (r, g, b)"""
+    import fsr
+    pix = [upsample(line) for line in deinterlace(fields, pars, mode, thr)]
+    w, h = len(pix[0]), len(pix)
+    out = fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table())
+    return [[(0, 0, 0)] * 240 + [rgb(*p) for p in row] + [(0, 0, 0)] * 240 for row in out]

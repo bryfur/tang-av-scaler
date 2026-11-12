@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [mode=M] [thr=T]: the picture's path through the DDR3 (iverilog): fields
+"""deint_tb.py [NFIELDS] [mode=M] [thr=T]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
-a frame out of deint.v and lineview.v beside pattern.v's timing; every pixel of the frame against
-model.py's deinterlacer and the scaling.  NFIELDS (default 5; 6: the newest field a bottom one)."""
+a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
+against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one)."""
 import os
 import subprocess
 import sys
@@ -12,7 +12,7 @@ sys.path.insert(0, HERE)
 import model
 
 WORK = os.path.join(HERE, "build")
-LAT, LINES = 10, 240
+LAT, LINES = 29, 240
 
 
 def stream(fields):
@@ -61,6 +61,7 @@ module tb;
                 .done(done), .rclk(clk), .ra(10'd0), .rd(raw_rd));
     wire ca_valid, ca_ack, db_valid, db_ack, db_rvalid; wire [24:0] ca_line, db_line; wire [255:0] ca_data, rd_data;
     wire [2:0] latest, fn; wire [7:0] par; wire [9:0] flines;
+    reg [255:0] rd_q; always @(posedge pclk) rd_q <= rd_data;
     cap_ddr u_capd (.llc(llc), .we(fb_we), .w_ln(w_ln), .w_col(w_col), .wd(fb_wd), .eof(eof), .eof_f(field),
                     .eof_lines(lines), .freeze(1'b0), .pclk(pclk), .a_valid(ca_valid), .a_line(ca_line),
                     .a_data(ca_data), .a_ack(ca_ack), .latest(latest), .par(par), .nfields(fn), .flines(flines));
@@ -72,23 +73,28 @@ module tb;
                    .c_valid(1'b0), .c_wr(1'b0), .c_line(25'd0), .c_data(256'd0), .c_ack(), .c_rvalid());
     ddr_model u_ddr (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),
                      .wr_data_en(wr_en), .rd_data(rd_data), .rd_data_valid(rd_valid));
-    reg [255:0] rd_q; always @(posedge pclk) rd_q <= rd_data;
-    wire ev, ev_first, r_we; wire [8:0] ev_goal, r_wa; wire [2:0] sd, si; wire [31:0] wd_d, wd_i;
+    wire ev, ev_first, r_we, fstart, hold, w_we; wire [9:0] ev_goal, emitted, w_x; wire [8:0] r_wa;
+    wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
-    deint u_deint (.clk(pclk), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal), .latest(latest), .par(par),
+    deint u_deint (.clk(pclk), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal), .hold(hold), .latest(latest), .par(par),
                    .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
-                   .frames(frames), .state_o(dstate));
+                   .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
+    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .hold(hold), .r_we(r_we), .r_slot_d(sd[1:0]),
+                  .r_slot_i(si[1:0]), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
+                  .w_x(w_x), .w_d(w_d));
     wire de, hs, vs, pre, gb, ucc; wire [7:0] pr, pg, pb, r, g, b; wire [12:0] ox; wire [11:0] oy;
     pattern u_pat (.clk(clk), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
                    .ox(ox), .oy(oy));
-    lineview u_lv (.clk(clk), .de(de), .x(ox), .y(oy), .swap(1'b0), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
-                   .w_clk(pclk), .w_we(r_we), .w_slot_d(sd), .w_slot_i(si), .w_wa(r_wa), .w_wd_d(wd_d),
-                   .w_wd_i(wd_i), .r(r), .g(g), .b(b));
+    easu u_easu (.clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
+                 .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .r(r), .g(g), .b(b));
     reg [%(lat)d:0] dl = 0;
     always @(posedge clk) dl <= {dl, de};
-    integer f, i;
+    integer f, i, gf;
+    reg dumping = 0;
+    initial gf = $fopen("%(work)s/%(tag)s_ring.txt", "w");
+    always @(posedge pclk) if (w_we && dumping) $fwrite(gf, "%%d %%d %%h\\n", w_slot, w_x, w_d);
     initial begin
         $readmemh("%(work)s/%(tag)s_in.hex", mem);
         for (i = 0; i <= %(last)d; i = i + 1) begin
@@ -98,6 +104,7 @@ module tb;
         $display("fields %%0d latest %%0d par %%b lines %%0d pix %%0d", fn, latest, par, flines, pix);
         // the frame that begins after the fields are in: from the next end of row 1079
         @(posedge ev_first);
+        dumping = 1;
         f = $fopen("%(work)s/%(tag)s_out.bin", "wb");
         for (i = 0; i < %(n_out)d; i = i + 1) begin
             @(posedge clk); #0.1;
@@ -110,14 +117,42 @@ module tb;
 endmodule
 ''' % dict(last=len(data) - 1, mode=mode, thr=thr, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lineview.v", "pattern.v")]
-    subprocess.check_call(["iverilog", "-g2005", "-o", os.path.join(WORK, tag + ".vvp"), os.path.join(WORK, tag + "_tb.v"),
-                           os.path.join(HERE, "ddr_model.v")] + rtl)
-    print(subprocess.check_output(["vvp", "-n", os.path.join(WORK, tag + ".vvp")]).decode().strip())
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "easu.v", "pattern.v")]
+    import fsr
+    hexf = os.path.join(WORK, "easu")
+    subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)
+    # Verilator (a compiled model: iverilog takes half an hour for a frame through easu.v)
+    mdir = os.path.join(WORK, "vl_" + tag)
+    subprocess.check_call(["verilator", "--binary", "--timing", "-j", "16", "-Wno-fatal", "-Wno-WIDTH", "-Wno-UNUSED",
+                           "-Wno-DECLFILENAME", "-Wno-STMTDLY", "-Wno-INITIALDLY", "-Wno-MULTIDRIVEN", "-Wno-TIMESCALEMOD",
+                           "--top-module", "tb", "--Mdir", mdir, "-o", tag] +
+                          ['-DEASU_HEX%d="%s%d.hex"' % (k, hexf, k) for k in range(4)] +
+                          [os.path.join(WORK, tag + "_tb.v"), os.path.join(HERE, "ddr_model.v")] + rtl,
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print(subprocess.check_output([os.path.join(mdir, tag)]).decode().strip())
     s = open(os.path.join(WORK, tag + "_out.bin"), "rb").read()
     de = [s[4 * k] - 65 for k in range(len(s) // 4)]
     start = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])       # (the dump begins in blanking)
     want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr)
+    # the ring as lstream.v wrote it, against the model's lines and analysis
+    import fsr
+    pix = [model.upsample(line) for line in model.deinterlace([w for _, w in fields], [f for f, _ in fields], mode, thr)]
+    ana = fsr.analysis([[p[0] for p in row] for row in pix], 720, 480)
+    line, prev, rb = -1, None, 0
+    for t in open(os.path.join(WORK, tag + "_ring.txt")):
+        slot, x, d = t.split()
+        slot, x, d = int(slot), int(x), int(d, 16)
+        if x == 0:
+            line += 1
+        if line >= 480:
+            break
+        sgn = lambda v: v - 512 if v & 256 else v
+        got = ((d >> 18 & 255, d >> 10 & 255, d >> 2 & 255), (sgn(d >> 45 & 511), sgn(d >> 36 & 511), d >> 28 & 255))
+        if got != (pix[line][x], ana[line][x]) or slot != line % 8:
+            rb += 1
+            if rb <= 8:
+                print("  ring line %d x %d slot %d: got %s want %s" % (line, x, slot, got, (pix[line][x], ana[line][x])))
+    print("ring: %d lines, %d words wrong" % (line + 1, rb))
     bad = shown = 0
     for row in range(1080):
         base = 4 * (start + row * 2200)
@@ -130,6 +165,14 @@ endmodule
                 if shown < 10:
                     shown += 1
                     print("  row %d col %d: got %s want %s" % (row, col, g3, wrow[col]))
+    if bad:
+        rows = {}
+        for row in range(1080):
+            base = 4 * (start + row * 2200)
+            cols = [col for col in range(1920) if (s[base + 4 * col + 1], s[base + 4 * col + 2], s[base + 4 * col + 3]) != want[row][col]]
+            if cols:
+                rows[row] = cols
+        print("  wrong: rows %s; in the first: columns %s" % (sorted(rows)[:20], rows[sorted(rows)[0]][:40]))
     print("%s: %d wrong pixels of %d" % (tag, bad, 1080 * 1920))
     sys.exit(1 if bad else 0)
 

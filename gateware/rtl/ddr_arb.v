@@ -3,8 +3,10 @@
 //   a   writes (the capture): first
 //   b   reads (the picture)
 //   c   reads and writes (the host's monitor): last
-// A user holds valid, its line's number and data until ack (a clock: the command is taken).  Reads
-// come back in the order asked, a user's own with its rvalid: a clock after the controller's
+// A user holds valid, its line's number and data until ack (a clock: the command is taken).  A
+// command taken waits in a register for the controller's ready (so the controller's ready, late in
+// its clock, goes no further than that register: a command every other clock at most).  Reads come
+// back in the order asked, a user's own with its rvalid: a clock after the controller's
 // rd_data_valid (registered here: the user takes rd_data a clock later too).
 
 module ddr_arb (
@@ -34,20 +36,34 @@ module ddr_arb (
     output             c_ack,
     output             c_rvalid
 );
-    assign a_ack = cmd_ready && a_valid;
-    assign b_ack = cmd_ready && !a_valid && b_valid;
-    assign c_ack = cmd_ready && !a_valid && !b_valid && c_valid;
+    reg         h_v = 1'b0, h_wr;
+    reg [24:0]  h_line;
+    reg [255:0] h_data;
+    assign a_ack = !h_v && a_valid;
+    assign b_ack = !h_v && !a_valid && b_valid;
+    assign c_ack = !h_v && !a_valid && !b_valid && c_valid;
 
     // whose each read in flight is
     reg [63:0] who;
     reg [5:0]  wp = 6'd0, rp = 6'd0;
     reg        rv = 1'b0;
     always @(posedge clk) begin
-        cmd_en <= a_ack || b_ack || c_ack;
-        wr_data_en <= a_ack || (c_ack && c_wr);
-        cmd <= (a_ack || (c_ack && c_wr)) ? 3'd0 : 3'd1;
-        addr <= {1'b0, a_ack ? a_line : b_ack ? b_line : c_line, 3'b000};
-        wr_data <= a_ack ? a_data : c_data;
+        cmd_en <= 1'b0;
+        wr_data_en <= 1'b0;
+        if (h_v && cmd_ready) begin
+            cmd_en <= 1'b1;
+            wr_data_en <= h_wr;
+            cmd <= h_wr ? 3'd0 : 3'd1;
+            addr <= {1'b0, h_line, 3'b000};
+            wr_data <= h_data;
+            h_v <= 1'b0;
+        end
+        if (a_ack || b_ack || c_ack) begin
+            h_v <= 1'b1;
+            h_wr <= a_ack || (c_ack && c_wr);
+            h_line <= a_ack ? a_line : b_ack ? b_line : c_line;
+            h_data <= a_ack ? a_data : c_data;
+        end
         if (b_ack || (c_ack && !c_wr)) begin
             who[wp] <= c_ack;
             wp <= wp + 6'd1;

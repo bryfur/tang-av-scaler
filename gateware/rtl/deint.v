@@ -19,9 +19,11 @@
 // everywhere; bob too until four fields of alternating parity are there (hist).  top_f: the F of
 // the top field.
 //
-// The lines go to lineview.v's ring, 16 pixels at a time, two lines together (the one as it is, D,
-// and the one made, I), eight words each (r_*).  The output asks by ev (a change: an event):
-// ev_first with it: a new frame; ev_goal: the frame's lines wanted in the ring by now.
+// The lines go to lstream.v's store of four, 16 pixels at a time, two lines together (the one as it
+// is, D, and the one made, I), eight words each (r_*: a line's place its number's low bits);
+// emitted: the frame's lines all there; fstart: a clock at a frame's start.  hold: no new step (the
+// store's lines are not read out yet).  The output asks by ev (a change: an event): ev_first with
+// it: a new frame; ev_goal: lines are made while emitted <= ev_goal.
 //
 // A step k reads C's line k (new) into the place of line k - 1 (old, kept in cbuf with its |C - P2|
 // in mbuf), and makes
@@ -36,7 +38,8 @@ module deint #(
     input              clk,
     input              ev,
     input              ev_first,
-    input      [8:0]   ev_goal,
+    input      [9:0]   ev_goal,
+    input              hold,
     input      [2:0]   latest,
     input      [7:0]   par,
     input      [2:0]   nfields,
@@ -57,12 +60,14 @@ module deint #(
     output reg [8:0]   r_wa,
     output reg [31:0]  r_wd_d,
     output reg [31:0]  r_wd_i,
+    output reg [9:0]   emitted = 10'd0,
+    output reg         fstart = 1'b0,
     output reg [15:0]  frames = 16'd0,  // (for the host: frames begun, and the last one's state)
     output reg [7:0]   state_o
 );
     // the output's events
     reg        e0, e1, e2, start = 1'b0;
-    reg [8:0]  goal = 9'd0;
+    reg [9:0]  goal = 10'd0;
     reg        start_clr;
     always @(posedge clk) begin
         e0 <= ev;
@@ -78,13 +83,12 @@ module deint #(
     end
 
     localparam S_IDLE = 0, S_RQ = 1, S_WAIT = 2, S_C1 = 3, S_C2 = 4, S_W = 5, S_NEXT = 6, S_C1B = 7, S_C2B = 8,
-               S_GO = 9;
+               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12;
     reg [3:0]  st = S_IDLE;
     reg        active = 1'b0, pc, hist;
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
     reg [9:0]  nl;                      // a field's lines
     reg [9:0]  k;                       // the step
-    reg [9:0]  emitted;                 // the frame's lines made
     reg [6:0]  c;                       // the sixteen pixels
     reg [2:0]  i;
     reg [2:0]  rx;
@@ -138,8 +142,7 @@ module deint #(
     endfunction
 
     // C1: new and old as used, the three differences' greatest
-    reg [255:0] cn, co;
-    reg [127:0] dn, m, dnr, dwr, md;
+    reg [127:0] dn, m, dnr, dwr, md, dor;
     reg         rdv = 1'b0;
     reg [255:0] rdq;
     reg [7:0]   carry;                  // m of the pixel before these sixteen
@@ -175,6 +178,7 @@ module deint #(
 
     always @(posedge clk) begin
         start_clr <= 1'b0;
+        fstart <= 1'b0;
         buf_we <= 1'b0;
         s0_v <= 1'b0;
         s1_v <= s0_v;
@@ -202,6 +206,7 @@ module deint #(
             S_IDLE:
                 if (start) begin
                     start_clr <= 1'b1;
+                    fstart <= 1'b1;
                     frames <= frames + 16'd1;
                     fc <= latest;
                     f1 <= latest - 3'd1;
@@ -214,7 +219,7 @@ module deint #(
                     k <= 10'd0;
                     emitted <= 10'd0;
                     active <= nfields != 3'd0;
-                end else if (active && !start_clr && k <= kmax && emitted <= {1'b0, goal}) begin
+                end else if (active && !start_clr && !fstart && !hold && k <= kmax && emitted <= goal) begin
                     c <= 7'd0;
                     i <= 3'd0;
                     rx <= 3'd0;
@@ -239,34 +244,16 @@ module deint #(
             S_WAIT:
                 if (rx == 3'd4)
                     st <= S_C1;
-            S_C1: begin                             // the differences
-                for (n = 0; n < 16; n = n + 1) begin
-                    dnr[8 * n +: 8] <= absd(luma(d0, n), luma(d1, n));
-                    dwr[8 * n +: 8] <= absd(luma(d2, n), luma(d3, n));
-                end
+            // (the differences, the greatest of them and those with the pixels beside are worked out
+            // below, a clock each, from the lines read and the buffers: both stay as they are until
+            // the step is over)
+            S_C1:
                 st <= S_C1B;
-            end
-            S_C1B: begin                            // new and old as used, the greatest difference
-                cn <= new_ok ? d0 : old_c;
-                co <= old_ok ? old_c : d0;
-                for (n = 0; n < 16; n = n + 1) begin
-                    t_dn = new_ok ? dnr[8 * n +: 8] : old_m[8 * n +: 8];
-                    t_do = old_ok ? old_m[8 * n +: 8] : t_dn;
-                    dn[8 * n +: 8] <= t_dn;
-                    m[8 * n +: 8] <= max2(max2(t_dn, t_do), dwr[8 * n +: 8]);
-                end
+            S_C1B:
+                st <= S_C1C;
+            S_C1C:
                 st <= S_C2;
-            end
-            S_C2: begin                             // with the pixels beside
-                buf_we <= new_ok;
-                buf_a <= c;
-                buf_c <= d0;
-                buf_m <= dn;
-                for (n = 0; n < 16; n = n + 1) begin
-                    t_l = n == 0 ? carry : m[8 * (n - 1) +: 8];
-                    t_r = n == 15 ? m[8 * 15 +: 8] : m[8 * (n + 1) +: 8];
-                    md[8 * n +: 8] <= max2(max2(t_l, m[8 * n +: 8]), t_r);
-                end
+            S_C2: begin
                 carry <= m[8 * 15 +: 8];
                 st <= S_C2B;
             end
@@ -280,11 +267,15 @@ module deint #(
                 p <= 4'd0;
                 st <= emit ? S_W : S_NEXT;
             end
+            S_GAP:
+                st <= S_GAP2;
+            S_GAP2:
+                st <= S_IDLE;
             S_W: begin
                 s0_v <= 1'b1;
                 s0_wa <= {c[5:0], p[2:0]};
-                wo <= co[32 * p[2:0] +: 32];
-                wn <= cn[32 * p[2:0] +: 32];
+                wo <= old_ok ? old_c[32 * p[2:0] +: 32] : d0[32 * p[2:0] +: 32];
+                wn <= new_ok ? d0[32 * p[2:0] +: 32] : old_c[32 * p[2:0] +: 32];
                 ww <= d2[32 * p[2:0] +: 32];
                 a_y0 <= al[5 * {p[2:0], 1'b0} +: 5];
                 a_y1 <= al[5 * {p[2:0], 1'b1} +: 5];
@@ -293,11 +284,15 @@ module deint #(
                     st <= S_NEXT;
             end
             S_NEXT: begin
+                buf_we <= new_ok;                   // new's line and differences kept for the next step
+                buf_a <= c;
+                buf_c <= d0;
+                buf_m <= dn;
                 if (c == NCH - 1) begin
                     k <= k + 10'd1;
                     if (emit)
                         emitted <= emitted + 10'd2;
-                    st <= S_IDLE;
+                    st <= S_GAP;                    // (two clocks: lstream.v's hold follows emitted)
                 end else begin
                     c <= c + 7'd1;
                     i <= 3'd0;
@@ -308,6 +303,18 @@ module deint #(
             default:
                 st <= S_IDLE;
         endcase
+        // C1 to C2B's work, a clock each (not held by the state)
+        for (n = 0; n < 16; n = n + 1) begin
+            dnr[8 * n +: 8] <= absd(luma(d0, n), luma(d1, n));
+            dwr[8 * n +: 8] <= absd(luma(d2, n), luma(d3, n));
+            t_dn = new_ok ? dnr[8 * n +: 8] : old_m[8 * n +: 8];
+            dn[8 * n +: 8] <= t_dn;
+            dor[8 * n +: 8] <= old_ok ? old_m[8 * n +: 8] : t_dn;
+            m[8 * n +: 8] <= max2(max2(dn[8 * n +: 8], dor[8 * n +: 8]), dwr[8 * n +: 8]);
+            t_l = n == 0 ? carry : m[8 * (n - 1) +: 8];
+            t_r = n == 15 ? m[8 * 15 +: 8] : m[8 * (n + 1) +: 8];
+            md[8 * n +: 8] <= max2(max2(t_l, m[8 * n +: 8]), t_r);
+        end
         // the second stage: the word made, and the word as it is
         r_wa <= s1_wa;
         r_slot_d <= line_d[2:0];

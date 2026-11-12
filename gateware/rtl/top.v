@@ -226,9 +226,9 @@ module top (
     endgenerate
 
     // the component input: the ADV7181D's fields decoded on its clock (vcap.v), kept in the DDR3
-    // (cap_ddr.v), made a progressive picture (deint.v) and shown (lineview.v: 1080p60 only), LAT
+    // (cap_ddr.v), made a progressive picture (deint.v, lstream.v) and scaled (easu.v: 1080p60 only), LAT
     // clocks behind pattern.v's pixel: its timing and its picture wait that long
-    localparam LAT = 10;
+    localparam LAT = 29;
     reg [31:0] vid = 32'd0;
     reg        raw_arm = 1'b0;
     reg [1:0]  raw_mode = 2'd0;
@@ -405,7 +405,7 @@ module top (
             dm_done <= 1'b1;
         end
     end
-    ddr_arb u_arb (.clk(pclk), .cmd_ready(d_cmd_ready && ddr_ok), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr),
+    ddr_arb u_arb (.clk(pclk), .cmd_ready(d_cmd_ready), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr),
                    .wr_data(d_wr_data), .wr_data_en(d_wr_en), .rd_data_valid(d_rd_valid),
                    .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
@@ -424,31 +424,36 @@ module top (
     wire [7:0]   f_par, d_state;
     wire [9:0]   f_lines;
     wire [15:0]  d_frames;
-    wire         l_ev, l_first, r_we;
-    wire [8:0]   l_goal, r_wa;
-    wire [2:0]   r_slot_d, r_slot_i;
+    wire         l_ev, l_first, r_we, d_fstart, d_hold, w_we;
+    wire [9:0]   l_goal, d_emitted, w_x;
+    wire [8:0]   r_wa;
+    wire [2:0]   r_slot_d, r_slot_i, w_slot;
     wire [31:0]  r_wd_d, r_wd_i;
+    wire [53:0]  w_d;
     cap_ddr u_capd (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
                     .eof_f(cap_field), .eof_lines(cap_lines), .freeze(vid[1]), .pclk(pclk), .a_valid(ca_valid),
                     .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
                     .nfields(f_n), .flines(f_lines));
-    deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal), .latest(f_latest), .par(f_par),
-                   .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .top_f(dcfg[2]),
-                   .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(d_rd_q),
-                   .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa), .r_wd_d(r_wd_d),
-                   .r_wd_i(r_wd_i), .frames(d_frames), .state_o(d_state));
+    deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal), .hold(d_hold), .latest(f_latest),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]),
+                   .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
+                   .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
+                   .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
+                   .state_o(d_state));
+    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .hold(d_hold), .r_we(r_we),
+                  .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
+                  .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     generate
         if (PPC == 1) begin : g_lv
-            lineview u_lv (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .swap(swap), .ev(l_ev), .ev_first(l_first),
-                           .ev_goal(l_goal), .w_clk(pclk), .w_we(r_we), .w_slot_d(r_slot_d), .w_slot_i(r_slot_i),
-                           .w_wa(r_wa), .w_wd_d(r_wd_d), .w_wd_i(r_wd_i), .r(l_r), .g(l_g), .b(l_b));
+            easu u_easu (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
+                         .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
             assign l_r = 8'd0;
             assign l_g = 8'd0;
             assign l_b = 8'd0;
             assign l_ev = 1'b0;
             assign l_first = 1'b0;
-            assign l_goal = 9'd0;
+            assign l_goal = 10'd0;
         end
     endgenerate
     reg [29:0] dst_s0, dst_s;

@@ -6,7 +6,7 @@
 cd "$(dirname "$0")/.." || exit 1
 fpgarun=${FPGARUN:-$HOME/devel/git/fpc/tools/fpga-container/fpgarun}
 out=${GW_OUT:-$PWD/gowin/build/avb}
-gw="env QT_QPA_PLATFORM=minimal LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libfreetype.so.6 GW_OUT=$out GW_DEVVER=$GW_DEVVER GW_MODE=$GW_MODE $HOME/tools/gowin-standard-1.9.12.04/IDE/bin/gw_sh"
+gw="env QT_QPA_PLATFORM=minimal LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libfreetype.so.6 GW_OUT=$out GW_DEVVER=$GW_DEVVER GW_MODE=$GW_MODE GW_PLACE=$GW_PLACE GW_ROUTE=$GW_ROUTE $HOME/tools/gowin-standard-1.9.12.04/IDE/bin/gw_sh"
 if [ -n "$GW_CST" ]; then
     exec "$fpgarun" env GW_SRCS="$GW_SRCS" GW_CST="$GW_CST" $gw gowin/avb.tcl
 fi
