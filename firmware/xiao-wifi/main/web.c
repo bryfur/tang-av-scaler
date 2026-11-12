@@ -1,0 +1,386 @@
+/* The web server:
+ *
+ *   GET  /                 the page (page.html): status, the network form, the update form
+ *   GET  /api/status       JSON: the firmware, Wi-Fi, the JTAG and console links, the FPGA
+ *   GET  /api/fpga         JSON: the FPGA's ID code and status register, read over JTAG now
+ *   GET  /api/log          the firmware's own log
+ *   GET  /api/console      the last bytes the FPGA's UART sent
+ *   POST /api/wifi         ssid=...&pass=...[&host=...] (a form): save and join
+ *   POST /api/ota          the body is a firmware image (avwifi.bin from the build): written to the other
+ *                          slot, then a restart into it
+ *   POST /api/load?sum=N   the body is a bitstream (the .fs file's bits as bytes); the link loads it into
+ *                          the FPGA's SRAM by itself (gowin.c) and answers with what happened
+ *   POST /api/restart
+ *
+ * No passwords: whoever reaches the port on the local network may use it, as with the JTAG port. */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "app.h"
+#include "board.h"
+#include "esp_app_desc.h"
+#include "esp_chip_info.h"
+#include "esp_http_server.h"
+#include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "esp_ota_ops.h"
+#include "esp_timer.h"
+#include "gowin.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "jtag.h"
+#include "soc/gpio_reg.h"
+#include "soc/soc.h"
+
+static const char *TAG = "web";
+extern const char page_start[] asm("_binary_page_html_start");
+extern const char page_end[] asm("_binary_page_html_end");
+
+static bool reached;
+
+bool web_reached(void)
+{
+    return reached;
+}
+
+static void restart_soon(void *arg)
+{
+    vTaskDelay(pdMS_TO_TICKS(800));
+    esp_restart();
+}
+
+/* JSON string contents: the network's name is whatever its owner typed */
+static void esc(char *dst, size_t max, const char *src)
+{
+    size_t n = 0;
+    for (; *src && n + 7 < max; src++) {
+        unsigned char c = *src;
+        if (c == '"' || c == '\\')
+            n += snprintf(dst + n, max - n, "\\%c", c);
+        else if (c < 0x20)
+            n += snprintf(dst + n, max - n, "\\u%04x", c);
+        else
+            dst[n++] = c;
+    }
+    dst[n] = 0;
+}
+
+static bool fpga_read(uint32_t *id, uint32_t *status)
+{
+    if (!jtag_take(false))
+        return false;
+    *id = jtag_gowin_read(GOWIN_IDCODE);
+    *status = jtag_gowin_read(GOWIN_STATUS);
+    jtag_give();
+    return true;
+}
+
+static esp_err_t get_page(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/html; charset=utf-8");
+    /* (TEXT data ends in a NUL the page does not want) */
+    return httpd_resp_send(req, page_start, page_end - page_start - 1);
+}
+
+static esp_err_t get_status(httpd_req_t *req)
+{
+    static char out[1536];
+    struct wifi_state w;
+    struct xvc_state x;
+    struct console_state c;
+    char ssid[80], host[80];
+    wifi_get(&w);
+    xvc_get(&x);
+    console_get(&c);
+    esc(ssid, sizeof ssid, w.ssid);
+    esc(host, sizeof host, w.host);
+    const esp_app_desc_t *app = esp_app_get_description();
+    const esp_partition_t *part = esp_ota_get_running_partition();
+    int n = snprintf(out, sizeof out,
+                     "{\"firmware\":{\"name\":\"%s\",\"version\":\"%s\",\"built\":\"%s %s\",\"idf\":\"%s\","
+                     "\"chip\":\"%s\",\"slot\":\"%s\",\"uptime_s\":%llu,\"heap\":%u,\"reset\":%d},"
+                     "\"wifi\":{\"joined\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"channel\":%d,"
+                     "\"host\":\"%s\",\"mac\":\"%s\",\"ap\":%s,\"ap_ssid\":\"%s\",\"drops\":%u},"
+                     "\"jtag\":{\"port\":%d,\"connected\":%s,\"peer\":\"%s\",\"sessions\":%u,\"bits\":%llu,"
+                     "\"tck_ns\":%u,\"fastest_ns\":%u},"
+                     "\"console\":{\"port\":%d,\"baud\":%d,\"tcp\":%s,\"usb\":%s,\"peer\":\"%s\","
+                     "\"to_fpga\":%u,\"from_fpga\":%u},"
+                     "\"pads\":{\"tms\":%u,\"tck\":%u,\"tdi\":%u,\"tdo\":%u}}",
+                     app->project_name, app->version, app->date, app->time, app->idf_ver, CONFIG_IDF_TARGET,
+                     part ? part->label : "?", (unsigned long long)(esp_timer_get_time() / 1000000),
+                     (unsigned)esp_get_free_heap_size(), (int)esp_reset_reason(),
+                     w.joined ? "true" : "false", ssid, w.ip, w.rssi, w.channel, host, w.mac, w.ap ? "true" : "false",
+                     w.ap_ssid, (unsigned)w.drops,
+                     PORT_XVC, x.connected ? "true" : "false", x.peer, (unsigned)x.sessions, (unsigned long long)x.bits,
+                     (unsigned)jtag_period(), (unsigned)jtag_fastest(),
+                     PORT_CONSOLE, UART_BAUD, c.tcp ? "true" : "false", c.usb ? "true" : "false", c.peer,
+                     (unsigned)c.to_fpga, (unsigned)c.from_fpga,
+                     (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TMS & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TCK & 1),
+                     (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDI & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDO & 1));
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t e = httpd_resp_send(req, out, n);
+    if (e == ESP_OK)
+        reached = true;
+    return e;
+}
+
+static esp_err_t get_fpga(httpd_req_t *req)
+{
+    char out[160];
+    uint32_t id, status;
+    int n;
+    if (fpga_read(&id, &status))
+        /* all ones or all zeros: nothing answers (no SOM, no power, a JTAG line open) */
+        n = snprintf(out, sizeof out, "{\"busy\":false,\"idcode\":\"0x%08x\",\"status\":\"0x%08x\",\"answers\":%s}",
+                     (unsigned)id, (unsigned)status, id != 0 && id != 0xFFFFFFFF ? "true" : "false");
+    else
+        n = snprintf(out, sizeof out, "{\"busy\":true}");
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, out, n);
+}
+
+static esp_err_t get_text(httpd_req_t *req)
+{
+    size_t max = 16384;
+    char *buf = malloc(max);
+    if (!buf)
+        return httpd_resp_send_500(req);
+    size_t n = req->user_ctx ? console_tail(buf, max) : logbuf_copy(buf, max);
+    httpd_resp_set_type(req, "text/plain; charset=utf-8");
+    esp_err_t e = httpd_resp_send(req, buf, n);
+    free(buf);
+    return e;
+}
+
+static int hexval(int c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+/* one field of a form body, decoded; false if it is not there */
+static bool field(const char *body, const char *name, char *dst, size_t max)
+{
+    size_t len = strlen(name);
+    for (const char *p = body; p; p = strchr(p, '&'), p = p ? p + 1 : NULL) {
+        if (strncmp(p, name, len) || p[len] != '=')
+            continue;
+        size_t n = 0;
+        for (p += len + 1; *p && *p != '&' && n + 1 < max; p++) {
+            if (*p == '+')
+                dst[n++] = ' ';
+            else if (*p == '%' && hexval(p[1]) >= 0 && hexval(p[2]) >= 0) {
+                dst[n++] = hexval(p[1]) << 4 | hexval(p[2]);
+                p += 2;
+            } else
+                dst[n++] = *p;
+        }
+        dst[n] = 0;
+        return true;
+    }
+    return false;
+}
+
+static esp_err_t post_wifi(httpd_req_t *req)
+{
+    char body[400], ssid[33], pass[65], host[33];
+    if (req->content_len == 0 || req->content_len >= sizeof body)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "a form: ssid=...&pass=...");
+    size_t got = 0;
+    while (got < req->content_len) {
+        int r = httpd_req_recv(req, body + got, req->content_len - got);
+        if (r <= 0)
+            return ESP_FAIL;
+        got += r;
+    }
+    body[got] = 0;
+    if (field(body, "host", host, sizeof host) && host[0])
+        wifi_set_host(host);
+    if (!field(body, "ssid", ssid, sizeof ssid) || !ssid[0])
+        return httpd_resp_sendstr(req, "host name saved (used from the next start)\n");
+    if (!field(body, "pass", pass, sizeof pass))
+        pass[0] = 0;
+    httpd_resp_sendstr(req, "saved: joining it now. This page is at http://avscaler.local/ on that network; "
+                            "if the network cannot be joined the access point comes back in half a minute.\n");
+    wifi_save(ssid, pass);
+    return ESP_OK;
+}
+
+static esp_err_t post_ota(httpd_req_t *req)
+{
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    esp_ota_handle_t h;
+    char msg[96];
+    if (!part || req->content_len < 1024 || req->content_len > part->size)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "the body: a firmware image that fits the slot");
+    if (esp_ota_begin(part, OTA_SIZE_UNKNOWN, &h) != ESP_OK)
+        return httpd_resp_send_500(req);
+    char *buf = malloc(4096);
+    size_t left = req->content_len;
+    esp_err_t e = buf ? ESP_OK : ESP_ERR_NO_MEM;
+    while (e == ESP_OK && left) {
+        int r = httpd_req_recv(req, buf, left < 4096 ? left : 4096);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT)
+            continue;
+        if (r <= 0) {
+            e = ESP_FAIL;
+            break;
+        }
+        e = esp_ota_write(h, buf, r);
+        left -= r;
+    }
+    free(buf);
+    if (e != ESP_OK) {
+        esp_ota_abort(h);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "the upload broke off: nothing changed");
+    }
+    /* (checks the image: its magic, its chip, its checksum and hash) */
+    e = esp_ota_end(h);
+    if (e == ESP_OK)
+        e = esp_ota_set_boot_partition(part);
+    if (e != ESP_OK) {
+        snprintf(msg, sizeof msg, "not a firmware image for this chip (%s): nothing changed", esp_err_to_name(e));
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, msg);
+    }
+    ESP_LOGI(TAG, "update: %u bytes in %s, restarting", (unsigned)req->content_len, part->label);
+    snprintf(msg, sizeof msg, "written to %s (%u bytes): restarting into it\n", part->label, (unsigned)req->content_len);
+    httpd_resp_sendstr(req, msg);
+    xTaskCreate(restart_soon, "restart", 2048, NULL, 5, NULL);
+    return ESP_OK;
+}
+
+/* A load runs in its own task (it may take the CPU from Wi-Fi for its length: gowin.c hold); the
+ * request is answered at once and GET /api/load tells how it went: its number, then the report. */
+static struct {
+    uint8_t *data;
+    size_t len;
+    unsigned sum, id;
+    struct gowin_opt opt;
+    bool running;
+    char msg[700];
+} load = {.msg = "0 no load yet\n"};
+
+static void load_task(void *arg)
+{
+    char *m = load.msg + snprintf(load.msg, sizeof load.msg, "%u running\n", load.id);
+    int64_t t0 = esp_timer_get_time();
+    char msg[600];
+    bool ok = gowin_load(load.data, load.len, load.sum, &load.opt, msg, sizeof msg);
+    jtag_give();
+    free(load.data);
+    (void)m;
+    snprintf(load.msg, sizeof load.msg, "%u done\n%s%u bytes, %u ms\n", load.id, msg, (unsigned)load.len,
+             (unsigned)((esp_timer_get_time() - t0) / 1000));
+    ESP_LOGI(TAG, "load %u: %u bytes: %s", load.id, (unsigned)load.len, ok ? "loaded" : "not loaded");
+    load.running = false;
+    vTaskDelete(NULL);
+}
+
+static esp_err_t get_load(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "text/plain");
+    return httpd_resp_sendstr(req, load.msg);
+}
+
+static esp_err_t post_load(httpd_req_t *req)
+{
+    char q[120], v[16], msg[64];
+    unsigned sum = 0;
+    struct gowin_opt o = {.gap_ms = 0, .stop_ms = 30, .pre_ms = 0, .spi_hz = 0, .reverse = true, .hold = false};
+    if (httpd_req_get_url_query_str(req, q, sizeof q) == ESP_OK) {
+        if (httpd_query_key_value(q, "sum", v, sizeof v) == ESP_OK)
+            sum = strtoul(v, NULL, 0);
+        if (httpd_query_key_value(q, "gap", v, sizeof v) == ESP_OK)
+            o.gap_ms = strtoul(v, NULL, 0);
+        if (httpd_query_key_value(q, "stop", v, sizeof v) == ESP_OK)
+            o.stop_ms = strtoul(v, NULL, 0);
+        if (httpd_query_key_value(q, "pre", v, sizeof v) == ESP_OK)
+            o.pre_ms = strtoul(v, NULL, 0);
+        if (httpd_query_key_value(q, "rev", v, sizeof v) == ESP_OK)
+            o.reverse = strtoul(v, NULL, 0);
+        if (httpd_query_key_value(q, "hold", v, sizeof v) == ESP_OK)
+            o.hold = strtoul(v, NULL, 0);
+        if (httpd_query_key_value(q, "spi", v, sizeof v) == ESP_OK)
+            o.spi_hz = strtoul(v, NULL, 0);
+    }
+    if (load.running)
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "a load is running");
+    if (req->content_len < 1024 || req->content_len > 6 * 1024 * 1024)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "the body: a bitstream");
+    uint8_t *data = heap_caps_malloc(req->content_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!data)
+        data = malloc(req->content_len);
+    if (!data)
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "no memory for the bitstream");
+    size_t got = 0;
+    while (got < req->content_len) {
+        int r = httpd_req_recv(req, (char *)data + got, req->content_len - got);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT)
+            continue;
+        if (r <= 0)
+            break;
+        got += r;
+    }
+    if (got != req->content_len) {
+        free(data);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "the upload broke off: the FPGA was not touched");
+    }
+    if (!jtag_take(false)) {
+        free(data);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "the JTAG port is in use by a client");
+    }
+    load.data = data;
+    load.len = got;
+    load.sum = sum;
+    load.opt = o;
+    load.id++;
+    load.running = true;
+    snprintf(msg, sizeof msg, "%u started\n", load.id);
+    httpd_resp_sendstr(req, msg);
+    vTaskDelay(pdMS_TO_TICKS(300));             /* the answer out before the task takes the CPU */
+    if (xTaskCreate(load_task, "load", 8192, NULL, 5, NULL) != pdPASS) {
+        load.running = false;
+        jtag_give();
+        free(data);
+        snprintf(load.msg, sizeof load.msg, "%u done\nno task for the load\nNOT loaded\n", load.id);
+    }
+    return ESP_OK;
+}
+
+static esp_err_t post_restart(httpd_req_t *req)
+{
+    httpd_resp_sendstr(req, "restarting\n");
+    xTaskCreate(restart_soon, "restart", 2048, NULL, 5, NULL);
+    return ESP_OK;
+}
+
+void web_start(void)
+{
+    httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
+    cfg.stack_size = 8192;
+    cfg.max_uri_handlers = 12;
+    cfg.lru_purge_enable = true;
+    cfg.recv_wait_timeout = 10;
+    httpd_handle_t srv;
+    if (httpd_start(&srv, &cfg) != ESP_OK) {
+        ESP_LOGE(TAG, "no web server");
+        return;
+    }
+    static const httpd_uri_t uris[] = {
+        {.uri = "/", .method = HTTP_GET, .handler = get_page},
+        {.uri = "/api/status", .method = HTTP_GET, .handler = get_status},
+        {.uri = "/api/fpga", .method = HTTP_GET, .handler = get_fpga},
+        {.uri = "/api/log", .method = HTTP_GET, .handler = get_text},
+        {.uri = "/api/console", .method = HTTP_GET, .handler = get_text, .user_ctx = (void *)1},
+        {.uri = "/api/wifi", .method = HTTP_POST, .handler = post_wifi},
+        {.uri = "/api/ota", .method = HTTP_POST, .handler = post_ota},
+        {.uri = "/api/load", .method = HTTP_POST, .handler = post_load},
+        {.uri = "/api/load", .method = HTTP_GET, .handler = get_load},
+        {.uri = "/api/restart", .method = HTTP_POST, .handler = post_restart},
+    };
+    for (size_t k = 0; k < sizeof uris / sizeof uris[0]; k++)
+        httpd_register_uri_handler(srv, &uris[k]);
+}
