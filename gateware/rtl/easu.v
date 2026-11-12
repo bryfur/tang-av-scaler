@@ -95,6 +95,10 @@ module easu (
     // the row: fy the source row above its place (-1 to H - 1), ky its place below it; the four
     // source rows' places in the ring; the weights of the four pixels' analyses
     reg signed [26:0] yp = 27'sd0;      // the row's place
+    // (the next row's: yp + g_dy in two clocks, the low half first: yp stays a row long)
+    reg [16:0] ypl;
+    reg signed [10:0] yph;
+    reg signed [26:0] ypn;
     wire signed [10:0] fy = yp[26:16];
     wire [2:0] ky = yp[15:13];          // below fy: (2 ky + 1) sixteenths
     wire       mir = ky[2];             // the lower half: the table's entry for the mirror image
@@ -116,10 +120,13 @@ module easu (
             row <= de;
         eol <= row && x == 13'd1958;
         last <= y == 12'd1079;
+        ypl <= {1'b0, yp[15:0]} + {1'b0, g_dy[15:0]};
+        yph <= yp[26:16] + {10'd0, g_dy[16]};
+        ypn <= {yph + {10'd0, ypl[16]}, ypl[15:0]};
         eol_q <= eol;
         eol_q2 <= eol_q;
         if (eol) begin
-            yp <= last ? g_ys : yp + $signed({10'd0, g_dy});
+            yp <= last ? g_ys : ypn;
         end
         if (eol_q) begin
             slot[0] <= rowslot(fy - 11'sd1);
@@ -253,7 +260,8 @@ module easu (
     reg        sx9, sy9, zx9, zy9;
     reg [17:0] dm, dn;
     reg        swp, opp, swp11, opp11, swp12, opp12, swp13, opp13;
-    reg [2:0]  li9, li10, li11, li12, li13;
+    reg [6:0]  li9;                     // (the strength against each level's edge; then their count)
+    reg [2:0]  li10, li11, li12, li13;
     wire signed [29:0] mt [0:7];
     reg [27:0] nn11, nn12, nn13;
     reg [27:0] mtq [0:7] /* synthesis syn_preserve = 1 */;
@@ -282,13 +290,14 @@ module easu (
         sy9 <= ay[18];
         zx9 <= ax == 19'sd0;
         zy9 <= ay == 19'sd0;
-        li9 <= (al >= 17'd1171) + (al >= 17'd3511) + (al >= 17'd5852) + (al >= 17'd8192) + (al >= 17'd10533) +
-               (al >= 17'd12874) + (al >= 17'd15214);
+        li9 <= {al >= 17'd15214, al >= 17'd12874, al >= 17'd10533, al >= 17'd8192, al >= 17'd5852, al >= 17'd3511,
+                al >= 17'd1171};
         swp <= aay > aax;
         opp <= sx9 != sy9 && !zx9 && !zy9;
         dm <= aay > aax ? aay : aax;
         dn <= aay > aax ? aax : aay;
-        li10 <= li9;
+        li10 <= li9[6] ? 3'd7 : li9[5] ? 3'd6 : li9[4] ? 3'd5 : li9[3] ? 3'd4 : li9[2] ? 3'd3 : li9[1] ? 3'd2 :
+                {2'd0, li9[0]};
         nn11 <= {dn, 10'd0};
         nn12 <= nn11;
         {swp12, swp11} <= {swp11, swp};

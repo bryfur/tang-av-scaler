@@ -30,10 +30,11 @@
 //                    (hdmi_scr.v opt); 0 and 7:4 set before the lanes are started
 //   30 RW  VID       0 the picture is the component input's (else pattern.v's), 1 the fields in the
 //                    DDR3 are left as they are, 2 the pixel port is 16 bits wide (the CP core's:
-//                    vcap.v), 3 Cb and Cr the other way round, 20:16 the sharpening (rcas.v: 0 none
-//                    to 16)
+//                    vcap.v), 3 Cb and Cr the other way round, 4 the sharpening leaves noise alone
+//                    (rcas.v dn), 20:16 the sharpening (rcas.v: 0 none to 16)
+//   37 R   FOCUS    focus.v: 27:0 the last field's sharpness across a line, 31:28 a count of fields
 //   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
-//                    15:8 the motion threshold
+//                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3)
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
 //                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
@@ -248,8 +249,8 @@ module top (
     // the component input: the ADV7181D's fields decoded on its clock (vcap.v), kept in the DDR3
     // (cap_ddr.v), made a progressive picture (deint.v, lstream.v), scaled (easu.v) and sharpened (rcas.v: 1080p60 only), LAT
     // clocks behind pattern.v's pixel: its timing and its picture wait that long
-    localparam LAT_E = 26, LAT = LAT_E + 2200 + 24;      // (easu.v; rcas.v: a row and 23)
-    reg [31:0] vid = 32'd0;
+    localparam LAT_E = 26, LAT = LAT_E + 2200 + 25;      // (easu.v; rcas.v: a row and 24)
+    reg [31:0] vid = 32'h00000010;
     reg        raw_arm = 1'b0;
     reg [1:0]  raw_mode = 2'd0;
     reg [9:0]  raw_ra = 10'd0;
@@ -288,13 +289,18 @@ module top (
         end
     border u_border (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .thr(bd_thr), .clr(bd_clr),
                      .any(bd_any), .x_min(bd_x0), .x_max(bd_x1), .ln_min(bd_l0), .ln_max(bd_l1));
-    reg                  vid_s0, vid_on, swap_s0, swap;
+    wire [27:0] fo_sum;
+    wire [3:0]  fo_n;
+    focus u_focus (.llc(in_llc), .we(fb_we), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof), .sum(fo_sum), .n(fo_n));
+    reg                  vid_s0, vid_on, swap_s0, swap, dn_s0, dn;
     reg [4:0]            sharp_s0, sharp;
     always @(posedge tx_clk) begin
         vid_s0 <= vid[0];
         vid_on <= vid_s0;
         swap_s0 <= vid[3];
         swap <= swap_s0;
+        dn_s0 <= vid[4];
+        dn <= dn_s0;
         sharp_s0 <= vid[20:16] > 5'd16 ? 5'd16 : vid[20:16];
         sharp <= sharp_s0;
     end
@@ -464,7 +470,7 @@ module top (
                    .c_ack(dm_ack), .c_rvalid(dm_rvalid));
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
-    reg  [31:0]  dcfg = 32'h140D0600;
+    reg  [31:0]  dcfg = 32'h140D0620;
     reg  [27:0]  g_xr = -28'sd11808768;
     reg          g_wide = 1'b0;
     reg  [16:0]  g_dx = 17'd32768;
@@ -513,7 +519,7 @@ module top (
                     .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
                     .nfields(f_n), .flines(f_lines));
     deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .goal(s_goal[9:0]), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
@@ -537,7 +543,7 @@ module top (
                          .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
                          .o_cr(e_cr));
             dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .d({p_x, p_y}), .q(e_xy));
-            rcas u_rcas (.wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
+            rcas u_rcas (.dn(dn), .wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
                          .cri(swap ? e_cb : e_cr), .sharp(sharp), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
             assign l_r = 8'd0;
@@ -638,6 +644,7 @@ module top (
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
+            8'h37: rdata <= {fo_n, fo_sum};
             8'h3E: rdata <= {bd_any, 6'd0, bd_x1, 7'd0, bd_x0};
             8'h3F: rdata <= {6'd0, bd_l1, 6'd0, bd_l0};
             8'h3A: rdata <= {{4{g_xr[27]}}, g_xr};

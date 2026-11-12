@@ -15,6 +15,12 @@
 //   out = (weave (16 - a) + bob a + 8) / 16                               (chroma: the pair's
 //                                                                           greater a)
 //
+// Noise (nr 1 to 3, with four fields in order): C's and P1's lines are first made quieter where
+// the picture is still: each sample (luma and chroma) with the same one two fields before (P2's,
+// P3's: the same line a frame earlier): their mean while they differ by T = 1 << nr or less, less
+// and less of the older one from there, none from 2 T on (sim/model.py tnr()).  What moves is still
+// seen in the fields as they are.
+//
 // At the picture's edge the missing one of old, new is the other.  mode 1: bob everywhere; 2: weave
 // everywhere; bob too until four fields of alternating parity are there (hist).  top_f: the F of
 // the top field.
@@ -46,6 +52,7 @@ module deint #(
     input      [9:0]   flines,
     input      [1:0]   mode,
     input      [7:0]   thr,
+    input      [1:0]   nr,              // temporal noise reduction: 0 none, 1 to 3
     input              top_f,
 
     output reg         b_valid = 1'b0,
@@ -140,6 +147,37 @@ module deint #(
     function [7:0] max2(input [7:0] a, input [7:0] b);
         max2 = a > b ? a : b;
     endfunction
+
+    // the noise reduction: C's line (d0 with d1) and P1's (d2 with d3),
+    // three clocks behind them (they are read by C1 and stay; used from C2B on): the difference;
+    // how much of it is taken (a table: by nr and the difference, under 16); the sample
+    reg [287:0] tac, taw;               // a sample's nine bits: {the older one is the lesser, the difference}
+    reg [159:0] tcc, tcw;               // five: {the older one is the lesser, the part taken}
+    reg [255:0] nrc, nrw;
+    reg [3:0]   tnr_t [0:63];           // [{nr, the difference}]
+    reg [15:0]  nrq /* synthesis syn_preserve = 1 */;   // nr (none without the fields' history): a copy for every four samples
+    integer     ti, tt;
+    initial
+        for (ti = 0; ti < 64; ti = ti + 1) begin
+            tt = 1 << (ti >> 4);
+            tnr_t[ti] = ti < 16 || (ti & 15) >= 2 * tt ? 0 :
+                        ((ti & 15) * ((2 * tt - (ti & 15)) < tt ? (2 * tt - (ti & 15)) : tt) + tt) >> ((ti >> 4) + 1);
+        end
+    function [8:0] tnr_a(input [7:0] cur, input [7:0] oth);
+        tnr_a = {oth < cur, oth > cur ? oth - cur : cur - oth};
+    endfunction
+    integer     nb;
+    always @(posedge clk) begin
+        nrq <= {8{hist ? nr : 2'd0}};
+        for (nb = 0; nb < 32; nb = nb + 1) begin
+            tac[9 * nb +: 9] <= tnr_a(d0[8 * nb +: 8], d1[8 * nb +: 8]);
+            taw[9 * nb +: 9] <= tnr_a(d2[8 * nb +: 8], d3[8 * nb +: 8]);
+            tcc[5 * nb +: 5] <= {tac[9 * nb + 8], |tac[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[2 * (nb / 4) +: 2], tac[9 * nb +: 4]}]};
+            tcw[5 * nb +: 5] <= {taw[9 * nb + 8], |taw[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[2 * (nb / 4) +: 2], taw[9 * nb +: 4]}]};
+            nrc[8 * nb +: 8] <= tcc[5 * nb + 4] ? d0[8 * nb +: 8] - {4'd0, tcc[5 * nb +: 4]} : d0[8 * nb +: 8] + {4'd0, tcc[5 * nb +: 4]};
+            nrw[8 * nb +: 8] <= tcw[5 * nb + 4] ? d2[8 * nb +: 8] - {4'd0, tcw[5 * nb +: 4]} : d2[8 * nb +: 8] + {4'd0, tcw[5 * nb +: 4]};
+        end
+    end
 
     // C1: new and old as used, the three differences' greatest
     reg [127:0] dn, m, dnr, dwr, md, dor, mab, dw2, mlc, mrr;
@@ -278,9 +316,9 @@ module deint #(
             S_W: begin
                 s0_v <= 1'b1;
                 s0_wa <= {c[5:0], p[2:0]};
-                wo <= old_ok ? old_c[32 * p[2:0] +: 32] : d0[32 * p[2:0] +: 32];
-                wn <= new_ok ? d0[32 * p[2:0] +: 32] : old_c[32 * p[2:0] +: 32];
-                ww <= d2[32 * p[2:0] +: 32];
+                wo <= old_ok ? old_c[32 * p[2:0] +: 32] : nrc[32 * p[2:0] +: 32];
+                wn <= new_ok ? nrc[32 * p[2:0] +: 32] : old_c[32 * p[2:0] +: 32];
+                ww <= nrw[32 * p[2:0] +: 32];
                 a_y0 <= al[5 * {p[2:0], 1'b0} +: 5];
                 a_y1 <= al[5 * {p[2:0], 1'b1} +: 5];
                 p <= p + 4'd1;
@@ -290,7 +328,7 @@ module deint #(
             S_NEXT: begin
                 buf_we <= new_ok;                   // new's line and differences kept for the next step
                 buf_a <= c;
-                buf_c <= d0;
+                buf_c <= nrc;
                 buf_m <= dn;
                 if (c == NCH - 1) begin
                     k <= k + 10'd1;

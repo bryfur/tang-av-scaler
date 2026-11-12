@@ -18,11 +18,16 @@ it up (`main/scaler.c`): the clock chip, the HDMI redriver, the display's SCDC, 
 lanes, the ADV7181D for 480i component, the picture's settings; again after the FPGA is reloaded or
 a display is plugged in. No host and no script: power, a source, a display.
 
-The web page's **Picture** section shows what comes in and goes out and sets: the picture rate
-(59.94 or 60 Hz), the deinterlacing (motion adaptive, bob, weave) and its motion threshold, the
-anti-aliasing and its edge threshold, Cb/Cr swapped, the field order, the test picture, a freeze.
-The settings are kept in flash. The same over HTTP: `GET /api/video`, `POST /api/video` (a form:
-`mode=1&aa=0`, ...; `again=1` brings everything up again).
+The web page shows what comes in and goes out and sets (each as it is changed): the part of the
+signal shown (all, the picture found inside its black border, or as set), 4:3 or 16:9, the noise
+reduction, the sharpening (and whether it leaves noise alone), the decoder's sampling phase (set, or
+tuned: every phase tried on a still picture, the sharpest kept), the anti-aliasing (its edge threshold, diagonals, corners, a view of what
+it finds), the deinterlacing (motion adaptive, bob, weave) and its motion threshold, the sound, the
+picture rate (59.94 or 60 Hz), Cb/Cr swapped, the field order, the test picture, a freeze. The
+settings are kept in flash. The same over HTTP: `GET /api/video`, `POST /api/video` (a form:
+`mode=1&aa=0`, ...; `again=1` brings everything up again, `measure=1` finds the picture's border
+again). **Screen capture**: the picture going out, read back from the FPGA (`GET /api/grab?step=N`,
+a BMP: 480 x 270 in 7 s, 960 x 540 in 24 s, 1920 x 1080 in 92 s).
 
 While a host is on the console port (`gateware/tools/*.py`), the link leaves the scaler to it.
 

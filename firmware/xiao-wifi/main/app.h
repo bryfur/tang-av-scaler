@@ -49,8 +49,12 @@ struct scaler_settings {
     uint8_t crop;       /* the part of the 720 x 480 shown, filling the output: 0 all of it, 1 where the
                          * picture is found to be (the black round a game's picture left out), 2 as set */
     uint16_t crop_x, crop_w, crop_y, crop_h;
-    bool wide;          /* the picture is 16:9's (a game set to widescreen): all 1920 columns (new settings
-                         * go at the end: the ones kept in flash are read as far as they go) */
+    bool wide;          /* the picture is 16:9's (a game set to widescreen): all 1920 columns */
+    uint8_t nr;         /* temporal noise reduction where the picture is still: 0 none, 1 to 3 */
+    bool dn;            /* the sharpening leaves noise alone */
+    uint8_t phase;      /* the decoder's sampling phase (its DLL: 0 to 31) (new settings go at the end: the
+                         * ones kept in flash are read as far as they go; a byte of padding the compiler
+                         * left at the end was kept too, as 0, and is the next setting's first value) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
@@ -61,12 +65,16 @@ struct scaler_state {
     uint16_t pix, lines, fields_s, frames_s;
     uint32_t llc_khz;
     uint16_t show_x, show_w, show_y, show_h;    /* the part shown now */
+    uint8_t tune;       /* the sampling phase's tuning: 0 not asked, 1 at it, 2 done (the sharpest kept),
+                         * 3 the picture moved meanwhile (as it was), 4 no fields to measure */
+    uint16_t tune_gain; /* the sharpest phase's sharpness over the least's, in percent */
 };
 void scaler_start(void);
 void scaler_get(struct scaler_state *s, struct scaler_settings *v);
 void scaler_set(const struct scaler_settings *v);
 void scaler_again(void);
 void scaler_measure(void);      /* where the picture is: found again */
+void scaler_tune(void);         /* the decoder's sampling phase: each tried (on a still picture), the sharpest kept */
 
 /* wifi.c: the saved network, or the firmware's own access point to be given one */
 void wifi_start(void);

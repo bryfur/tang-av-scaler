@@ -7,7 +7,8 @@
 // that pixel come a row (2200 clocks) and LAT clocks later.  The row after the picture's last is worked
 // through too (x and y run on through the blanking).
 //
-// sharp: 0 (nothing: the picture as it is) to 16.
+// sharp: 0 (nothing: the picture as it is) to 16.  dn: FSR_RCAS_DENOISE: the sharpening times
+// 1 - n/2, n = |the four neighbours' mean - the pixel| / the five's range (to the nearest quarter).
 
 module rcas (
     input             clk,
@@ -17,12 +18,13 @@ module rcas (
     input      [7:0]  cbi,
     input      [7:0]  cri,
     input      [4:0]  sharp,
+    input             dn,               // less where a pixel stands apart from its neighbours (noise)
     input             wide,             // the picture all 1920 columns
     output reg [7:0]  r,
     output reg [7:0]  g,
     output reg [7:0]  b
 ) /* synthesis syn_dspstyle = "logic" */;
-    localparam LAT = 24;
+    localparam LAT = 25;
     localparam P = 219;
     integer i;
     function [7:0] min2(input [7:0] a, input [7:0] b);
@@ -126,6 +128,8 @@ module rcas (
         ok6 <= ok5;
         mne <= min2(mn4, e6);
         pmx <= P - max2(mx4, e6);
+        rng5 <= max2(mx4, e6) - min2(mn4, e6);
+        nd <= s6 > {e6, 2'b00} ? s6 - {e6, 2'b00} : {e6, 2'b00} - s6;
         r1 <= recip[mx4];
         r2 <= recip[8'd219 - mn4];
         s7 <= s6;
@@ -133,16 +137,25 @@ module rcas (
         c7 <= c6;
         ok7 <= ok6;
     end
-    // 9, 10: the two limits; 11: the least of them and 48; 12: times sharp / 16
+    // the noise: nd / (4 rng5) to the nearest quarter (0 to 4): nd against rng5's odd halves
+    reg [7:0]  rng5;
+    reg [9:0]  nd;
+    wire [10:0] r1x = {3'd0, rng5}, r3x = {2'd0, rng5, 1'b0} + r1x, r5x = {1'b0, rng5, 2'b00} + r1x,
+                r7x = {rng5, 3'b000} - r1x;
+    reg [3:0]  nth;
+    reg [2:0]  nz4, nz5, nz6, nz7;
+    reg [5:0]  ls0;
+    wire [7:0] ls3 = {2'b00, ls0} + {1'b0, ls0, 1'b0};  // 3 ls0
+    // 9, 10: the two limits; 11: the least of them and 48; 12: times sharp / 16; 13: less for noise
     wire signed [22:0] t1, t2;
     easu_mul #(.AW(9), .BW(14)) u_t1 (.clk(clk), .a({1'b0, mne}), .b({1'b0, r1}), .p(t1));
     easu_mul #(.AW(9), .BW(14)) u_t2 (.clk(clk), .a({1'b0, pmx}), .b({1'b0, r2}), .p(t2));
     reg [5:0]  l10, ls;
     reg [10:0] lsm;
-    reg [9:0]  s8, s9, s9b, s10, s11;
-    reg [7:0]  e8, e9, e9b, e10, e11;
-    reg [15:0] c8, c9, c9b, c10, c11;
-    reg        ok8, ok9, ok9b, ok10, ok11;
+    reg [9:0]  s8, s9, s9b, s10, s11a, s11;
+    reg [7:0]  e8, e9, e9b, e10, e11a, e11;
+    reg [15:0] c8, c9, c9b, c10, c11a, c11;
+    reg        ok8, ok9, ok9b, ok10, ok11a, ok11;
     reg [6:0]  u1, u2;                  // (each limit held to 64 first: a clock of its own after the multiplier)
     always @(posedge clk) begin
         {s9b, s9, s8} <= {s9, s8, s7};
@@ -151,17 +164,27 @@ module rcas (
         {ok9b, ok9, ok8} <= {ok9, ok8, ok7};
         u1 <= |t1[22:12] ? 7'd64 : t1[12:6];
         u2 <= |t2[22:12] ? 7'd64 : t2[12:6];
+        nth <= !dn || rng5 == 8'd0 ? 4'd0 : {{nd, 1'b0} >= r7x, {nd, 1'b0} >= r5x, {nd, 1'b0} >= r3x, {nd, 1'b0} >= r1x};
+        nz4 <= {2'd0, nth[0]} + {2'd0, nth[1]} + {2'd0, nth[2]} + {2'd0, nth[3]};
+        {nz7, nz6, nz5} <= {nz6, nz5, nz4};
         l10 <= (u1 < u2 ? u1 : u2) > 7'd48 ? 6'd48 : u1 < u2 ? u1[5:0] : u2[5:0];
         s10 <= s9b;
         e10 <= e9b;
         c10 <= c9b;
         ok10 <= ok9b;
         lsm = l10 * sharp;
-        ls <= lsm[9:4];
-        s11 <= s10;
-        e11 <= e10;
-        c11 <= c10;
-        ok11 <= ok10;
+        ls0 <= lsm[9:4];
+        s11a <= s10;
+        e11a <= e10;
+        c11a <= c10;
+        ok11a <= ok10;
+        // (a clock more: less by the noise's eighths)
+        ls <= ls0 - (nz7 == 3'd0 ? 6'd0 : nz7 == 3'd1 ? {3'd0, ls0[5:3]} : nz7 == 3'd2 ? {2'd0, ls0[5:2]} :
+                     nz7 == 3'd3 ? {1'b0, ls3[7:3]} : {1'b0, ls0[5:1]});
+        s11 <= s11a;
+        e11 <= e11a;
+        c11 <= c11a;
+        ok11 <= ok11a;
     end
     // 13, 14: the neighbours' part; 15: taken off; 16, 17: divided; 18: luma again
     wire signed [17:0] q;

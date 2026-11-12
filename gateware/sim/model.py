@@ -28,6 +28,14 @@ def field(t):
     return out
 
 
+def noisy(fields, amp):
+    """the fields with noise of +-amp added to every sample (the same each run), within 16 to 235"""
+    import random
+    r = random.Random(1)
+    lim = lambda v: min(235, max(16, v))
+    return [[[tuple(lim(v + r.randint(-amp, amp)) for v in w) for w in line] for line in f] for f in fields]
+
+
 def picture_fields(path, n):
     """n fields (as field()'s) of a still 720 x 480 picture from a file"""
     from PIL import Image
@@ -60,6 +68,15 @@ def border(fields, thr=40):
     return b
 
 
+def focus(f):
+    """focus.v: a field's sum of the squares (in sixteenths) of the luma steps between neighbours"""
+    s = 0
+    for line in f:
+        y = luma(line)
+        s += sum((a - b) ** 2 >> 4 for a, b in zip(y, y[1:]))
+    return min(s, 0xFFFFFFF)
+
+
 def luma(line):
     return [v for w in line for v in (w[1], w[3])]
 
@@ -72,16 +89,36 @@ def blend(w, b, a):
     return (w * (16 - a) + b * a + 8) >> 4
 
 
-def deinterlace(fields, pars, mode=0, thr=6, top_f=0):
-    """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines"""
+def tnr(cur, oth, nr):
+    """a sample and the same one two fields before (the same line, a frame earlier), where the picture
+    is still: their mean while they differ by T = 1 << nr or less, less and less of the older one
+    from there, none from 2 T on (something moved)"""
+    if not nr:
+        return cur
+    t = 1 << nr
+    d = oth - cur
+    a = abs(d)
+    if a >= 2 * t:
+        return cur
+    c = (a * min(t, 2 * t - a) + t) >> (nr + 1)
+    return cur + c if d > 0 else cur - c
+
+
+def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0):
+    """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines; nr: the
+    temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity"""
     c, p1 = fields[-1], fields[-2]
     hist = (len(fields) >= 4 and pars[-2] != pars[-1] and pars[-3] == pars[-1] and pars[-4] != pars[-1])
     p2 = fields[-3] if len(fields) >= 3 else c
     p3 = fields[-4] if len(fields) >= 4 else p1
+    raw_c, raw_p1 = c, p1               # (what moves is seen in the fields as they are)
+    if hist and nr:
+        c = [[tuple(tnr(a, b, nr) for a, b in zip(wa, wb)) for wa, wb in zip(la, lb)] for la, lb in zip(c, p2)]
+        p1 = [[tuple(tnr(a, b, nr) for a, b in zip(wa, wb)) for wa, wb in zip(la, lb)] for la, lb in zip(p1, p3)]
     pc = int(pars[-1] != top_f)
     nl = len(c)
     out = [None] * (2 * nl)
-    dcp = [[abs(a - b) for a, b in zip(luma(c[n]), luma(p2[n]))] for n in range(nl)]
+    dcp = [[abs(a - b) for a, b in zip(luma(raw_c[n]), luma(p2[n]))] for n in range(nl)]
     for k in range(nl + (0 if pc else 1)):
         if not pc and k == 0:
             continue
@@ -93,7 +130,7 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0):
         w = k if pc else k - 1
         line_i, line_d = (2 * k, 2 * k + 1) if pc else (2 * (k - 1) + 1, 2 * (k - 1))
         out[line_d] = c[new] if pc else c[old]
-        dw = [abs(a - b) for a, b in zip(luma(p1[w]), luma(p3[w]))]
+        dw = [abs(a - b) for a, b in zip(luma(raw_p1[w]), luma(p3[w]))]
         m = [max(a, b, d) for a, b, d in zip(dcp[new], dcp[old], dw)]
         al = []
         for i in range(2 * PAIRS):
@@ -153,9 +190,9 @@ def upsample(line):
     return out
 
 
-def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False):
+def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines"""
-    lines = deinterlace(fields, pars, mode, thr)
+    lines = deinterlace(fields, pars, mode, thr, nr=nr)
     if smaa_thr is not None:
         import smaa
         lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
@@ -163,11 +200,11 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=()):
+               crop=(), nr=0, dn=False):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr)
     w, h = len(pix[0]), len(pix)
-    out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp)
+    out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2
     return [[(0, 0, 0)] * side + [rgb(*p) for p in row] + [(0, 0, 0)] * side for row in out]

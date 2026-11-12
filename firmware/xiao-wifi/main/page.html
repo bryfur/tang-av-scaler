@@ -60,7 +60,10 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f sub crop" id="c_auto"><span><small id="shown"></small></span><button type="button" onclick="video('measure=1')">Find again</button></div>
 <div class="f sub crop" id="c_man"><span>From / size</span><span class="rg"><input type="number" name="crop_x" min="0" max="719"><input type="number" name="crop_y" min="0" max="479"><input type="number" name="crop_w" min="64" max="720"><input type="number" name="crop_h" min="64" max="480"></span></div>
 <div class="f"><span>Widescreen (16:9)<small>for a game set to widescreen</small></span><input class="sw" type="checkbox" name="wide"></div>
+<div class="f"><span>Noise reduction<small>averages frames where the picture is still</small></span><span class="seg"><label><input type="radio" name="nr" value="0"><span>Off</span></label><label><input type="radio" name="nr" value="1"><span>Low</span></label><label><input type="radio" name="nr" value="2"><span>Medium</span></label><label><input type="radio" name="nr" value="3"><span>High</span></label></span></div>
 <div class="f"><span>Sharpening</span><span class="rg"><input type="range" name="sharp" min="0" max="16"><output></output></span></div>
+<div class="f"><span>Noise-aware sharpening<small>sharpens less where a pixel is just noise</small></span><input class="sw" type="checkbox" name="dn"></div>
+<div class="f"><span>Sampling phase<small id="tn">where in a pixel the decoder samples</small></span><span class="rg"><input type="range" name="phase" min="0" max="31"><output></output></span><button type="button" onclick="video('tune=1')">Tune</button></div>
 <div class="f"><span>Freeze</span><input class="sw" type="checkbox" name="freeze"></div>
 </section>
 <section><h2>Anti-aliasing</h2>
@@ -126,7 +129,7 @@ async function status(){
     $('log').textContent=await (await fetch('/api/log')).text();
   }catch(e){$('pills').innerHTML=pill('bad','no answer from the link')}
 }
-let vfill=true;
+let vfill=true,tun=0;
 async function vstat(){
   const v=await (await fetch('/api/video')).json(), f=vf.elements;
   const sig=v.fields_s>=49&&v.fields_s<=61;
@@ -135,6 +138,8 @@ async function vstat(){
     pill(sig?'ok':'bad',sig?'Input '+v.pix+' &times; '+v.lines*2+'i':'No input')+
     pill(v.pll?'ok':'bad','1080p out'+(v.set.ntsc?' 59.94':' 60'))+
     pill(v.hpd?'ok':'','Display '+(v.hpd?'connected':'not seen'));
+  $('tn').textContent=['where in a pixel the decoder samples; Tune tries each on a still picture (pause the game)','tuning: about ten seconds...','tuned: the sharpest is '+(v.tune_gain-100)+' % sharper than the worst','the picture moved while tuning: pause the game and try again','no picture to tune on'][v.tune]||'';
+  if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
   $('shown').textContent='showing '+v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2];
   $('vs').innerHTML=
     row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':

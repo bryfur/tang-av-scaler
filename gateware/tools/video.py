@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """video.py: the component input on the HDMI output (rtl/vcap.v, fbview.v).
 
-    video.py [--load [FS]] [--swap] [--sd] [--mode M] [--thr T] [--top1] [--noaa] [--aa T] [--aadbg] [--nodiag] [--nocorner] [--sharp N]
+    video.py [--load [FS]] [--swap] [--sd] [--mode M] [--thr T] [--top1] [--noaa] [--aa T] [--aadbg] [--nodiag] [--nocorner] [--nr N] [--nodn] [--sharp N]
                                         # decoder to 480i component (CP core; --sd: the SD core, luma
                                         # only), HDMI up at 1080p60 if --load, show the input;
                                         # deinterlacing --mode 0 motion adaptive (default), 1 bob,
@@ -10,6 +10,8 @@
                                         # threshold --aa (20); sharpening --sharp 0-16 (8)
     video.py freeze | run               # the fields in memory kept as they are (a still picture) | not
     video.py stat                       # what the capture sees
+    video.py phase [N | sweep [PASSES]] # the decoder's sampling phase (its DLL: 0 to 31): as it is, set, or
+                                        # each tried beside phase 0 and the sharpest kept (focus.v)
     video.py crop [X0 CW Y0 CH [1] | auto [wide]]  # (1, wide: a 16:9 picture: all 1920 columns) the part of the 720 x 480 the scaler shows (nothing: all of it;
                                         # auto: where border.v finds picture over three seconds)
     video.py raw [MODE]                 # 1024 raw samples of the pixel port (0 now, 1 from a sync code,
@@ -25,7 +27,8 @@ import adv
 import avb
 
 VID, CAP, FIELDS, RAW, RAWD, DEINT, DSTAT = 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36
-GEOM, BORDER, BORDERL = 0x3A, 0x3E, 0x3F
+GEOM, BORDER, BORDERL, FOCUS = 0x3A, 0x3E, 0x3F, 0x37
+DLL = 0x6A                          # the decoder's sampling phase: bits 4:0
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -51,6 +54,55 @@ def border(m):
         return None
     x0, x1, l0, l1 = x & 0x1FF, x >> 16 & 0x1FF, l & 0x3FF, l >> 16 & 0x3FF
     return 2 * x0, 2 * (x1 - x0 + 1), 2 * l0, 2 * (l1 - l0 + 1)
+
+
+def focus(m, fields=4, skip=2):
+    """focus.v's sum over some fields (their middle one), after leaving some out"""
+    def one():
+        a = m.r(FOCUS)
+        return a >> 28, a & 0xFFFFFFF
+    n, _ = one()
+    got, t = [], time.time()
+    while len(got) < skip + fields:
+        k, v = one()
+        if k != n:
+            n = k
+            got.append(v)
+        if time.time() - t > 3:
+            sys.exit("focus: no fields come in")
+    got = sorted(got[skip:])            # (the middle one: a read as the register changes may be anything)
+    return got[len(got) // 2] if fields > 2 else sum(got) / fields
+
+
+def phase(m, a):
+    was = adv.rd(m, DLL)[0]
+    if not a:
+        print("phase %d (register %02x), sharpness %.0f" % (was & 31, was, focus(m)))
+    elif a[0] == "sweep":
+        # each phase beside phase 0 just before and after it: the picture may move meanwhile, and
+        # what is in it changes the sum far more than the phase does
+        passes = int(a[1]) if len(a) > 1 else 2
+        res = [0.0] * 32
+        for k in range(passes):
+            adv.wr(m, DLL, was & 0xE0)
+            ref = focus(m, 3)
+            for p in range(1, 32):
+                adv.wr(m, DLL, was & 0xE0 | p)
+                f = focus(m, 3)
+                adv.wr(m, DLL, was & 0xE0)
+                nxt = focus(m, 3)
+                res[p] += 2 * f / (ref + nxt or 1) / passes
+                ref = nxt
+            res[0] = 1.0
+        for p in range(32):
+            print("%2d %6.3f %s" % (p, res[p], "#" * int(60 * (res[p] - min(res)) / (max(res) - min(res) or 1))))
+        best = max(range(32), key=lambda p: res[p])
+        adv.wr(m, DLL, was & 0xE0 | best)
+        print("sharpest: phase %d (%.3f of phase 0's sharpness; the least %.3f at %d; it was %d)"
+              % (best, res[best], min(res), res.index(min(res)), was & 31))
+    else:
+        adv.wr(m, DLL, was & 0xE0 | int(a[0]) & 31)
+        print("phase %d, sharpness %.0f" % (int(a[0]) & 31, focus(m)))
 
 
 def crop(m, part):
@@ -87,6 +139,9 @@ def main():
     a = sys.argv[1:]
     if a[:1] == ["stat"]:
         stat(avb.Mon())
+        return
+    if a[:1] == ["phase"]:
+        phase(avb.Mon(), a[1:])
         return
     if a[:1] == ["crop"]:
         m = avb.Mon()
@@ -127,8 +182,8 @@ def main():
     adv.setup(m, "sd" if sd else "cp480i")
     opt = lambda name, d: int(a[a.index(name) + 1]) if name in a else d
     # anti-aliasing: on unless --noaa, its edge threshold --aa (20)
-    m.w(DEINT, opt("--aa", 20) << 24 | (0 if "--nocorner" in a else 1) << 19 | (0 if "--nodiag" in a else 1) << 18 | (1 if "--aadbg" in a else 0) << 17 | (0 if "--noaa" in a else 1) << 16 | opt("--thr", 6) << 8 | (4 if "--top1" in a else 0) | opt("--mode", 0))
-    m.w(VID, opt("--sharp", 8) << 16 | (8 if "--swap" in a else 0) | (0 if sd else 4) | 1)
+    m.w(DEINT, opt("--aa", 20) << 24 | (0 if "--nocorner" in a else 1) << 19 | (0 if "--nodiag" in a else 1) << 18 | (1 if "--aadbg" in a else 0) << 17 | (0 if "--noaa" in a else 1) << 16 | opt("--thr", 6) << 8 | opt("--nr", 2) << 4 | (4 if "--top1" in a else 0) | opt("--mode", 0))
+    m.w(VID, opt("--sharp", 8) << 16 | (0 if "--nodn" in a else 16) | (8 if "--swap" in a else 0) | (0 if sd else 4) | 1)
     m.flush()
     time.sleep(0.7)
     stat(m)

@@ -11,6 +11,9 @@
  *  - the part of the picture shown (the scaler fills the output with it): all, as set, or where
  *    the FPGA finds picture in the fields (border.v: it only grows, so a dark scene takes nothing
  *    away; found again after a bring-up or when asked);
+ *  - the decoder's sampling phase (its DLL, 32 steps): a console's pixels come at the samples' rate
+ *    (13.5 MHz for a picture 640 wide), so where in a pixel the sample is taken shows: as set, or
+ *    each tried on a still picture and the sharpest kept (the FPGA's focus.v measures);
  *  - the settings (kept in NVS), changed from the web page: POST /api/video.
  *
  * While a host is on the console's TCP port the scaler is left to it (its tools write the same
@@ -33,7 +36,9 @@ static const char *TAG = "scaler";
 enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, R_I2C_SH = 0x05, R_FREQ = 0x10,
        R_GT_CTRL = 0x20, R_GT_STAT = 0x21, R_MODE = 0x25, R_HDMI = 0x26, R_VID = 0x30, R_CAP = 0x31,
        R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36,
-       R_GEOM = 0x3A, R_BORDER = 0x3E, R_BORDERL = 0x3F };
+       R_FOCUS = 0x37, R_GEOM = 0x3A, R_BORDER = 0x3E, R_BORDERL = 0x3F };
+#define ADV 0x21
+#define ADV_DLL 0x6A                    /* the sampling phase: bits 4:0 */
 #define MAGIC 0x31425641u
 #define DP_OE (1u << 2)
 #define IN_RESET_N (1u << 3)
@@ -41,9 +46,9 @@ enum { BUS_PLL, BUS_DP, BUS_DDC, BUS_IN };
 
 static struct scaler_state state;
 static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 20, .sharp = 8,
-                                      .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480};
+                                      .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480, .nr = 2, .dn = true};
 static SemaphoreHandle_t lock;          /* set, state, dirty */
-static bool dirty, again, measure;
+static bool dirty, again, measure, tune;
 
 /* ---- the monitor ---- */
 static uint8_t out[2048];
@@ -250,10 +255,68 @@ static void picture(void)
     s = set;
     dirty = false;
     xSemaphoreGive(lock);
-    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_corner ? 1u : 0) << 19 | (s.aa_diag ? 1u : 0) << 18 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (s.top1 ? 4 : 0) | (s.mode & 3));
+    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_corner ? 1u : 0) << 19 | (s.aa_diag ? 1u : 0) << 18 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (uint32_t)(s.nr & 3) << 4 | (s.top1 ? 4 : 0) | (s.mode & 3));
     wr(R_HDMI, s.audio ? 6 : 0);        /* the video guard band and the data islands, or DVI's blanking */
-    wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
+    wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.dn ? 16 : 0) | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
     flush();
+}
+
+/* the decoder's sampling phase set (the register's other bits as they are) */
+static bool phase_set(uint8_t p)
+{
+    uint8_t was;
+    for (int k = 0; k < 4; k++)
+        if (i2c_get(BUS_IN, ADV, ADV_DLL, &was))
+            return i2c_sure(BUS_IN, ADV, ADV_DLL, (was & 0xE0) | (p & 31));
+    return false;
+}
+
+/* focus.v's sharpness: the mean of three fields, after two left out (the phase has just changed);
+ * 0: no fields come */
+static uint32_t focus(void)
+{
+    uint32_t v, w, n, sum = 0;
+    int got = -2;
+    if (!rd(R_FOCUS, &v))
+        return 0;
+    n = v >> 28;
+    for (int t = 0; t < 300 && got < 3; t++) {
+        if (!rd(R_FOCUS, &v) || !rd(R_FOCUS, &w))
+            return 0;
+        if (v != w || v >> 28 == n) {
+            vTaskDelay(pdMS_TO_TICKS(2));
+            continue;
+        }
+        n = v >> 28;
+        if (++got > 0)
+            sum += (v & 0xFFFFFFF) >> 2;
+    }
+    return got == 3 ? sum / 3 + 1 : 0;
+}
+
+/* every phase tried on the picture as it is; the sharpest's number, or -1 (the picture moved: the
+ * first phase is not as sharp again as it was), -2 (no fields).  The phase is left at 0. */
+static int phase_tune(uint16_t *gain)
+{
+    uint32_t f[32], again, lo = ~0u;
+    int best = 0;
+    for (int p = 0; p < 32; p++) {
+        if (!phase_set(p) || !(f[p] = focus()))
+            return -2;
+        if (f[p] > f[best])
+            best = p;
+        if (f[p] < lo)
+            lo = f[p];
+    }
+    if (!phase_set(0) || !(again = focus()))
+        return -2;
+    uint32_t d = again > f[0] ? again - f[0] : f[0] - again;
+    ESP_LOGI(TAG, "sampling phase: sharpest %d (%u), least %u, phase 0 %u and again %u", best, (unsigned)f[best],
+             (unsigned)lo, (unsigned)f[0], (unsigned)again);
+    if (d > f[best] / 32)
+        return -1;
+    *gain = (uint16_t)((uint64_t)f[best] * 100 / lo);
+    return best;
 }
 
 /* the scaler's part of the source (gateware/sim/fsr.py geom()) */
@@ -328,8 +391,14 @@ static bool bringup(void)
     flush();
     rd(R_GT_STAT, &stat);
     ok &= (stat >> 13 & 1) != 0;
-    if (mode == 1)
+    if (mode == 1) {
+        uint8_t ph;
         ok &= decoder(IN_RESET_N | DP_OE);
+        xSemaphoreTake(lock, portMAX_DELAY);
+        ph = set.phase;
+        xSemaphoreGive(lock);
+        ok &= phase_set(ph);
+    }
     picture();
     rd(R_ID, &x);
     ESP_LOGI(TAG, "brought up: %s, clock chip and decoder %s, transceiver PLL %s", ntsc ? "59.94 Hz" : "60 Hz",
@@ -342,7 +411,8 @@ static void task(void *arg)
     bool up_ok = false, seen = false;
     uint16_t shown[4] = {0, 720, 0, 480}, want[4];
     int counted = 0;                    /* seconds the border has been looked for */
-    uint8_t crop_was = 255;
+    uint8_t crop_was = 255, phase_was = 255, tune_st = 0;
+    uint16_t tune_gain = 0;
     bool wide_was = false;
     uint32_t fields_was = 0, frames_was = 0;
     for (;;) {
@@ -372,6 +442,7 @@ static void task(void *arg)
                     s.ups++;
                     crop_was = 255;
                     seen = true;
+                    phase_was = 255;
                 } else {
                     /* (found up after this firmware's own restart: the bring-up before it stands) */
                     if (!seen)
@@ -383,12 +454,42 @@ static void task(void *arg)
                 s.ok = up_ok;
                 /* the part shown */
                 struct scaler_settings c;
-                bool again_m;
+                bool again_m, tune_now;
                 xSemaphoreTake(lock, portMAX_DELAY);
                 c = set;
                 again_m = measure;
                 measure = false;
+                tune_now = tune;
+                tune = false;
+                if (tune_now)
+                    state.tune = 1;
                 xSemaphoreGive(lock);
+                /* the sampling phase: as set; or tuned (some eight seconds), and that kept */
+                if (phase_was == 255)
+                    phase_was = c.phase;        /* (the bring-up set it) */
+                if (tune_now) {
+                    int best = phase_tune(&tune_gain);
+                    tune_st = best >= 0 ? 2 : best == -1 ? 3 : 4;
+                    if (best >= 0) {
+                        nvs_handle_t h;
+                        xSemaphoreTake(lock, portMAX_DELAY);
+                        set.phase = c.phase = best;
+                        c = set;
+                        xSemaphoreGive(lock);
+                        if (nvs_open("av", NVS_READWRITE, &h) == ESP_OK) {
+                            nvs_set_blob(h, "video", &c, sizeof c);
+                            nvs_commit(h);
+                            nvs_close(h);
+                        }
+                    }
+                    phase_set(c.phase);
+                    phase_was = c.phase;
+                } else if (c.phase != phase_was) {
+                    phase_set(c.phase);
+                    phase_was = c.phase;
+                }
+                s.tune = tune_st;
+                s.tune_gain = tune_gain;
                 if (c.crop != crop_was || again_m) {
                     wr(R_BORDER, 40);           /* (the luma picture is above) */
                     flush();
@@ -475,6 +576,13 @@ void scaler_set(const struct scaler_settings *v)
         nvs_commit(h);
         nvs_close(h);
     }
+}
+
+void scaler_tune(void)
+{
+    xSemaphoreTake(lock, portMAX_DELAY);
+    tune = true;
+    xSemaphoreGive(lock);
 }
 
 void scaler_measure(void)

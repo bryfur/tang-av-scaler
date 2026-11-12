@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH[,1]]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
@@ -13,7 +13,7 @@ sys.path.insert(0, HERE)
 import model
 
 WORK = os.path.join(HERE, "build")
-LAT, LINES = 26 + 2200 + 24, 240
+LAT, LINES = 26 + 2200 + 25, 240
 
 
 def stream(fields):
@@ -48,12 +48,17 @@ def main():
     diag = "diag" in args
     corner = "corner" in args
     crop = next((tuple(int(v) for v in a[5:].split(",")) for a in args if a.startswith("crop=")), ())
+    nr = int(next((a[3:] for a in args if a.startswith("nr=")), 0))
+    dn = "dn" in args
+    noise = int(next((a[6:] for a in args if a.startswith("noise=")), 0))
     pic = next((a[4:] for a in args if a.startswith("pic=")), None)
     fields = [(t & 1, model.field(t)) for t in range(nf)]
     if pic:
         fields = [(t & 1, f) for t, f in enumerate(model.picture_fields(pic, nf))]
+    if noise:
+        fields = [(f, w) for (f, _), w in zip(fields, model.noisy([w for _, w in fields], noise))]
     data = stream(fields)
-    tag = "d%d%s%s_%d_%d%s_s%d" % (nf, "p" if pic else "", "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
+    tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, "p" if pic else "", "_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "", "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     import fsr
@@ -74,6 +79,8 @@ module tb;
     wire bd_any; wire [8:0] bd_x0, bd_x1; wire [9:0] bd_l0, bd_l1;
     border u_bd (.llc(llc), .we(fb_we), .w_ln(w_ln), .w_col(w_col), .wd(fb_wd), .thr(8'd40), .clr(1'b0), .any(bd_any),
                  .x_min(bd_x0), .x_max(bd_x1), .ln_min(bd_l0), .ln_max(bd_l1));
+    wire [27:0] fo_sum; wire [3:0] fo_n;
+    focus u_fo (.llc(llc), .we(fb_we), .w_col(w_col), .wd(fb_wd), .eof(eof), .sum(fo_sum), .n(fo_n));
     wire ca_valid, ca_ack, db_valid, db_ack, db_rvalid; wire [24:0] ca_line, db_line; wire [255:0] ca_data, rd_data;
     wire [2:0] latest, fn; wire [7:0] par; wire [9:0] flines;
     reg [255:0] rd_q; always @(posedge pclk) rd_q <= rd_data;
@@ -94,7 +101,7 @@ module tb;
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
     deint u_deint (.clk(pclk), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
-                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .top_f(1'b0),
+                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
@@ -109,7 +116,7 @@ module tb;
     easu u_easu (.g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
                  .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
     dline #(.W(25), .D(26)) u_dxy (.clk(clk), .d({ox, oy}), .q(e_xy));
-    rcas u_rcas (.wide(1'b%(g_wide)d), .clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d),
+    rcas u_rcas (.wide(1'b%(g_wide)d), .clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d), .dn(1'b%(dn)d),
                  .r(r), .g(g), .b(b));
     wire de_d;
     dline #(.W(1), .D(%(latv)d)) u_dde (.clk(clk), .d(de), .q(de_d));
@@ -135,12 +142,13 @@ module tb;
         $fclose(f);
         $display("deint: frames %%0d state %%h", frames, dstate);
         $display("border %%0d %%0d %%0d %%0d %%0d", bd_any, bd_x0, bd_x1, bd_l0, bd_l1);
+        $display("focus %%0d %%0d", fo_n, fo_sum);
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
     subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)
@@ -159,16 +167,19 @@ endmodule
     print(log)
     bd = [int(v) for v in next(t for t in log.splitlines() if t.startswith("border ")).split()[1:]]
     bw = model.border([w for _, w in fields])
+    fo = [int(v) for v in next(t for t in log.splitlines() if t.startswith("focus ")).split()[1:]]
+    fw = model.focus(fields[-1][1])
+    print("focus: %s" % ("as the model's" if fo == [nf & 15, fw] else "got %s want %s" % (fo, [nf & 15, fw])))
     print("border: %s" % ("as the model's" if (tuple(bd[1:]) if bd[0] else None) == bw else "got %s want %s" % (bd, bw)))
     s = open(os.path.join(WORK, tag + "_out.bin"), "rb").read()
     de = [s[4 * k] - 65 for k in range(len(s) // 4)]
     # (the dump begins at the end of the frame before: its last row is still coming out)
     first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
     start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner)
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr)
     ana = fsr.analysis([[p[0] for p in row] for row in pix], 720, 480)
     line, prev, rb = -1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):

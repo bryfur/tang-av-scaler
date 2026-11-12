@@ -91,6 +91,7 @@ module hdmi_audio (
     reg [7:0]  x = 8'd255;
     reg [10:0] line = 11'd0;
     reg [2:0]  kind;                    // this line's packet: 0 none, 1 AVI, 2 audio InfoFrame, 3 N/CTS, 4 samples
+    reg        k_avi, k_aif, k_ncts, k_smp;     // (which it is, a clock after kind: for its bytes)
     reg [23:0] hb;
     reg [55:0] sp [0:3];
     reg [31:0] hdr;
@@ -119,6 +120,10 @@ module hdmi_audio (
         hs_q2 <= hs_q;
         vs_q2 <= vs_q;
         take_s <= 1'b0;
+        k_avi <= kind == 3'd1;
+        k_aif <= kind == 3'd2;
+        k_ncts <= kind == 3'd3;
+        k_smp <= kind == 3'd4;
         {al, ar, an} <= {fl[rp], fr[rp], fn[rp]};
         {bl, br, bn} <= {fl[rp + 2'd1], fr[rp + 2'd1], fn[rp + 2'd1]};
         if (t1 != t2 && cnt != 3'd4) begin
@@ -150,29 +155,24 @@ module hdmi_audio (
         if (x == 8'd2) begin
             for (i = 0; i < 4; i = i + 1)
                 sp[i] <= 56'd0;
-            case (kind)
-                3'd1: begin
-                    hb <= {8'h0D, 8'h02, 8'h82};
-                    sp[0] <= {16'd0, AVI4, AVI3, AVI2, AVI1, AVI0};
-                end
-                3'd2: begin
-                    hb <= {8'h0A, 8'h01, 8'h84};
-                    sp[0] <= {40'd0, 8'h01, AIF0};
-                end
-                3'd3: begin
-                    hb <= {8'h00, 8'h00, 8'h01};
-                    for (i = 0; i < 4; i = i + 1)
-                        sp[i] <= {N[7:0], N[15:8], 4'd0, N[19:16], CTS[7:0], CTS[15:8], 4'd0, CTS[19:16], 8'd0};
-                end
-                default: begin
-                    // (a sample's block start flag: bit 4 for the first, 5 for the second)
-                    hb <= {2'b00, take == 2'd2 && bn == 8'd0, an == 8'd0, 4'd0, 6'd0, take == 2'd2, 1'b1, 8'h02};
-                    sp[0] <= {status(al, ar, an), ar, al};
-                    if (take == 2'd2)
-                        sp[1] <= {status(bl, br, bn), br, bl};
-                    take_s <= kind == 3'd4;
-                end
-            endcase
+            if (k_avi) begin
+                hb <= {8'h0D, 8'h02, 8'h82};
+                sp[0] <= {16'd0, AVI4, AVI3, AVI2, AVI1, AVI0};
+            end else if (k_aif) begin
+                hb <= {8'h0A, 8'h01, 8'h84};
+                sp[0] <= {40'd0, 8'h01, AIF0};
+            end else if (k_ncts) begin
+                hb <= {8'h00, 8'h00, 8'h01};
+                for (i = 0; i < 4; i = i + 1)
+                    sp[i] <= {N[7:0], N[15:8], 4'd0, N[19:16], CTS[7:0], CTS[15:8], 4'd0, CTS[19:16], 8'd0};
+            end else begin
+                // (a sample's block start flag: bit 4 for the first, 5 for the second)
+                hb <= {2'b00, take == 2'd2 && bn == 8'd0, an == 8'd0, 4'd0, 6'd0, take == 2'd2, 1'b1, 8'h02};
+                sp[0] <= {status(al, ar, an), ar, al};
+                if (take == 2'd2)
+                    sp[1] <= {status(bl, br, bn), br, bl};
+                take_s <= k_smp;
+            end
         end
         // (a subpacket's in four clocks, 14 bits each: spq the bits still to go)
         ph <= {ph[2:0], x == 8'd3};

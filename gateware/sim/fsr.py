@@ -222,22 +222,28 @@ RCAS_P = 219                                        # luma's range above black (
 RCAS_RD = [(65536 + 128 - 2 * k) // (256 - 4 * k) for k in range(49)]
 
 
-def rcas(pix, sharp):
+def rcas(pix, sharp, dn=False):
     """rtl/rcas.v: FSR 1's robust contrast adaptive sharpening (RCAS), on luma: each pixel less a
     part L of its four neighbours, L as great as leaves the result between black and white and not
-    past the neighbours' range (at most 3/16), times sharp/16.  pix: rows of (y, cb, cr)"""
+    past the neighbours' range (at most 3/16), times sharp/16.  dn: and less where the pixel stands
+    apart from its four neighbours (FSR_RCAS_DENOISE: noise is not sharpened): times 1 - n/2,
+    n = |the four's mean - the pixel| / the five's range, to the nearest quarter.  pix: rows of (y, cb, cr)"""
     h, w = len(pix), len(pix[0])
     v = [[min(max(p[0] - 16, 0), RCAS_P) for p in row] for row in pix]
     out = []
     for r in range(h):
-        up, dn, row = v[max(r - 1, 0)], v[min(r + 1, h - 1)], v[r]
+        up, below, row = v[max(r - 1, 0)], v[min(r + 1, h - 1)], v[r]
         line = []
         for x in range(w):
-            e, b, hh, d, f = row[x], up[x], dn[x], row[max(x - 1, 0)], row[min(x + 1, w - 1)]
+            e, b, hh, d, f = row[x], up[x], below[x], row[max(x - 1, 0)], row[min(x + 1, w - 1)]
             mn4, mx4 = min(b, d, f, hh), max(b, d, f, hh)
             t1 = (min(mn4, e) * RECIP[mx4]) >> 6
             t2 = ((RCAS_P - max(mx4, e)) * RECIP[RCAS_P - mn4]) >> 6
             ls = (min(t1, t2, 48) * sharp) >> 4
+            if dn:
+                rng, nd = max(mx4, e) - min(mn4, e), abs(b + d + f + hh - 4 * e)
+                nz = sum(1 for k in (1, 3, 5, 7) if 2 * nd >= k * rng) if rng else 0
+                ls -= (ls * nz) >> 3
             num = max(e * 256 - ls * (b + d + f + hh), 0)
             y = min((num * RCAS_RD[ls] + 32768) >> 16, RCAS_P) + 16
             line.append((y, pix[r][x][1], pix[r][x][2]))
