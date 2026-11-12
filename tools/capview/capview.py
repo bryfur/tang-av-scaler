@@ -8,7 +8,8 @@ encoding: a tenth of a second from HDMI to the page on the local network) as a m
 have it the rest of the time.
 
     /               the page
-    /stream         the frames (multipart/x-mixed-replace)
+    /frame?after=N  the next frame newer than number N (its number in X-Frame): what the page asks for
+    /stream         the frames (multipart/x-mixed-replace), for players that take that
     /snapshot.jpg   the newest frame
     /status         JSON: frames a second, viewers
 """
@@ -21,18 +22,33 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PAGE = b"""<!doctype html><html><head><meta charset="utf-8"><title>capture</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<style>html,body{margin:0;height:100%;background:#000;color:#999;font:13px system-ui,sans-serif}
-#v{display:block;margin:auto;max-width:100%;max-height:100vh;cursor:pointer}
-#s{position:fixed;left:.6em;bottom:.4em;opacity:.7}a{color:#9cf}</style></head><body>
-<img id="v" src="/stream" title="click: full screen">
-<div id="s"></div>
+<style>html,body{margin:0;height:100%;background:#111;color:#999;font:13px system-ui,sans-serif}
+#v{display:block;margin:auto;max-width:100vw;max-height:100vh;cursor:pointer;background:#000}
+#s{position:fixed;left:.6em;bottom:.4em;background:#000a;padding:.1em .4em}a{color:#9cf}</style></head><body>
+<canvas id="v" width="1920" height="1080" title="click: full screen"></canvas>
+<div id="s">connecting...</div>
 <script>
-const v=document.getElementById('v'),s=document.getElementById('s');
+// each frame asked for by itself (the answer waits for a frame newer than the last one shown) and
+// drawn on a canvas: every browser does that, which cannot be said of a multipart stream in an <img>
+const v=document.getElementById('v'),s=document.getElementById('s'),c=v.getContext('2d');
 v.onclick=()=>document.fullscreenElement?document.exitFullscreen():v.requestFullscreen();
-v.onerror=()=>setTimeout(()=>v.src='/stream?'+Date.now(),1000);
-setInterval(async()=>{try{const j=await (await fetch('/status')).json();
- s.innerHTML=j.fps.toFixed(0)+' frames/s &middot; '+(j.kbps/1000).toFixed(1)+' Mbit/s &middot; '+j.viewers+' watching &middot; <a href="/snapshot.jpg" target="_blank">snapshot</a>'}
- catch(e){s.textContent='no answer'}},2000);
+let n=-1,shown=0,bytes=0,t0=performance.now(),err='';
+async function loop(){
+  for(;;){
+    try{
+      const r=await fetch('/frame?after='+n,{cache:'no-store'});
+      if(r.status!=200){err=(await r.text()).trim()||('HTTP '+r.status);await new Promise(f=>setTimeout(f,500));continue}
+      n=+r.headers.get('X-Frame');
+      const b=await r.blob(),im=await createImageBitmap(b);
+      if(v.width!=im.width||v.height!=im.height){v.width=im.width;v.height=im.height}
+      c.drawImage(im,0,0);im.close();shown++;bytes+=b.size;err='';
+    }catch(e){err='no answer from the server';await new Promise(f=>setTimeout(f,1000))}
+  }
+}
+setInterval(()=>{const t=performance.now(),d=(t-t0)/1000;
+  s.innerHTML=err?err:(shown/d).toFixed(0)+' frames/s &middot; '+(bytes*8/d/1e6).toFixed(1)+' Mbit/s &middot; '+v.width+' x '+v.height+' &middot; <a href="/snapshot.jpg" target="_blank">snapshot</a>';
+  shown=0;bytes=0;t0=t},2000);
+loop();
 </script></body></html>"""
 
 
@@ -104,11 +120,15 @@ class Source:
 
 def handler(src):
     class H(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"           # (the page's frames on one connection)
+
         def log_message(self, *a):
             pass
 
-        def send(self, code, kind, body):
+        def send(self, code, kind, body, extra=()):
             self.send_response(code)
+            for k, val in extra:
+                self.send_header(k, val)
             self.send_header("Content-Type", kind)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
@@ -121,7 +141,7 @@ def handler(src):
                 self.send(200, "text/html; charset=utf-8", PAGE)
             elif path == "/status":
                 self.send(200, "application/json", json.dumps(
-                    {"fps": src.fps, "kbps": src.kbps, "viewers": src.viewers, "error": src.error}).encode())
+                    {"fps": src.fps, "kbps": src.kbps, "viewers": src.viewers, "watched": src.wanted(), "error": src.error}).encode())
             elif path == "/snapshot.jpg":
                 src.want()
                 n, frame = src.next(src.n if src.fps == 0 else -1, 6)
@@ -129,7 +149,19 @@ def handler(src):
                     self.send(200, "image/jpeg", frame)
                 else:
                     self.send(503, "text/plain", ("no frame: " + src.error + "\n").encode())
+            elif path == "/frame":
+                try:
+                    after = int(self.path.split("after=")[1].split("&")[0])
+                except (IndexError, ValueError):
+                    after = -1
+                src.want()
+                n, frame = src.next(after, 4)
+                if frame:
+                    self.send(200, "image/jpeg", frame, [("X-Frame", str(n))])
+                else:
+                    self.send(503, "text/plain", ("no frame from the dongle. " + src.error + "\n").encode())
             elif path == "/stream":
+                self.close_connection = True
                 self.send_response(200)
                 self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=f")
                 self.send_header("Cache-Control", "no-store")

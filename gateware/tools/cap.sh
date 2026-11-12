@@ -4,7 +4,7 @@
 # own JPEG); else straight from /dev/video0, raw 1080p (the FRAMESth frame, default 20: the first
 # ones after opening are stale).
 out=${1:-/tmp/cap.png}
-if [ "$(curl -s -m 2 http://localhost:8090/status | grep -c '"viewers": [1-9]')" = 1 ]; then
+if [ "$(curl -s -m 2 http://localhost:8090/status | grep -c '"watched": true')" = 1 ]; then
     curl -s -m 8 -o "$out.jpg" http://localhost:8090/snapshot.jpg && exec ffmpeg -hide_banner -loglevel error -y -i "$out.jpg" "$out"
 fi
 exec ffmpeg -hide_banner -loglevel error -y -f v4l2 -input_format yuyv422 -video_size 1920x1080 \
