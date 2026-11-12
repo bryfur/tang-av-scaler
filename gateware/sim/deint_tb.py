@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [mode=M] [thr=T]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
-against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one)."""
+against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T."""
 import os
 import subprocess
 import sys
@@ -41,9 +41,10 @@ def main():
     nf = int(next((a for a in args if a.isdigit()), 5))
     mode = int(next((a[5:] for a in args if a.startswith("mode=")), 0))
     thr = int(next((a[4:] for a in args if a.startswith("thr=")), 6))
+    aa = next((int(a[3:]) for a in args if a.startswith("aa=")), None)
     fields = [(t & 1, model.field(t)) for t in range(nf)]
     data = stream(fields)
-    tag = "d%d_%d_%d" % (nf, mode, thr)
+    tag = "d%d_%d_%d%s" % (nf, mode, thr, "" if aa is None else "_aa%d" % aa)
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     tb = '''`timescale 1ns/1ps
@@ -74,14 +75,17 @@ module tb;
     ddr_model u_ddr (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),
                      .wr_data_en(wr_en), .rd_data(rd_data), .rd_data_valid(rd_valid));
     wire ev, ev_first, r_we, fstart, hold, w_we; wire [9:0] ev_goal, emitted, w_x; wire [8:0] r_wa;
+    reg [10:0] s_goal = 0; reg lg0 = 0, lg1 = 0, lg2 = 0;
+    always @(posedge pclk) begin lg0 <= ev; lg1 <= lg0; lg2 <= lg1; if (lg1 != lg2) s_goal <= {1'b0, ev_goal} + 11'd18; end
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
-    deint u_deint (.clk(pclk), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal), .hold(hold), .latest(latest), .par(par),
+    deint u_deint (.clk(pclk), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
                    .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
-    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .hold(hold), .r_we(r_we), .r_slot_d(sd[1:0]),
+    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .hold(hold), .aa_en(1'b%(aa_en)d),
+                  .aa_thr(8'd%(aa_thr)d), .r_we(r_we), .r_slot_d(sd[1:0]),
                   .r_slot_i(si[1:0]), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
                   .w_x(w_x), .w_d(w_d));
     wire de, hs, vs, pre, gb, ucc; wire [7:0] pr, pg, pb, r, g, b; wire [12:0] ox; wire [11:0] oy;
@@ -115,28 +119,30 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_thr=aa or 0, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "easu.v", "pattern.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "pattern.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
     subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)
+    subprocess.check_call([sys.executable, os.path.join(HERE, "smaa.py"), "table", os.path.join(WORK, "smaa.hex")])
     # Verilator (a compiled model: iverilog takes half an hour for a frame through easu.v)
     mdir = os.path.join(WORK, "vl_" + tag)
     subprocess.check_call(["verilator", "--binary", "--timing", "-j", "16", "-Wno-fatal", "-Wno-WIDTH", "-Wno-UNUSED",
                            "-Wno-DECLFILENAME", "-Wno-STMTDLY", "-Wno-INITIALDLY", "-Wno-MULTIDRIVEN", "-Wno-TIMESCALEMOD",
                            "--top-module", "tb", "--Mdir", mdir, "-o", tag] +
                           ['-DEASU_HEX%d="%s%d.hex"' % (k, hexf, k) for k in range(4)] +
+                          ['-DSMAA_HEX="%s"' % os.path.join(WORK, "smaa.hex")] +
                           [os.path.join(WORK, tag + "_tb.v"), os.path.join(HERE, "ddr_model.v")] + rtl,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     print(subprocess.check_output([os.path.join(mdir, tag)]).decode().strip())
     s = open(os.path.join(WORK, tag + "_out.bin"), "rb").read()
     de = [s[4 * k] - 65 for k in range(len(s) // 4)]
     start = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])       # (the dump begins in blanking)
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = [model.upsample(line) for line in model.deinterlace([w for _, w in fields], [f for f, _ in fields], mode, thr)]
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa)
     ana = fsr.analysis([[p[0] for p in row] for row in pix], 720, 480)
     line, prev, rb = -1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):

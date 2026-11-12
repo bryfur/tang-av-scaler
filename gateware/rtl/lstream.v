@@ -1,25 +1,30 @@
 // lstream.v: deint.v's lines, two at a time and sixteen pixels at a time, made a stream of whole
-// lines in order, 4:4:4, each pixel with its part of the scaler's edge analysis (sim/fsr.py
-// analysis()), and written to easu.v's ring.  On the DDR3's user clock.
+// lines in order, anti-aliased (smaa.v), 4:4:4, each pixel with its part of the scaler's edge
+// analysis (sim/fsr.py analysis()), and written to easu.v's ring.  On the DDR3's user clock.
 //
 // - A store of four lines (words {Cb, Y0, Cr, Y1}; deint.v's r_*).  hold: deint.v waits (the two
 //   lines before its last two are not read out yet).
-// - Line j is read out when deint.v has made it: a pixel a clock, the second pixel of a word with
-//   the mean of its chroma and the next word's.  After the last line it is read out once more (the
-//   line below the last is the last).
-// - As line j streams, line j - 1 goes to the ring: each pixel with dx, dy (the luma to its right
-//   less that to its left, below less above; at the picture's edge the pixel's own) and
+// - Line j is read out when deint.v has made it and the output is near enough to wanting it
+//   (j <= goal): a pixel a clock (its luma and one chroma sample), 24 clocks between lines.  After
+//   the picture's last line FL more (whatever): smaa.v's lines come out LAG = FL - 1 lines late, and
+//   the analysis wants a line after the last.
+// - smaa.v; then 4:4:4: an even pixel has its word's chroma, an odd one the mean of its word's and
+//   the next word's (the line's last its own).
+// - As line j comes out of that, line j - 1 goes to the ring: each pixel with dx, dy (the luma to
+//   its right less that to its left, below less above; at the picture's edge the pixel's own) and
 //   ls = sx + sy, s = min(64, |d| RECIP[max(|far - mid|, |mid - near|)] / 64)^2 / 64.
 //
 // The ring's word (54 bits): {dx 9, dy 9, ls 8, 2'd0, y 8, cb 8, cr 8, 2'd0}.
 
 module lstream #(
     parameter W = 720,
-    parameter H = 480
+    parameter H = 480,
+    parameter FL = 19                   // smaa.v's N + 4
 ) (
     input             clk,
     input             fstart,
     input      [9:0]  emitted,
+    input      [10:0] goal,
     output reg        hold = 1'b0,      // (a clock after emitted)
     input             r_we,
     input      [1:0]  r_slot_d,
@@ -27,6 +32,8 @@ module lstream #(
     input      [8:0]  r_wa,
     input      [31:0] r_wd_d,
     input      [31:0] r_wd_i,
+    input             aa_en,
+    input      [7:0]  aa_thr,
 
     output reg        w_we = 1'b0,
     output reg [2:0]  w_slot,
@@ -35,7 +42,7 @@ module lstream #(
 );
     // the store
     reg [8:0]  ra;
-    reg [31:0] sq [0:3];
+    reg [31:0] sq [0:3] /* synthesis syn_ramstyle = "registers" */;
     genvar k;
     generate
         for (k = 0; k < 4; k = k + 1) begin : g_st
@@ -52,35 +59,31 @@ module lstream #(
 
     // the read-out: line sj, word q: two clocks a word (ph 0 its first pixel, 1 its second); the
     // store's word at ra = q + 1 is there in the second
-    reg [9:0]  sj = 10'd0;              // the line being or to be read out (H: the last once more)
+    reg [9:0]  sj = 10'd0;              // the line being or to be read out (from H: the last again)
     reg        run = 1'b0, ph = 1'b0, prime = 1'b0;
     reg [1:0]  pw;
+    reg [4:0]  gap = 5'd0;
     reg [8:0]  q;
     reg [31:0] cur;
-    wire [9:0] src = sj == H ? H - 1 : sj;
+    wire [9:0] src = sj >= H ? H - 1 : sj;
     wire [31:0] nxt = sq[src[1:0]];
-    wire       have = sj < emitted || (sj == H && emitted == H);
+    wire       have = (sj < emitted || (sj >= H && emitted == H)) && sj < H + FL && {1'b0, sj} <= goal;
     always @(posedge clk)
-        hold <= emitted - (sj > H ? H : sj) > 10'd2 && sj <= H;
-    reg        s_v = 1'b0, s_last = 1'b0;
-    reg [9:0]  s_x, s_j;
-    reg [23:0] s_p;
-    function [7:0] mean(input [7:0] a, input [7:0] b);
-        reg [8:0] t;
-        begin
-            t = {1'b0, a} + {1'b0, b} + 9'd1;
-            mean = t[8:1];
-        end
-    endfunction
+        hold <= emitted - (sj > H ? H : sj) > 10'd2;
+    reg        r_v = 1'b0, r_last = 1'b0;
+    reg [9:0]  r_x, r_j;
+    reg [7:0]  r_y, r_c;
     always @(posedge clk) begin
-        s_v <= 1'b0;
-        s_last <= 1'b0;
+        r_v <= 1'b0;
+        r_last <= 1'b0;
+        if (gap != 5'd0)
+            gap <= gap - 5'd1;
         if (fstart) begin
             sj <= 10'd0;
             run <= 1'b0;
             prime <= 1'b0;
         end else if (!run && !prime) begin
-            if (have && sj <= H) begin
+            if (have && gap == 5'd0) begin
                 prime <= 1'b1;
                 pw <= 2'd0;
                 ra <= 9'd0;
@@ -99,23 +102,77 @@ module lstream #(
             end
         end else begin
             ph <= !ph;
-            s_v <= 1'b1;
-            s_j <= sj;
-            s_x <= {q, ph};
-            if (!ph)
-                s_p <= {cur[23:16], cur[31:24], cur[15:8]};
-            else begin
-                s_p <= q == W / 2 - 1 ? {cur[7:0], cur[31:24], cur[15:8]} :
-                       {cur[7:0], mean(cur[31:24], nxt[31:24]), mean(cur[15:8], nxt[15:8])};
-                s_last <= q == W / 2 - 1;
+            r_v <= 1'b1;
+            r_j <= sj;
+            r_x <= {q, ph};
+            if (!ph) begin
+                r_y <= cur[23:16];
+                r_c <= cur[31:24];
+            end else begin
+                r_y <= cur[7:0];
+                r_c <= cur[15:8];
+                r_last <= q == W / 2 - 1;
                 cur <= nxt;
                 ra <= q + 9'd2;
                 q <= q + 9'd1;
                 if (q == W / 2 - 1) begin
                     run <= 1'b0;
                     sj <= sj + 10'd1;
+                    gap <= 5'd31;
                 end
             end
+        end
+    end
+
+    // the anti-aliasing
+    wire       o_v, o_last;
+    wire [9:0] o_x, o_j;
+    wire [7:0] o_y, o_c;
+    smaa #(.W(W), .H(H), .N(FL - 4)) u_aa (.clk(clk), .en(aa_en), .thr(aa_thr), .i_v(r_v), .i_x(r_x), .i_j(r_j),
+                                         .i_last(r_last), .i_y(r_y), .i_c(r_c), .o_v(o_v), .o_x(o_x), .o_j(o_j),
+                                         .o_last(o_last), .o_y(o_y), .o_c(o_c));
+
+    // 4:4:4: the pixel two before the one coming in (and two clocks more at a line's end)
+    reg [15:0] u0, u1, u2;
+    reg [10:0] un;
+    reg [9:0]  uj;
+    reg [1:0]  umore = 2'd0;
+    reg        s_v = 1'b0, s_last = 1'b0;
+    reg [9:0]  s_x, s_j;
+    reg [23:0] s_p;
+    wire       u_t = o_v || umore != 2'd0;
+    wire [10:0] n_in = o_v ? {1'b0, o_x} : un + 11'd1;
+    wire [10:0] xo = n_in - 11'd2;
+    function [7:0] mean(input [7:0] a, input [7:0] b);
+        reg [8:0] t;
+        begin
+            t = {1'b0, a} + {1'b0, b} + 9'd1;
+            mean = t[8:1];
+        end
+    endfunction
+    always @(posedge clk) begin
+        s_v <= 1'b0;
+        s_last <= 1'b0;
+        if (u_t) begin
+            un <= n_in;
+            if (o_v) begin
+                uj <= o_j;
+                umore <= o_last ? 2'd2 : 2'd0;
+            end else
+                umore <= umore - 2'd1;
+            u0 <= {o_y, o_c};
+            u1 <= u0;
+            u2 <= u1;
+            s_v <= n_in >= 11'd2;
+            s_x <= xo[9:0];
+            s_j <= o_v ? o_j : uj;
+            s_last <= xo == W - 1;
+            if (!xo[0])
+                s_p <= {u1[15:8], u1[7:0], u0[7:0]};
+            else if (xo == W - 1)
+                s_p <= {u1[15:8], u2[7:0], u1[7:0]};
+            else
+                s_p <= {u1[15:8], mean(u2[7:0], u0[7:0]), mean(u1[7:0], o_c)};
         end
     end
 
@@ -150,7 +207,7 @@ module lstream #(
             if (c_v) begin
                 h0_p <= lbq[31:8];
                 h0_u <= a1_j == 10'd1 ? lbq[31:24] : lbq[7:0];
-                h0_d <= a1_p[23:16];
+                h0_d <= a1_j == H ? lbq[31:24] : a1_p[23:16];
                 h0_x <= a1_x;
                 h_j <= a1_j - 10'd1;
             end

@@ -186,37 +186,35 @@ module easu (
                           pixel(win[7]), pixel(win[6]), pixel(win[5]), pixel(win[4]),
                           pixel(win[2]), pixel(win[1])};     // tap t at [24 t +: 24]
 
-    // 5, 6: the four analyses times their row's weight; 7: times their column's (1 or 3); 8: summed
-    wire signed [14:0] qdx [0:3], qdy [0:3];
-    wire signed [14:0] qls [0:3];
+    // 5, 6: the four analyses times their weight (their row's, times 3 or 1 by the column and the
+    // pixel's place: an odd pixel is a quarter past the left column: 3 of it, 1 of the right; an
+    // even one 1, 3); 7: a register; 8: summed
+    wire signed [15:0] qdx [0:3], qdy [0:3];
+    wire signed [15:0] qls [0:3];
     reg signed [16:0] pdx [0:3], pdy [0:3];
     reg signed [16:0] pls [0:3];
     reg signed [18:0] ax, ay;
     reg [16:0] al;
-    reg [4:0]  wyr [0:1];
+    reg [5:0]  wy1r [0:1], wy3r [0:1];
     genvar gi;
     generate
         for (gi = 0; gi < 4; gi = gi + 1) begin : g_q       // gi: {row, col} of f g / j k
             localparam WI = (gi[1] ? 8 : 4) + (gi[0] ? 2 : 1);
-            easu_mul #(.AW(9), .BW(6)) u_dx (.clk(clk), .a(win[WI][53:45]), .b({1'b0, wyr[gi[1]]}), .p(qdx[gi]));
-            easu_mul #(.AW(9), .BW(6)) u_dy (.clk(clk), .a(win[WI][44:36]), .b({1'b0, wyr[gi[1]]}), .p(qdy[gi]));
-            easu_mul #(.AW(9), .BW(6)) u_ls (.clk(clk), .a({1'b0, win[WI][35:28]}), .b({1'b0, wyr[gi[1]]}), .p(qls[gi]));
+            wire [5:0] wgt = odd[4] != gi[0] ? wy3r[gi[1]] : wy1r[gi[1]];
+            easu_mul #(.AW(9), .BW(7)) u_dx (.clk(clk), .a(win[WI][53:45]), .b({1'b0, wgt}), .p(qdx[gi]));
+            easu_mul #(.AW(9), .BW(7)) u_dy (.clk(clk), .a(win[WI][44:36]), .b({1'b0, wgt}), .p(qdy[gi]));
+            easu_mul #(.AW(9), .BW(7)) u_ls (.clk(clk), .a({1'b0, win[WI][35:28]}), .b({1'b0, wgt}), .p(qls[gi]));
         end
     endgenerate
     always @(posedge clk) begin
-        wyr[0] <= wy0;
-        wyr[1] <= wy1;
+        wy1r[0] <= {1'b0, wy0};
+        wy1r[1] <= {1'b0, wy1};
+        wy3r[0] <= wy0 * 2'd3;
+        wy3r[1] <= wy1 * 2'd3;
         for (i = 0; i < 4; i = i + 1) begin
-            // (an odd pixel is a quarter past the left column: 3 of it, 1 of the right; an even one 1, 3)
-            if (odd[6] != i[0]) begin
-                pdx[i] <= qdx[i] + (qdx[i] <<< 1);
-                pdy[i] <= qdy[i] + (qdy[i] <<< 1);
-                pls[i] <= qls[i] + (qls[i] <<< 1);
-            end else begin
-                pdx[i] <= qdx[i];
-                pdy[i] <= qdy[i];
-                pls[i] <= qls[i];
-            end
+            pdx[i] <= qdx[i];
+            pdy[i] <= qdy[i];
+            pls[i] <= qls[i];
         end
         ax <= pdx[0] + pdx[1] + pdx[2] + pdx[3];
         ay <= pdy[0] + pdy[1] + pdy[2] + pdy[3];

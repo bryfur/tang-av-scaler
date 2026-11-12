@@ -23,7 +23,7 @@
 // is, D, and the one made, I), eight words each (r_*: a line's place its number's low bits);
 // emitted: the frame's lines all there; fstart: a clock at a frame's start.  hold: no new step (the
 // store's lines are not read out yet).  The output asks by ev (a change: an event): ev_first with
-// it: a new frame; ev_goal: lines are made while emitted <= ev_goal.
+// it: a new frame.  goal (this clock's): lines are made while emitted <= goal.
 //
 // A step k reads C's line k (new) into the place of line k - 1 (old, kept in cbuf with its |C - P2|
 // in mbuf), and makes
@@ -38,7 +38,7 @@ module deint #(
     input              clk,
     input              ev,
     input              ev_first,
-    input      [9:0]   ev_goal,
+    input      [9:0]   goal,
     input              hold,
     input      [2:0]   latest,
     input      [7:0]   par,
@@ -67,14 +67,12 @@ module deint #(
 );
     // the output's events
     reg        e0, e1, e2, start = 1'b0;
-    reg [9:0]  goal = 10'd0;
     reg        start_clr;
     always @(posedge clk) begin
         e0 <= ev;
         e1 <= e0;
         e2 <= e1;
         if (e1 != e2) begin
-            goal <= ev_goal;
             if (ev_first)
                 start <= 1'b1;
         end

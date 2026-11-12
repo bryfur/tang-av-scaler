@@ -121,10 +121,19 @@ def upsample(line):
     return out
 
 
-def frame_1080(fields, pars, mode=0, thr=6):
-    """deint.v, lstream.v, easu.v: 1080 rows of 1920 (r, g, b)"""
+def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None):
+    """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines"""
+    lines = deinterlace(fields, pars, mode, thr)
+    if smaa_thr is not None:
+        import smaa
+        lines = smaa.smaa_words(lines, smaa_thr)
+    return [upsample(line) for line in lines]
+
+
+def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None):
+    """deint.v, smaa.v, lstream.v, easu.v: 1080 rows of 1920 (r, g, b)"""
     import fsr
-    pix = [upsample(line) for line in deinterlace(fields, pars, mode, thr)]
+    pix = frame_480(fields, pars, mode, thr, smaa_thr)
     w, h = len(pix[0]), len(pix)
     out = fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table())
     return [[(0, 0, 0)] * 240 + [rgb(*p) for p in row] + [(0, 0, 0)] * 240 for row in out]

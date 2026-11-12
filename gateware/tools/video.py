@@ -91,7 +91,8 @@ def main():
     sd = "--sd" in a
     adv.setup(m, "sd" if sd else "cp480i")
     opt = lambda name, d: int(a[a.index(name) + 1]) if name in a else d
-    m.w(DEINT, opt("--thr", 6) << 8 | (4 if "--top1" in a else 0) | opt("--mode", 0))
+    # anti-aliasing: on unless --noaa, its edge threshold --aa (20)
+    m.w(DEINT, opt("--aa", 20) << 24 | (0 if "--noaa" in a else 1) << 16 | opt("--thr", 6) << 8 | (4 if "--top1" in a else 0) | opt("--mode", 0))
     m.w(VID, (8 if "--swap" in a else 0) | (0 if sd else 4) | 1)
     m.flush()
     time.sleep(0.7)

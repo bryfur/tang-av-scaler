@@ -32,6 +32,7 @@
 //                    vcap.v), 3 Cb and Cr the other way round
 //   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
 //                    15:8 the motion threshold
+//                    16 the anti-aliasing on (smaa.v), 31:24 its edge threshold (a luma step)
 //   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state,
 //                    31:16 frames it has begun
 //   31 R   CAP       vcap.v: 10:0 the Y samples of a line, 20:11 the lines of picture of a field,
@@ -413,10 +414,10 @@ module top (
                    .c_ack(dm_ack), .c_rvalid(dm_rvalid));
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
-    reg  [15:0]  dcfg = 16'h0600;
+    reg  [31:0]  dcfg = 32'h14010600;
     always @(posedge clk)
         if (we && addr == 8'h35)
-            dcfg <= wdata[15:0];
+            dcfg <= wdata;
     wire         ca_valid, ca_ack, db_valid, db_ack, db_rvalid;
     wire [24:0]  ca_line, db_line;
     wire [255:0] ca_data;
@@ -430,17 +431,29 @@ module top (
     wire [2:0]   r_slot_d, r_slot_i, w_slot;
     wire [31:0]  r_wd_d, r_wd_i;
     wire [53:0]  w_d;
+    // (the stream runs 18 lines ahead of the ring for smaa.v; l_goal crosses from the word clock
+    // with its event: taken as deint.v takes it)
+    reg  [10:0]  s_goal = 11'd0;
+    reg          lg0, lg1, lg2;
+    always @(posedge pclk) begin
+        lg0 <= l_ev;
+        lg1 <= lg0;
+        lg2 <= lg1;
+        if (lg1 != lg2)
+            s_goal <= {1'b0, l_goal} + 11'd18;
+    end
     cap_ddr u_capd (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
                     .eof_f(cap_field), .eof_lines(cap_lines), .freeze(vid[1]), .pclk(pclk), .a_valid(ca_valid),
                     .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
                     .nfields(f_n), .flines(f_lines));
-    deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal), .hold(d_hold), .latest(f_latest),
+    deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .goal(s_goal[9:0]), .hold(d_hold), .latest(f_latest),
                    .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
                    .state_o(d_state));
-    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .hold(d_hold), .r_we(r_we),
+    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .hold(d_hold), .r_we(r_we),
+                  .aa_en(dcfg[16]), .aa_thr(dcfg[31:24]),
                   .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     generate
@@ -512,7 +525,7 @@ module top (
             8'h31: rdata <= {cap_s[22], 9'd0, cap_s[21:0]};
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
-            8'h35: rdata <= {16'd0, dcfg};
+            8'h35: rdata <= dcfg;
             8'h36: rdata <= {dst_s[29:14], dst_s[13:6], 2'd0, dst_s[5:0]};
             8'h38: rdata <= {grab_done_s, 15'd0, grab_cfg};
             8'h40: rdata <= {8'd0, ddr_s[18:3], 5'd0, ddr_s[2:0]};

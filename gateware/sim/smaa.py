@@ -16,12 +16,13 @@ it is scaled.
 3. Each pixel is mixed with the neighbour (left, right, top, bottom) whose weight is greatest.
 
     smaa.py picture IN.png OUT.png [edges]    # a picture through it (edges: the edges found, as a picture)
-    smaa.py table OUT.hex                     # the areas for $readmemh: (pattern, left, right) -> two weights
+    smaa.py table OUT.hex                     # the areas for $readmemh: {pattern 4, left 4, right 4} ->
+                                              # {above 8, below 8}
 """
 import math
 import sys
 
-N = 16              # the search's reach, each way
+N = 15              # the search's reach, each way
 T = 20              # the luma step that is an edge (of 255)
 
 
@@ -165,6 +166,39 @@ def blend(pix, wts, w, h):
     return out
 
 
+def smaa_words(lines, thr=T, n=N):
+    """rtl/smaa.v: the picture as lines of 4:2:2 words (cb, y0, cr, y1) -> the same: luma mixed as
+    blend() does; a chroma sample mixed only with the one above or below it (a pixel carries one:
+    Cb the even pixels, Cr the odd)"""
+    h, w = len(lines), 2 * len(lines[0])
+    y = [[v for wd in line for v in (wd[1], wd[3])] for line in lines]
+    c = [[v for wd in line for v in (wd[0], wd[2])] for line in lines]
+    wts = weights(edges(y, w, h, thr), w, h, n)
+    W = lambda x, r: wts[r][x] if 0 <= x < w and 0 <= r < h else (0, 0, 0, 0)
+    mix = lambda a, b, k: a + (((b - a) * k + 128) >> 8)
+    out = []
+    for r in range(h):
+        ny, nc = [], []
+        for x in range(w):
+            a_top, a_left = W(x, r)[0], W(x, r)[2]
+            a_bot, a_right = W(x, r + 1)[1], W(x + 1, r)[3]
+            best = max(a_top, a_left, a_bot, a_right)
+            yy, cc = y[r][x], c[r][x]
+            if best:
+                if best == a_top:
+                    yy, cc = mix(yy, y[r - 1][x], best), mix(cc, c[r - 1][x], best)
+                elif best == a_bot:
+                    yy, cc = mix(yy, y[r + 1][x], best), mix(cc, c[r + 1][x], best)
+                elif best == a_left:
+                    yy = mix(yy, y[r][x - 1], best)
+                else:
+                    yy = mix(yy, y[r][x + 1], best)
+            ny.append(yy)
+            nc.append(cc)
+        out.append([(nc[2 * q], ny[2 * q], nc[2 * q + 1], ny[2 * q + 1]) for q in range(w // 2)])
+    return out
+
+
 def smaa(pix, w, h, thr=T, n=N):
     e = edges([[p[0] for p in row] for row in pix], w, h, thr)
     return blend(pix, weights(e, w, h, n), w, h), e
@@ -189,9 +223,9 @@ def main():
     elif a[0] == "table":
         with open(a[1], "w") as f:
             for pat in range(16):
-                for left in range(32):
-                    for right in range(32):
-                        ab, be = lookup(pat, min(left, N), min(right, N)) if left <= N and right <= N else (0, 0)
+                for left in range(16):
+                    for right in range(16):
+                        ab, be = lookup(pat, left, right)
                         f.write("%04x\n" % (ab << 8 | be))
 
 
