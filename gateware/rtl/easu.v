@@ -78,7 +78,8 @@ module easu (
     input      [53:0] w_d,
 
     // the part of the source shown (fsr.py geom(); they stay as they are): a raster column's place
-    // g_xr + x g_dx, a row's g_ys + y g_dy, in 65536ths of a source pixel
+    // g_xr + (x + 120) g_dx (counted from 120 columns before the raster's first), a row's g_ys + y g_dy, in 65536ths of a source pixel
+    input             g_wide,           // the picture all 1920 columns (16:9), not the middle 1440
     input signed [27:0] g_xr,
     input      [16:0] g_dx,
     input signed [26:0] g_ys,
@@ -98,7 +99,7 @@ module easu (
     wire [2:0] ky = yp[15:13];          // below fy: (2 ky + 1) sixteenths
     wire       mir = ky[2];             // the lower half: the table's entry for the mirror image
     wire [1:0] kyt = mir ? ~ky[1:0] : ky[1:0];
-    reg        eol = 1'b0, eol_q = 1'b0, eol_q2 = 1'b0, last = 1'b0;
+    reg        eol = 1'b0, eol_q = 1'b0, eol_q2 = 1'b0, last = 1'b0, row = 1'b0;
     reg [2:0]  slot [0:3] /* synthesis syn_ramstyle = "registers" */;
     function [2:0] rowslot(input signed [10:0] v);
         reg signed [10:0] c;
@@ -110,7 +111,10 @@ module easu (
     wire [4:0] wy0 = 5'd15 - {1'b0, ky, 1'b0}, wy1 = {1'b0, ky, 1'b1};
     wire signed [10:0] fy5 = fy + 11'sd5;
     always @(posedge clk) begin
-        eol <= de && x == 13'd1918;
+        // (a row's end: after its last pixel has its weights, 40 columns into the blanking)
+        if (x == 13'd1918)
+            row <= de;
+        eol <= row && x == 13'd1958;
         last <= y == 12'd1079;
         eol_q <= eol;
         eol_q2 <= eol_q;
@@ -130,12 +134,12 @@ module easu (
         end
     end
 
-    // the column's place: xq the pixel's now at x (counted on from g_xr at x = 0), xc: it has a source
+    // the column's place: xq the pixel's now at x (counted on from g_xr, 120 columns before the line's first), xc: it has a source
     // column more than the pixel before
     // 1, 2: the column asked of the ring: the newest of the four, the one left of its place and 2, in 0 to W - 1
     reg signed [27:0] xq = 28'sd0;
     reg        xc = 1'b0;
-    wire signed [27:0] x_from = x == 13'd0 ? g_xr : xq;
+    wire signed [27:0] x_from = x == 13'd2080 ? g_xr : xq;     // (2200 a line: 120 before column 0)
     wire signed [27:0] x_next = x_from + $signed({11'd0, g_dx});
     wire signed [12:0] cn = $signed(xq[27:16]) + 13'sd2;
     reg [9:0]  ra_n;                    // (a register of its own before the eight beside the lines)
@@ -185,7 +189,7 @@ module easu (
         kxs[0] <= xq[15:13];
         for (i = 1; i <= 15; i = i + 1)
             kxs[i] <= kxs[i - 1];
-        inw <= {inw[28:0], de && x >= 13'd240 && x < 13'd1680};
+        inw <= {inw[28:0], de && (g_wide || x >= 13'd240 && x < 13'd1680)};
         for (i = 0; i < 4; i = i + 1) begin
             cd[i] <= q[slot[i]];
             if (odd[4]) begin

@@ -17,6 +17,7 @@ module rcas (
     input      [7:0]  cbi,
     input      [7:0]  cri,
     input      [4:0]  sharp,
+    input             wide,             // the picture all 1920 columns
     output reg [7:0]  r,
     output reg [7:0]  g,
     output reg [7:0]  b
@@ -42,8 +43,10 @@ module rcas (
     end
 
     // 1: the pixel in; the row before and the one before that, by column
-    wire [10:0] ox = x[10:0] - 11'd240;
-    wire        inw = x >= 13'd240 && x < 13'd1680 && y <= 12'd1080;
+    // (the picture's columns: the middle 1440, or wide: all 1920)
+    wire [12:0] xa = wide ? 13'd0 : 13'd240, xe = wide ? 13'd1920 : 13'd1680;
+    wire [10:0] ox = x[10:0] - xa[10:0];
+    wire        inw = x >= xa && x < xe && y <= 12'd1080;
     reg [31:0] lm [0:2047];             // {luma of the row before, of the one before that, its chroma}
     reg [31:0] l1, l2;
     reg        v1, v2, top1, top2, bot1, bot2, ok1, ok2;
@@ -61,7 +64,7 @@ module rcas (
         {top2, top1} <= {top1, y == 12'd1};         // the row above is the picture's first: nothing above it
         {bot2, bot1} <= {bot1, y == 12'd1080};      // ... its last: nothing below
         // (the pixel coming out: one to the left, a row above: in the picture?)
-        {ok2, ok1} <= {ok1, x >= 13'd241 && x < 13'd1681 && y >= 12'd1 && y <= 12'd1080};
+        {ok2, ok1} <= {ok1, x > xa && x <= xe && y >= 12'd1 && y <= 12'd1080};
         if (v2)
             lm[x2] <= {y2, l2[31:24], c2};
     end
@@ -80,7 +83,7 @@ module rcas (
         k0_h <= bot2 ? ce : y2;
         k0_c <= l2[15:0];
         k0_first <= x2 == 11'd0;
-        k0_last <= x2 == 11'd1439;
+        k0_last <= x2 == (wide ? 11'd1919 : 11'd1439);
         k0_ok <= ok2;                   // (of the column before this one: as k1 is when it is used)
         k1_e <= k0_e;
         k1_b <= k0_b;

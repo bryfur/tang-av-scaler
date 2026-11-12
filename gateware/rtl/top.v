@@ -37,7 +37,8 @@
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
 //                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
-//   3A-3D RW GEOM   the part of the source the scaler shows (sim/fsr.py geom(): XR, DX, YS, DY)
+//   3A-3D RW GEOM   the part of the source the scaler shows (sim/fsr.py geom(): XR, DX, YS, DY;
+//                    DX's bit 31: the picture 16:9's, all 1920 columns, not the middle 1440)
 //   3E RW  BORDER   border.v: where the captured fields have picture: a write starts it again (7:0 the
 //                    luma a pixel of picture is above); read: 8:0 the first pair of pixels, 24:16 the
 //                    last, 31 there was picture
@@ -464,7 +465,8 @@ module top (
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
     reg  [31:0]  dcfg = 32'h140D0600;
-    reg  [27:0]  g_xr = -28'sd7876608;
+    reg  [27:0]  g_xr = -28'sd11808768;
+    reg          g_wide = 1'b0;
     reg  [16:0]  g_dx = 17'd32768;
     reg  [26:0]  g_ys = -27'sd18205;
     reg  [16:0]  g_dy = 17'd29127;
@@ -473,8 +475,10 @@ module top (
             dcfg <= wdata;
         if (we && addr == 8'h3A)
             g_xr <= wdata[27:0];
-        if (we && addr == 8'h3B)
+        if (we && addr == 8'h3B) begin
             g_dx <= wdata[16:0];
+            g_wide <= wdata[31];
+        end
         if (we && addr == 8'h3C)
             g_ys <= wdata[26:0];
         if (we && addr == 8'h3D)
@@ -523,17 +527,17 @@ module top (
             wire [7:0]  e_y, e_cb, e_cr;
             wire [24:0] e_xy;
             // (the scaler's part of the source: set while nothing depends on a frame of it)
-            reg [88:0] geo0, geo;
+            reg [89:0] geo0, geo;
             always @(posedge tx_clk) begin
-                geo0 <= {g_xr, g_dx, g_ys, g_dy};
+                geo0 <= {g_wide, g_xr, g_dx, g_ys, g_dy};
                 geo <= geo0;
             end
-            easu u_easu (.g_xr(geo[88:61]), .g_dx(geo[60:44]), .g_ys(geo[43:17]), .g_dy(geo[16:0]),
+            easu u_easu (.g_wide(geo[89]), .g_xr(geo[88:61]), .g_dx(geo[60:44]), .g_ys(geo[43:17]), .g_dy(geo[16:0]),
                          .clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
                          .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
                          .o_cr(e_cr));
             dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .d({p_x, p_y}), .q(e_xy));
-            rcas u_rcas (.clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
+            rcas u_rcas (.wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
                          .cri(swap ? e_cb : e_cr), .sharp(sharp), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
             assign l_r = 8'd0;
@@ -637,7 +641,7 @@ module top (
             8'h3E: rdata <= {bd_any, 6'd0, bd_x1, 7'd0, bd_x0};
             8'h3F: rdata <= {6'd0, bd_l1, 6'd0, bd_l0};
             8'h3A: rdata <= {{4{g_xr[27]}}, g_xr};
-            8'h3B: rdata <= {15'd0, g_dx};
+            8'h3B: rdata <= {g_wide, 14'd0, g_dx};
             8'h3C: rdata <= {{5{g_ys[26]}}, g_ys};
             8'h3D: rdata <= {15'd0, g_dy};
             8'h36: rdata <= {dst_s[29:14], dst_s[13:6], 2'd0, dst_s[5:0]};

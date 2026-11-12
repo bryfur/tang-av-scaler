@@ -48,8 +48,9 @@ struct scaler_settings {
     bool aa_corner;     /* SMAA's corners kept */
     uint8_t crop;       /* the part of the 720 x 480 shown, filling the output: 0 all of it, 1 where the
                          * picture is found to be (the black round a game's picture left out), 2 as set */
-    uint16_t crop_x, crop_w, crop_y, crop_h;    /* (new settings go at the end: the ones kept in flash
-                                                 * are read as far as they go) */
+    uint16_t crop_x, crop_w, crop_y, crop_h;
+    bool wide;          /* the picture is 16:9's (a game set to widescreen): all 1920 columns (new settings
+                         * go at the end: the ones kept in flash are read as far as they go) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH[,1]]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
@@ -106,10 +106,10 @@ module tb;
     pattern u_pat (.clk(clk), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
                    .ox(ox), .oy(oy));
     wire [7:0] e_y, e_cb, e_cr; wire [24:0] e_xy;
-    easu u_easu (.g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
+    easu u_easu (.g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
                  .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
     dline #(.W(25), .D(26)) u_dxy (.clk(clk), .d({ox, oy}), .q(e_xy));
-    rcas u_rcas (.clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d),
+    rcas u_rcas (.wide(1'b%(g_wide)d), .clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d),
                  .r(r), .g(g), .b(b));
     wire de_d;
     dline #(.W(1), .D(%(latv)d)) u_dde (.clk(clk), .d(de), .q(de_d));
@@ -138,7 +138,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], aa_thr=aa or 0, sharp=sharp, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v")]
     import fsr

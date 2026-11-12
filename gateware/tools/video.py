@@ -10,7 +10,7 @@
                                         # threshold --aa (20); sharpening --sharp 0-16 (8)
     video.py freeze | run               # the fields in memory kept as they are (a still picture) | not
     video.py stat                       # what the capture sees
-    video.py crop [X0 CW Y0 CH | auto]  # the part of the 720 x 480 the scaler shows (nothing: all of it;
+    video.py crop [X0 CW Y0 CH [1] | auto [wide]]  # (1, wide: a 16:9 picture: all 1920 columns) the part of the 720 x 480 the scaler shows (nothing: all of it;
                                         # auto: where border.v finds picture over three seconds)
     video.py raw [MODE]                 # 1024 raw samples of the pixel port (0 now, 1 from a sync code,
                                         # 2 from the start of a line of picture)
@@ -56,8 +56,8 @@ def border(m):
 def crop(m, part):
     sys.path.insert(0, os.path.join(HERE, "../sim"))
     import fsr
-    for k, v in enumerate(fsr.geom(*part)):
-        m.w(GEOM + k, v & 0xFFFFFFFF)
+    for k, v in enumerate(fsr.regs(fsr.geom(*part))):
+        m.w(GEOM + k, v)
     m.flush()
 
 
@@ -90,14 +90,15 @@ def main():
         return
     if a[:1] == ["crop"]:
         m = avb.Mon()
-        part = tuple(int(v) for v in a[1:5]) if len(a) >= 5 else ()
+        part = tuple(int(v) for v in a[1:6]) if len(a) >= 5 else ()
         if a[1:2] == ["auto"]:
             m.w(BORDER, 40)
             m.flush()
             time.sleep(3)
             part = border(m)
             print("picture found: %s" % (part,))
-            part = part if part and part[1] >= 560 and part[3] >= 380 else ()
+            part = part if part and part[1] >= 560 and part[3] >= 380 else (0, 720, 0, 480)
+            part += (1,) if "wide" in a else ()
         crop(m, part)
         print("shown: %s" % (part or "all",))
         return

@@ -32,20 +32,28 @@ TAPS = [(0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (2, 0), (-1, 1), (0, 1), (1, 
 NANG, NLEN = 32, 8
 NPX, NPY = 8, 8                                     # places between source pixels: k/8 across, (2k + 1)/16 down
 OW, OH, OX0 = 1440, 1080, 240                       # the output picture, its first column in the raster
+PRE = 120                                           # (the columns are counted from this many before the raster's)
 MIRROR = [10, 11, 6, 7, 8, 9, 2, 3, 4, 5, 0, 1]     # TAPS with the rows turned over (ty -> 1 - ty)
 TAN = [round(1024 * math.tan((2 * k - 1) * math.pi / 64)) for k in range(1, 9)]    # the bins' edges, to 45 degrees
 LEN_TH = [-(-(2 * j - 1) * 16384 // 14) for j in range(1, 8)]                     # len's levels' edges
 RECIP = [0] + [4096 // v for v in range(1, 256)]
 
 
-def geom(x0=0, cw=720, y0=0, ch=480):
+def geom(x0=0, cw=720, y0=0, ch=480, wide=0):
     """the part of the source the output shows, cw x ch pixels from (x0, y0): (XR, DX, YS, DY) as the
-    hardware has them: a raster column x's place is XR + x DX, a row y's YS + y DY, in 65536ths of a
+    hardware has them: a raster column x's place is XR + (x + PRE) DX, a row y's YS + y DY, in 65536ths of a
     source pixel (pixel n's middle at n); the place across with a sixteenth more (to the nearest
-    eighth, when the rest is cut off)"""
-    dx = (cw * 65536 + OW // 2) // OW
+    eighth, when the rest is cut off); wide: the picture is 16:9's (a game set to widescreen: the
+    output all 1920 columns), else 4:3's (the middle 1440)"""
+    ow, ox0 = (1920, 0) if wide else (OW, OX0)
+    dx = (cw * 65536 + ow // 2) // ow
     dy = (ch * 65536 + OH // 2) // OH
-    return (x0 * 65536 + dx // 2 - 32768 + 4096 - OX0 * dx, dx, y0 * 65536 + dy // 2 - 32768, dy)
+    return (x0 * 65536 + dx // 2 - 32768 + 4096 - (ox0 + PRE) * dx, dx, y0 * 65536 + dy // 2 - 32768, dy, 1 if wide else 0)
+
+
+def regs(g):
+    """geom()'s as the registers 3A to 3D have it"""
+    return [g[0] & 0xFFFFFFF, g[1] | g[4] << 31, g[2] & 0x7FFFFFF, g[3]]
 
 
 def kernel(ppx, ppy, dx, dy, ln):
@@ -118,8 +126,9 @@ def angle_bin(ax, ay):
 
 
 def scale_hw(pix, ana, w, h, tab, g=None):
-    """rtl/easu.v: pix h rows of w (y, cb, cr) -> 1080 rows of 1440; g: geom()'s"""
-    xr, dx, ys, dy = g or geom()
+    """rtl/easu.v: pix h rows of w (y, cb, cr) -> 1080 rows of 1440 (or 1920); g: geom()'s"""
+    xr, dx, ys, dy, wide = g or geom()
+    ow, ox0 = (1920, 0) if wide else (OW, OX0)
     out = []
     cx = lambda x: min(max(x, 0), w - 1)
     cy = lambda y: min(max(y, 0), h - 1)
@@ -131,8 +140,8 @@ def scale_hw(pix, ana, w, h, tab, g=None):
         rows = [pix[cy(fy + d)] for d in (-1, 0, 1, 2)]
         arow = [ana[cy(fy)], ana[cy(fy + 1)]]
         line = []
-        for ox in range(OW):
-            xp = xr + (ox + OX0) * dx
+        for ox in range(ow):
+            xp = xr + (ox + ox0 + PRE) * dx
             fx, px = xp >> 16, xp >> 13 & 7
             wx = (8 - px, px)
             ax = ay = al = 0

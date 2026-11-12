@@ -169,4 +169,5 @@ def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=Fal
     pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner)
     w, h = len(pix[0]), len(pix)
     out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp)
-    return [[(0, 0, 0)] * 240 + [rgb(*p) for p in row] + [(0, 0, 0)] * 240 for row in out]
+    side = (1920 - len(out[0])) // 2
+    return [[(0, 0, 0)] * side + [rgb(*p) for p in row] + [(0, 0, 0)] * side for row in out]

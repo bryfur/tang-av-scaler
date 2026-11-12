@@ -257,11 +257,12 @@ static void picture(void)
 }
 
 /* the scaler's part of the source (gateware/sim/fsr.py geom()) */
-static void geom(unsigned x0, unsigned cw, unsigned y0, unsigned ch)
+static void geom(unsigned x0, unsigned cw, unsigned y0, unsigned ch, bool wide)
 {
-    int32_t dx = (int32_t)((cw * 65536u + 720) / 1440), dy = (int32_t)((ch * 65536u + 540) / 1080);
-    wr(R_GEOM, (uint32_t)((int32_t)(x0 * 65536u) + dx / 2 - 32768 + 4096 - 240 * dx));
-    wr(R_GEOM + 1, (uint32_t)dx);
+    int32_t ow = wide ? 1920 : 1440, ox0 = wide ? 0 : 240;
+    int32_t dx = (int32_t)((cw * 65536u + ow / 2) / ow), dy = (int32_t)((ch * 65536u + 540) / 1080);
+    wr(R_GEOM, ((uint32_t)((int32_t)(x0 * 65536u) + dx / 2 - 32768 + 4096 - (ox0 + 120) * dx)) & 0xFFFFFFFu);
+    wr(R_GEOM + 1, (uint32_t)dx | (wide ? 1u << 31 : 0));
     wr(R_GEOM + 2, (uint32_t)((int32_t)(y0 * 65536u) + dy / 2 - 32768));
     wr(R_GEOM + 3, (uint32_t)dy);
     flush();
@@ -342,6 +343,7 @@ static void task(void *arg)
     uint16_t shown[4] = {0, 720, 0, 480}, want[4];
     int counted = 0;                    /* seconds the border has been looked for */
     uint8_t crop_was = 255;
+    bool wide_was = false;
     uint32_t fields_was = 0, frames_was = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -399,8 +401,9 @@ static void task(void *arg)
                             memcpy(want, shown, sizeof want);
                     }
                 }
-                if (memcmp(want, shown, sizeof want)) {
-                    geom(want[0], want[1], want[2], want[3]);
+                if (memcmp(want, shown, sizeof want) || c.wide != wide_was) {
+                    geom(want[0], want[1], want[2], want[3], c.wide);
+                    wide_was = c.wide;
                     memcpy(shown, want, sizeof shown);
                     ESP_LOGI(TAG, "shown: %u x %u from %u, %u", want[1], want[3], want[0], want[2]);
                 }
