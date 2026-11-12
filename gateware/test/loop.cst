@@ -1,0 +1,14 @@
+IO_LOC "esp_cs" W22;  // J22 pin 2, bank 4
+IO_LOC "esp_irq" W21;  // J22 pin 4, bank 4
+IO_LOC "esp_miso" N17;  // J22 pin 14, bank 4
+IO_LOC "esp_rx" M17;  // J22 pin 10, bank 3
+IO_LOC "esp_tx" V20;  // J22 pin 6, bank 4, GCLKC_8 SGCLKC_5
+IO_LOC "in_led" E18;  // J20 pin 71, bank 2
+IO_LOC "sys_clk" V22;
+IO_PORT "esp_cs" IO_TYPE=LVCMOS33;
+IO_PORT "esp_irq" IO_TYPE=LVCMOS33;
+IO_PORT "esp_miso" IO_TYPE=LVCMOS33;
+IO_PORT "esp_rx" IO_TYPE=LVCMOS33;
+IO_PORT "esp_tx" IO_TYPE=LVCMOS33;
+IO_PORT "in_led" IO_TYPE=LVCMOS33;
+IO_PORT "sys_clk" IO_TYPE=LVCMOS33 PULL_MODE=NONE;

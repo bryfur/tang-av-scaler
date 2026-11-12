@@ -19,3 +19,14 @@ hardware/*/lib/*.3dshapes/
 
 # fab outputs: the zip, BOM and CPL are kept; the loose Gerbers are in the zip
 hardware/**/fab/gerbers/
+# builds
+gateware/gowin/build/
+gateware/gowin/*.log
+gateware/sim/build/
+firmware/xiao/build/
+firmware/xiao/build.log
+firmware/xiao/sdkconfig
+firmware/xiao/sdkconfig.old
+firmware/xiao-wifi/build-*/
+firmware/xiao-wifi/test/build/
+firmware/xiao-wifi/managed_components/

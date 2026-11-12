@@ -15,11 +15,15 @@ PS2 component (YPbPr) + stereo audio
 | Directory | What |
 |---|---|
 | `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. Revisions in `rev-a/`, `rev-b/` (hats on the Console), `rev-ca/`, `rev-cb/` (the SOM on its own carrier, shared parts in `rev-c/`), their shared generators in `kit/`. |
+| `gateware/` | The FPGA design for rev C-B, for now its bring-up image: a register monitor on the XIAO's UART, HDMI out of the transceivers, the component input on the HDMI output. [gateware/README.md](gateware/README.md) |
+| `firmware/` | The XIAO in rev C's sockets: `xiao/` a USB-JTAG and UART bridge (ESP32-S3), `xiao-wifi/` the same with Wi-Fi (ESP32-C5). |
 
 Status: rev A (ADV7842, six layers) is routed and ready to order but costs about $400 at
 JLCPCB. Rev B (ADV7181D, four layers, a hat on the Console) and rev C-A / C-B (the SOM on a carrier
 of its own: 1080p60 through an ADV7511, or 4K60 from the FPGA's transceivers) are reviewed against
-every data sheet, routed, DRC clean, with fab files. Nothing has been built or ordered.
+every data sheet, routed, DRC clean, with fab files. Rev C-B is built and in bring-up
+(2026-11-12): a PS2's 480i component picture comes out of its HDMI port as 1080p60, in colour
+(`gateware/`); 4K30 out works, 4K60 not yet. The other revisions have not been built.
 
 ## The boards
 

@@ -1,0 +1,362 @@
+// top.v: AV board rev C-B bring-up image: the monitor (mon.v) on the XIAO's UART and what it reaches.
+//
+// Registers (32 bits):
+//   00 R   ID        "AVB1" (0x31425641)
+//   01 R   BUILD     `AVB_BUILD
+//   02 RW  CTRL      0 LED from bit 1 (else it blinks), 1 LED, 2 DP_OE, 3 IN_RESET_N (the ADV7181D's),
+//                    4 CEC pulled low
+//   03 R   STAT      0 KEY1, 1 KEY2 (pressed = 0), 2 DP_HPD, 3 IN_INT, 4 CEC, 8 an I2C SCL never rose
+//                    (sticky, cleared by reading)
+//   04 RW  I2C       the four buses' lines, open drain, one bit each: a 1 written pulls the line
+//                    low.  Bits 0 PLL_SCL, 1 PLL_SDA, 2 DP_SCL, 3 DP_SDA, 4 DDC_SCL, 5 DDC_SDA,
+//                    6 IN_SCL, 7 IN_SDA; read: 7:0 as written, 15:8 the lines themselves.
+//                    A write holds the next command until the lines have settled and every SCL let
+//                    go has risen (a device stretching the clock; 84 ms at most).
+//   05-08 R I2C_SH   bus 0-3's SDA at each of its SCL's rises, shifted in from bit 0: a byte read is
+//                    eight clock pulses and one register read
+//   10-17 R FREQ     fmeter.v counts (x 23.84 Hz at 50 MHz): 0 PLL_CLK2, 1 IN_LLC, 2 the transmit
+//                    word clock (lane 0's), 3 lane 0's PLL reference as the quad sees it, 4 lane 1's
+//                    word clock
+//   20 RW  GT_CTRL   the transceiver lanes (gtx_quad.v), a bit a lane: 3:0 lane resets released,
+//                    7:4 transmit PCS resets, 11:8 data valid
+//   21 R   GT_STAT   3:0 the lanes' own PLLs locked (not used: gowin/serdes.py), 7:4 FIFOs full,
+//                    11:8 almost full, 13:12 the quad's PLLs locked: bit 13 the LC PLL all four
+//                    lanes run from
+//   22-23 R GT_ST    lanes 1,0 and 3,2: STAT (13 bits) at 12:0 and 28:16
+//   24 R   GT_AST    the lanes' ASTAT, six bits each
+//   26 RW  HDMI      0 characters scrambled [HDMI 2.0], 1 the video preamble and guard band sent (else
+//                    DVI's plain blanking), 7:4 the scrambler's open choices (hdmi_scr.v opt); set
+//                    before the lanes are started
+//   30 RW  VID       0 the picture is the component input's (fbview.v; else pattern.v's), 1 the frame
+//                    store is left as it is, 2 the pixel port is 16 bits wide (the CP core's: vcap.v), 3 Cb and
+//                    Cr the other way round, 4 the two fields shown half a line apart (fbview.v bob),
+//                    5 the F of the top field, 15:8 the field's first line shown
+//   31 R   CAP       vcap.v: 10:0 the Y samples of a line, 20:11 the lines of picture of a field,
+//                    21 its F, 31 the raw capture is done
+//   32 R   FIELDS    15:0 a count of fields
+//   33 W   RAW       takes 1024 samples of the pixel port: 1:0 from when (vcap.v mode)
+//   34 RW  RAWD      written: the sample's number; read: that sample: 7:0 Y pins, 15:8 C pins, 16 HS,
+//                    17 VS, 18 DE
+//   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
+//                    (20-bit words, 2.97 Gb/s), 4 = 3840x2160p60 (40 bits a clock, 5.94 Gb/s, the
+//                    TMDS clock a fortieth); `AVB_PPC, with the transceivers' register file
+//
+// HDMI: pattern.v's picture, framed and scrambled as asked (hdmi_scr.v), through three TMDS
+// encoders on the word clock;
+// lane 0 = channel 2 (red), lane 3 = channel 1 (green), lane 2 = channel 0 (blue and the syncs),
+// lane 1 = the TMDS clock as a word of five ones and five zeros (hardware/av-board/rev-cb/board.py LANES).
+//
+// The LED blinks at 1.5 Hz from configuration on: the FPGA's own sign of life.
+
+`ifndef AVB_BUILD
+`define AVB_BUILD 32'd0
+`endif
+`ifndef AVB_PPC
+`define AVB_PPC 1
+`endif
+
+module top (
+    input  sys_clk,                 // the SOM's 50 MHz
+    input  esp_tx,                  // the XIAO's TX
+    output esp_rx,                  // the XIAO's RX
+    output in_led,
+    input  in_key1,
+    input  in_key2,
+    inout  pll_scl,
+    inout  pll_sda,
+    inout  dp_scl,
+    inout  dp_sda,
+    inout  ddc_scl,
+    inout  ddc_sda,
+    inout  in_scl,
+    inout  in_sda,
+    output dp_oe,
+    input  dp_hpd,
+    inout  cec_fpga,
+    output in_reset_n,
+    input  in_int,
+    input  pll_clk2,
+    input  in_llc,                  // the ADV7181D's pixel port
+    input  [7:0] in_y,
+    input  [7:0] in_c,
+    input  in_hs,
+    input  in_vs,
+    input  in_de
+);
+    wire clk, pll_lock;
+    sys_pll u_pll (.clkin(sys_clk), .clk(clk), .lock(pll_lock));
+
+    wire [7:0]  addr;
+    wire [31:0] wdata;
+    wire        we;
+    reg  [31:0] rdata;
+    wire        hold;
+    mon #(.DIV(50)) u_mon (.clk(clk), .rx(esp_tx), .tx(esp_rx), .addr(addr), .wdata(wdata), .we(we),
+                          .rdata(rdata), .hold(hold));
+
+    reg [24:0] beat = 25'd0;
+    wire       tick = &beat;
+    always @(posedge clk)
+        beat <= beat + 25'd1;
+
+    // CTRL
+    reg [4:0] ctrl = 5'd0;
+    always @(posedge clk)
+        if (we && addr == 8'h02)
+            ctrl <= wdata[4:0];
+    assign in_led = ctrl[0] ? ctrl[1] : beat[24];
+    assign dp_oe = ctrl[2];
+    assign in_reset_n = ctrl[3];
+    assign cec_fpga = ctrl[4] ? 1'b0 : 1'bz;
+
+    // I2C: lines in pairs {SDA, SCL}, bus k at bits 2k+1, 2k
+    reg  [7:0] i2c_drv = 8'd0;
+    wire [7:0] i2c_pin = {in_sda, in_scl, ddc_sda, ddc_scl, dp_sda, dp_scl, pll_sda, pll_scl};
+    assign pll_scl = i2c_drv[0] ? 1'b0 : 1'bz;
+    assign pll_sda = i2c_drv[1] ? 1'b0 : 1'bz;
+    assign dp_scl  = i2c_drv[2] ? 1'b0 : 1'bz;
+    assign dp_sda  = i2c_drv[3] ? 1'b0 : 1'bz;
+    assign ddc_scl = i2c_drv[4] ? 1'b0 : 1'bz;
+    assign ddc_sda = i2c_drv[5] ? 1'b0 : 1'bz;
+    assign in_scl  = i2c_drv[6] ? 1'b0 : 1'bz;
+    assign in_sda  = i2c_drv[7] ? 1'b0 : 1'bz;
+    reg [7:0]  i2c_s0, i2c_in;
+    reg [3:0]  rose;                // SCLs let go by the last write
+    reg [22:0] wait_t;
+    reg        waiting = 1'b0;
+    reg        stuck = 1'b0;
+    reg [31:0] i2c_sh [0:3];
+    wire [3:0] scl_low = {!i2c_in[6], !i2c_in[4], !i2c_in[2], !i2c_in[0]} & ~{i2c_drv[6], i2c_drv[4], i2c_drv[2], i2c_drv[0]};
+    wire       i2c_we = we && addr == 8'h04;
+    assign hold = waiting || i2c_we;
+    integer k;
+    always @(posedge clk) begin
+        i2c_s0 <= i2c_pin;
+        i2c_in <= i2c_s0;
+        if (addr == 8'h03 && u_mon.state == 4'd6)       // STAT read
+            stuck <= 1'b0;
+        if (i2c_we) begin
+            i2c_drv <= wdata[7:0];
+            rose <= {i2c_drv[6] & ~wdata[6], i2c_drv[4] & ~wdata[4], i2c_drv[2] & ~wdata[2], i2c_drv[0] & ~wdata[0]};
+            wait_t <= 23'd0;
+            waiting <= 1'b1;
+        end else if (waiting) begin
+            wait_t <= wait_t + 23'd1;
+            // 5 us for the lines, then every SCL not held by us high, or 84 ms gone
+            if (wait_t[22] || (wait_t >= 23'd256 && scl_low == 4'd0)) begin
+                waiting <= 1'b0;
+                if (wait_t[22])
+                    stuck <= 1'b1;
+                for (k = 0; k < 4; k = k + 1)
+                    if (rose[k])
+                        i2c_sh[k] <= {i2c_sh[k][30:0], i2c_in[2 * k + 1]};
+            end
+        end
+    end
+
+    // the transceivers
+    reg  [31:0] gt_ctrl = 32'd0;
+    always @(posedge clk)
+        if (we && addr == 8'h20)
+            gt_ctrl <= wdata;
+    wire [3:0]  pcs_tx_clk, cmu_ok, gt_ref_clk, fifo_full, fifo_afull;
+    wire [51:0] gt_stat;
+    wire [23:0] gt_astat;
+    wire [1:0]  qpll_ok;
+    wire        tx_clk = pcs_tx_clk[0];
+    reg  [319:0] tx_data;
+    gtx_quad u_gtx (.ln_rstn(gt_ctrl[3:0]), .pcs_tx_rst(gt_ctrl[7:4]), .tx_clk(tx_clk), .tx_vld(gt_ctrl[11:8]),
+                    .tx_data(tx_data), .pcs_tx_clk(pcs_tx_clk), .cmu_ok(cmu_ok), .ref_clk(gt_ref_clk),
+                    .fifo_full(fifo_full), .fifo_afull(fifo_afull), .stat(gt_stat), .astat(gt_astat),
+                    .qpll_ok(qpll_ok));
+
+    // HDMI's framing and scrambling (hdmi_scr.v), set before a picture is wanted
+    reg [7:0] hd_ctrl = 8'd0;
+    always @(posedge clk)
+        if (we && addr == 8'h26)
+            hd_ctrl <= wdata[7:0];
+    reg [7:0] hd_s0, hd;
+    always @(posedge tx_clk) begin
+        hd_s0 <= hd_ctrl;
+        hd <= hd_s0;
+    end
+
+    // the picture, on the word clock: PPC pixels, so PPC characters a lane, a clock
+    localparam PPC = `AVB_PPC;
+    wire [PPC - 1:0]      p_de, p_hs, p_vs, p_pre, p_gb, p_ucc;
+    wire [8 * PPC - 1:0]  p_r, p_g, p_b;
+    wire [12:0]           p_x;
+    wire [11:0]           p_y;
+    generate
+        if (PPC > 1) begin : g_2160p          // 30 Hz two pixels a clock, 60 Hz four
+            pattern #(.PPC(PPC), .HA(3840), .HF(176), .HS(88), .HT(4400), .VA(2160), .VF(8), .VS(10), .VT(2250))
+                u_pat (.clk(tx_clk), .de(p_de), .hs(p_hs), .vs(p_vs), .pre(p_pre), .gb(p_gb), .ucc(p_ucc),
+                       .r(p_r), .g(p_g), .b(p_b), .ox(p_x), .oy(p_y));
+        end else begin : g_1080p60
+            pattern u_pat (.clk(tx_clk), .de(p_de), .hs(p_hs), .vs(p_vs), .pre(p_pre), .gb(p_gb), .ucc(p_ucc),
+                           .r(p_r), .g(p_g), .b(p_b), .ox(p_x), .oy(p_y));
+        end
+    endgenerate
+
+    // the component input: the ADV7181D's fields into the frame store on its clock (vcap.v), the
+    // store as the picture on the word clock (fbview.v: 1080p60 only), LAT clocks behind
+    // pattern.v's pixel: its timing and its picture wait that long
+    localparam LAT = 10;
+    reg [31:0] vid = 32'd0;
+    reg        raw_arm = 1'b0;
+    reg [1:0]  raw_mode = 2'd0;
+    reg [9:0]  raw_ra = 10'd0;
+    reg [16:0] base0 = 17'd0;
+    always @(posedge clk) begin
+        if (we && addr == 8'h30)
+            vid <= wdata;
+        if (we && addr == 8'h33) begin
+            raw_arm <= !raw_arm;
+            raw_mode <= wdata[1:0];
+        end
+        if (we && addr == 8'h34)
+            raw_ra <= wdata[9:0];
+        base0 <= vid[15:8] * 17'd360 - 17'd60;
+    end
+    wire        fb_we, cap_field, raw_done, fl_we, fl_wd;
+    wire [7:0]  fl_wa;
+    wire [16:0] fb_wa, fb_ra;
+    wire [31:0] fb_wd, fb_rd;
+    wire [10:0] cap_pix;
+    wire [9:0]  cap_lines;
+    wire [15:0] cap_fields;
+    wire [18:0] raw_rd;
+    wire [7:0]  f_r, f_g, f_b;
+    vcap u_cap (.llc(in_llc), .y(in_y), .c(in_c), .hs(in_hs), .vs(in_vs), .de(in_de), .freeze(vid[1]), .wide(vid[2]),
+                .we(fb_we), .wa(fb_wa), .wd(fb_wd), .f_we(fl_we), .f_wa(fl_wa), .f_wd(fl_wd), .pix(cap_pix), .lines(cap_lines), .field(cap_field),
+                .fields(cap_fields), .arm(raw_arm), .mode(raw_mode), .done(raw_done), .rclk(clk),
+                .ra(raw_ra), .rd(raw_rd));
+    generate
+        if (PPC == 1) begin : g_fb
+            fbram u_fb (.wclk(in_llc), .we(fb_we), .wa(fb_wa), .wd(fb_wd), .rclk(tx_clk), .ra(fb_ra), .rd(fb_rd));
+            fbview u_view (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .base0(base0), .voff(vid[15:8]), .swap(swap), .bob(bob), .top(ftop),
+                           .f_clk(in_llc), .f_we(fl_we), .f_wa(fl_wa), .f_wd(fl_wd), .ra(fb_ra), .rd(fb_rd),
+                           .r(f_r), .g(f_g), .b(f_b));
+        end else begin : g_nofb
+            assign f_r = 8'd0;
+            assign f_g = 8'd0;
+            assign f_b = 8'd0;
+        end
+    endgenerate
+    reg [6 * PPC - 1:0]  dl_t [1:LAT];
+    reg [24 * PPC - 1:0] dl_p [1:LAT];
+    reg                  vid_s0, vid_on, swap_s0, swap, bob_s0, bob, ftop_s0, ftop;
+    integer dk;
+    always @(posedge tx_clk) begin
+        vid_s0 <= vid[0];
+        vid_on <= vid_s0;
+        swap_s0 <= vid[3];
+        swap <= swap_s0;
+        bob_s0 <= vid[4];
+        bob <= bob_s0;
+        ftop_s0 <= vid[5];
+        ftop <= ftop_s0;
+        dl_t[1] <= {p_de, p_hs, p_vs, p_pre, p_gb, p_ucc};
+        dl_p[1] <= {p_r, p_g, p_b};
+        for (dk = 2; dk <= LAT; dk = dk + 1) begin
+            dl_t[dk] <= dl_t[dk - 1];
+            dl_p[dk] <= dl_p[dk - 1];
+        end
+    end
+    wire [PPC - 1:0]      v_de, v_hs, v_vs, v_pre, v_gb, v_ucc;
+    wire [8 * PPC - 1:0]  v_r, v_g, v_b;
+    assign {v_de, v_hs, v_vs, v_pre, v_gb, v_ucc} = dl_t[LAT];
+    assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {f_r, f_g, f_b} : dl_p[LAT];
+    // the channels' control bits: 0 {VSYNC, HSYNC}; 1 {CTL1, CTL0}, 2 {CTL3, CTL2}: the video preamble
+    // is CTL0 alone [HDMI 1.4 5.2.1.1], sent with the guard band
+    wire [2 * PPC - 1:0]  c0, c1;
+    genvar gk;
+    generate
+        for (gk = 0; gk < PPC; gk = gk + 1) begin : g_c
+            assign c0[2 * gk +: 2] = {v_vs[gk], v_hs[gk]};
+            assign c1[2 * gk +: 2] = {1'b0, v_pre[gk] & hd[1]};
+        end
+    endgenerate
+    wire [8 * PPC - 1:0]  s_r, s_g, s_b;
+    wire [PPC - 1:0]      s_r_de, s_g_de, s_b_de;
+    wire [10 * PPC - 1:0] k_r, k_g, k_b, t_r, t_g, t_b;
+    hdmi_scr #(.N(PPC), .CH(0)) u_s0 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_b), .c(c0),
+                                     .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_b), .de_o(s_b_de), .tok(k_b));
+    hdmi_scr #(.N(PPC), .CH(1)) u_s1 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_g), .c(c1),
+                                     .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_g), .de_o(s_g_de), .tok(k_g));
+    hdmi_scr #(.N(PPC), .CH(2)) u_s2 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_r),
+                                     .c({2 * PPC{1'b0}}), .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_r),
+                                     .de_o(s_r_de), .tok(k_r));
+    tmds_enc #(.N(PPC)) u_t2 (.clk(tx_clk), .d(s_r), .tok(k_r), .de(s_r_de), .q(t_r));
+    tmds_enc #(.N(PPC)) u_t1 (.clk(tx_clk), .d(s_g), .tok(k_g), .de(s_g_de), .q(t_g));
+    tmds_enc #(.N(PPC)) u_t0 (.clk(tx_clk), .d(s_b), .tok(k_b), .de(s_b_de), .q(t_b));
+    // a lane's word: its characters in order, the line's first pixel's at the low end (sent
+    // first); `AVB_SWAP: the other way round
+`ifdef AVB_SWAP
+    localparam SWAP = 1;
+`else
+    localparam SWAP = 0;
+`endif
+    function [79:0] word(input [10 * PPC - 1:0] w);
+        integer ch;
+        begin
+            word = 80'd0;
+            for (ch = 0; ch < PPC; ch = ch + 1)
+                word[10 * ch +: 10] = w[10 * (SWAP ? PPC - 1 - ch : ch) +: 10];
+        end
+    endfunction
+    // the TMDS clock's lane: a tenth of the bit rate, five ones and five zeros a character; above
+    // 3.4 Gb/s a fortieth [HDMI 2.0 6.1.3.2], twenty and twenty across the clock's four characters
+    wire [79:0] ck_word = PPC == 4 ? 80'h00000FFFFF : word({PPC{10'b0000011111}});
+    always @(posedge tx_clk)
+        tx_data <= {word(t_g), word(t_b), ck_word, word(t_r)};
+
+    wire [31:0] f0, f1, f2, f3, f4;
+    fmeter u_f0 (.clk(clk), .tick(tick), .f(pll_clk2), .count(f0));
+    fmeter u_f1 (.clk(clk), .tick(tick), .f(in_llc), .count(f1));
+    fmeter u_f2 (.clk(clk), .tick(tick), .f(tx_clk), .count(f2));
+    fmeter u_f3 (.clk(clk), .tick(tick), .f(gt_ref_clk[0]), .count(f3));
+    fmeter u_f4 (.clk(clk), .tick(tick), .f(pcs_tx_clk[1]), .count(f4));
+    reg [13:0] gt_s0, gt_s;
+    always @(posedge clk) begin
+        gt_s0 <= {qpll_ok, fifo_afull, fifo_full, cmu_ok};
+        gt_s <= gt_s0;
+    end
+
+    reg [4:0] stat_s0, stat;
+    reg [38:0] cap_s0, cap_s;
+    always @(posedge clk) begin
+        stat_s0 <= {cec_fpga, in_int, dp_hpd, in_key2, in_key1};
+        stat <= stat_s0;
+        cap_s0 <= {cap_fields, raw_done, cap_field, cap_lines, cap_pix};
+        cap_s <= cap_s0;
+        case (addr)
+            8'h00: rdata <= 32'h31425641;
+            8'h01: rdata <= `AVB_BUILD;
+            8'h02: rdata <= {27'd0, ctrl};
+            8'h03: rdata <= {23'd0, stuck, 3'd0, stat};
+            8'h04: rdata <= {16'd0, i2c_in, i2c_drv};
+            8'h05: rdata <= i2c_sh[0];
+            8'h06: rdata <= i2c_sh[1];
+            8'h07: rdata <= i2c_sh[2];
+            8'h08: rdata <= i2c_sh[3];
+            8'h10: rdata <= f0;
+            8'h11: rdata <= f1;
+            8'h12: rdata <= f2;
+            8'h13: rdata <= f3;
+            8'h14: rdata <= f4;
+            8'h20: rdata <= gt_ctrl;
+            8'h21: rdata <= {18'd0, gt_s};
+            8'h22: rdata <= {3'd0, gt_stat[25:13], 3'd0, gt_stat[12:0]};
+            8'h23: rdata <= {3'd0, gt_stat[51:39], 3'd0, gt_stat[38:26]};
+            8'h24: rdata <= {8'd0, gt_astat};
+            8'h25: rdata <= PPC;
+            8'h26: rdata <= {24'd0, hd_ctrl};
+            8'h30: rdata <= vid;
+            8'h31: rdata <= {cap_s[22], 9'd0, cap_s[21:0]};
+            8'h32: rdata <= {16'd0, cap_s[38:23]};
+            8'h34: rdata <= {13'd0, raw_rd};
+            default: rdata <= 32'd0;
+        endcase
+    end
+endmodule

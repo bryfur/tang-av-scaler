@@ -1,0 +1,6 @@
+create_clock -name osc -period 20 -waveform {0 10} [get_ports {sys_clk}]
+create_clock -name sys -period 20 -waveform {0 10} [get_pins {u_pll/u/CLKOUT0}]
+create_clock -name pll_clk2 -period 6 -waveform {0 3} [get_ports {pll_clk2}]
+create_clock -name in_llc -period 13 -waveform {0 6.5} [get_ports {in_llc}]
+create_clock -name tx -period 6.5 -waveform {0 3.25} [get_pins {u_gtx/u_quad/LANE0_PCS_TX_O_FABRIC_CLK}]
+set_clock_groups -asynchronous -group [get_clocks {sys}] -group [get_clocks {pll_clk2}] -group [get_clocks {in_llc}] -group [get_clocks {osc}] -group [get_clocks {tx}]
