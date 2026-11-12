@@ -31,3 +31,5 @@ firmware/xiao-wifi/build-*/
 firmware/xiao-wifi/test/build/
 firmware/xiao-wifi/managed_components/
 gateware/sw/build/
+# a local capture viewer (a development aid on one machine: not part of the project)
+tools/capview/

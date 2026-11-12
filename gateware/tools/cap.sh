@@ -1,6 +1,7 @@
 #!/bin/bash
-# cap.sh [OUT.png] [FRAMES]: a frame of the HDMI output as a USB capture dongle sees it.  If the
-# capture page's service has the dongle (tools/capview, port 8090): its newest frame (the dongle's
+# cap.sh [OUT.png] [FRAMES]: a frame of the HDMI output as a USB capture dongle sees it.  If a
+# capture page's service has the dongle (one that answers /status and /snapshot.jpg on port 8090):
+# its newest frame (the dongle's
 # own JPEG); else straight from /dev/video0, raw 1080p (the FRAMESth frame, default 20: the first
 # ones after opening are stale).
 out=${1:-/tmp/cap.png}
