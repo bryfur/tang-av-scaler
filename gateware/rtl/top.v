@@ -27,10 +27,13 @@
 //   26 RW  HDMI      0 characters scrambled [HDMI 2.0], 1 the video preamble and guard band sent (else
 //                    DVI's plain blanking), 7:4 the scrambler's open choices (hdmi_scr.v opt); set
 //                    before the lanes are started
-//   30 RW  VID       0 the picture is the component input's (fbview.v; else pattern.v's), 1 the frame
-//                    store is left as it is, 2 the pixel port is 16 bits wide (the CP core's: vcap.v), 3 Cb and
-//                    Cr the other way round, 4 the two fields shown half a line apart (fbview.v bob),
-//                    5 the F of the top field, 15:8 the field's first line shown
+//   30 RW  VID       0 the picture is the component input's (else pattern.v's), 1 the fields in the
+//                    DDR3 are left as they are, 2 the pixel port is 16 bits wide (the CP core's:
+//                    vcap.v), 3 Cb and Cr the other way round
+//   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
+//                    15:8 the motion threshold
+//   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state,
+//                    31:16 frames it has begun
 //   31 R   CAP       vcap.v: 10:0 the Y samples of a line, 20:11 the lines of picture of a field,
 //                    21 its F, 31 the raw capture is done
 //   32 R   FIELDS    15:0 a count of fields
@@ -41,6 +44,10 @@
 //                    row, 15:12 the step between them; read: 31 they are in
 //   39 RW  GRABD     written: the place in the rows taken ({which, column}); read: the pixel there
 //                    (R, G, B from bit 23), and the place moves on by one
+//   40 RW  DDR       the DDR3 (rtl/ddr3): read: 0 calibrated, 1 its calibration failed, 2 the host's
+//                    command is done, 15:8 the calibration's code, 23:16 the DLL's step; written: the
+//                    host's command: 24:0 the line (256 bits), 31 a write (of DDRD), else a read
+//   48-4F RW DDRD    the line: written, a write's; read, the last read's
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
 //                    (20-bit words, 2.97 Gb/s), 4 = 3840x2160p60 (40 bits a clock, 5.94 Gb/s, the
 //                    TMDS clock a fortieth); `AVB_PPC, with the transceivers' register file
@@ -85,7 +92,23 @@ module top (
     input  [7:0] in_c,
     input  in_hs,
     input  in_vs,
-    input  in_de
+    input  in_de,
+    // the SOM's DDR3
+    output [14:0] ddr_addr,
+    output [2:0]  ddr_bank,
+    output        ddr_cs,
+    output        ddr_ras,
+    output        ddr_cas,
+    output        ddr_we,
+    output        ddr_ck,
+    output        ddr_ck_n,
+    output        ddr_cke,
+    output        ddr_odt,
+    output        ddr_reset_n,
+    output [3:0]  ddr_dm,
+    inout  [31:0] ddr_dq,
+    inout  [3:0]  ddr_dqs,
+    inout  [3:0]  ddr_dqs_n
 );
     wire clk, pll_lock;
     sys_pll u_pll (.clkin(sys_clk), .clk(clk), .lock(pll_lock));
@@ -202,15 +225,14 @@ module top (
         end
     endgenerate
 
-    // the component input: the ADV7181D's fields into the frame store on its clock (vcap.v), the
-    // store as the picture on the word clock (fbview.v: 1080p60 only), LAT clocks behind
-    // pattern.v's pixel: its timing and its picture wait that long
+    // the component input: the ADV7181D's fields decoded on its clock (vcap.v), kept in the DDR3
+    // (cap_ddr.v), made a progressive picture (deint.v) and shown (lineview.v: 1080p60 only), LAT
+    // clocks behind pattern.v's pixel: its timing and its picture wait that long
     localparam LAT = 10;
     reg [31:0] vid = 32'd0;
     reg        raw_arm = 1'b0;
     reg [1:0]  raw_mode = 2'd0;
     reg [9:0]  raw_ra = 10'd0;
-    reg [16:0] base0 = 17'd0;
     always @(posedge clk) begin
         if (we && addr == 8'h30)
             vid <= wdata;
@@ -220,46 +242,29 @@ module top (
         end
         if (we && addr == 8'h34)
             raw_ra <= wdata[9:0];
-        base0 <= vid[15:8] * 17'd360 - 17'd60;
     end
-    wire        fb_we, cap_field, raw_done, fl_we, fl_wd;
-    wire [7:0]  fl_wa;
-    wire [16:0] fb_wa, fb_ra;
-    wire [31:0] fb_wd, fb_rd;
+    wire        fb_we, cap_field, raw_done, cap_eof;
+    wire [9:0]  cap_ln;
+    wire [8:0]  cap_col;
+    wire [7:0]  l_r, l_g, l_b;
+    wire [31:0] fb_wd;
     wire [10:0] cap_pix;
     wire [9:0]  cap_lines;
     wire [15:0] cap_fields;
     wire [18:0] raw_rd;
-    wire [7:0]  f_r, f_g, f_b;
     vcap u_cap (.llc(in_llc), .y(in_y), .c(in_c), .hs(in_hs), .vs(in_vs), .de(in_de), .freeze(vid[1]), .wide(vid[2]),
-                .we(fb_we), .wa(fb_wa), .wd(fb_wd), .f_we(fl_we), .f_wa(fl_wa), .f_wd(fl_wd), .pix(cap_pix), .lines(cap_lines), .field(cap_field),
+                .we(fb_we), .wa(), .wd(fb_wd), .w_ln(cap_ln), .w_col(cap_col), .eof(cap_eof), .f_we(), .f_wa(), .f_wd(), .pix(cap_pix), .lines(cap_lines), .field(cap_field),
                 .fields(cap_fields), .arm(raw_arm), .mode(raw_mode), .done(raw_done), .rclk(clk),
                 .ra(raw_ra), .rd(raw_rd));
-    generate
-        if (PPC == 1) begin : g_fb
-            fbram u_fb (.wclk(in_llc), .we(fb_we), .wa(fb_wa), .wd(fb_wd), .rclk(tx_clk), .ra(fb_ra), .rd(fb_rd));
-            fbview u_view (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .base0(base0), .voff(vid[15:8]), .swap(swap), .bob(bob), .top(ftop),
-                           .f_clk(in_llc), .f_we(fl_we), .f_wa(fl_wa), .f_wd(fl_wd), .ra(fb_ra), .rd(fb_rd),
-                           .r(f_r), .g(f_g), .b(f_b));
-        end else begin : g_nofb
-            assign f_r = 8'd0;
-            assign f_g = 8'd0;
-            assign f_b = 8'd0;
-        end
-    endgenerate
     reg [6 * PPC - 1:0]  dl_t [1:LAT];
     reg [24 * PPC - 1:0] dl_p [1:LAT];
-    reg                  vid_s0, vid_on, swap_s0, swap, bob_s0, bob, ftop_s0, ftop;
+    reg                  vid_s0, vid_on, swap_s0, swap;
     integer dk;
     always @(posedge tx_clk) begin
         vid_s0 <= vid[0];
         vid_on <= vid_s0;
         swap_s0 <= vid[3];
         swap <= swap_s0;
-        bob_s0 <= vid[4];
-        bob <= bob_s0;
-        ftop_s0 <= vid[5];
-        ftop <= ftop_s0;
         dl_t[1] <= {p_de, p_hs, p_vs, p_pre, p_gb, p_ucc};
         dl_p[1] <= {p_r, p_g, p_b};
         for (dk = 2; dk <= LAT; dk = dk + 1) begin
@@ -270,7 +275,7 @@ module top (
     wire [PPC - 1:0]      v_de, v_hs, v_vs, v_pre, v_gb, v_ucc;
     wire [8 * PPC - 1:0]  v_r, v_g, v_b;
     assign {v_de, v_hs, v_vs, v_pre, v_gb, v_ucc} = dl_t[LAT];
-    assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {f_r, f_g, f_b} : dl_p[LAT];
+    assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {l_r, l_g, l_b} : dl_p[LAT];
     // the channels' control bits: 0 {VSYNC, HSYNC}; 1 {CTL1, CTL0}, 2 {CTL3, CTL2}: the video preamble
     // is CTL0 alone [HDMI 1.4 5.2.1.1], sent with the guard band
     wire [2 * PPC - 1:0]  c0, c1;
@@ -337,6 +342,126 @@ module top (
     grab u_grab (.clk(tx_clk), .de(v_de[0]), .vs(v_vs[0]), .rgb({v_r[7:0], v_g[7:0], v_b[7:0]}), .row(grab_cfg[10:0]),
                  .step(grab_cfg[15:12]), .arm(grab_arm), .done(grab_done), .rclk(clk), .ra(grab_ra), .rd(grab_rd));
 
+    // the DDR3: its controller on its own clock (pclk, 100 MHz), its users through ddr_arb.v
+    reg  [7:0]   por = 8'd0;
+    always @(posedge clk)
+        if (!pll_lock)
+            por <= 8'd0;
+        else if (!por[7])
+            por <= por + 8'd1;
+    wire         memory_clk, ddr_lock, pll_stop, pclk, ddr_ok, cal_fail;
+    wire [7:0]   cal_info, dll_step;
+    wire         d_cmd_ready, d_cmd_en, d_wr_en, d_rd_valid;
+    wire [2:0]   d_cmd;
+    wire [28:0]  d_addr;
+    wire [255:0] d_wr_data, d_rd_data;
+    ddr_pll u_ddr_pll (.clkin(sys_clk), .rst(!por[7]), .enclk(pll_stop), .memory_clk(memory_clk), .lock(ddr_lock));
+    ddr3_top #(.CL(6), .CWL(5), .TCK_PS(2500), .PCLK_KHZ(100000), .FAST(0)) u_ddr3 (
+        .memory_clk(memory_clk), .pll_stop(pll_stop), .clk(clk), .rst_n(por[7]), .pll_lock(ddr_lock),
+        .clk_out(pclk), .init_calib_complete(ddr_ok),
+        .cmd_ready(d_cmd_ready), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr), .wr_data_rdy(),
+        .wr_data(d_wr_data), .wr_data_en(d_wr_en), .wr_data_end(d_wr_en), .wr_data_mask(32'd0),
+        .rd_data(d_rd_data), .rd_data_valid(d_rd_valid), .rd_data_end(),
+        .cal_fail(cal_fail), .cal_info(cal_info), .cal_dbg(), .cal_map(), .cal_snap(), .rd_stray(),
+        .cal_opt(16'h0020), .dll_step(dll_step),
+        .O_ddr_addr(ddr_addr), .O_ddr_ba(ddr_bank), .O_ddr_cs_n(ddr_cs), .O_ddr_ras_n(ddr_ras),
+        .O_ddr_cas_n(ddr_cas), .O_ddr_we_n(ddr_we), .O_ddr_clk(ddr_ck), .O_ddr_clk_n(ddr_ck_n),
+        .O_ddr_cke(ddr_cke), .O_ddr_odt(ddr_odt), .O_ddr_reset_n(ddr_reset_n), .O_ddr_dqm(ddr_dm),
+        .IO_ddr_dq(ddr_dq), .IO_ddr_dqs(ddr_dqs), .IO_ddr_dqs_n(ddr_dqs_n));
+
+    reg  [255:0] d_rd_q;                 // (a read's line, with ddr_arb.v's rvalid)
+    always @(posedge pclk)
+        d_rd_q <= d_rd_data;
+
+    // the host's line: asked for on the system clock, done on pclk
+    reg  [31:0]  dm_cmd = 32'd0;
+    reg          dm_go = 1'b0;
+    reg  [255:0] dm_wdata = 256'd0;
+    reg  [255:0] dm_rdata = 256'd0;
+    reg          dm_g0, dm_g1, dm_g2, dm_valid = 1'b0, dm_done = 1'b0;
+    wire         dm_ack, dm_rvalid;
+    always @(posedge clk) begin
+        if (we && addr == 8'h40) begin
+            dm_cmd <= wdata;
+            dm_go <= !dm_go;
+        end
+        if (we && addr[7:3] == 5'b01001)
+            dm_wdata[32 * addr[2:0] +: 32] <= wdata;
+    end
+    always @(posedge pclk) begin
+        dm_g0 <= dm_go;
+        dm_g1 <= dm_g0;
+        dm_g2 <= dm_g1;
+        if (dm_g1 != dm_g2) begin
+            dm_valid <= 1'b1;
+            dm_done <= 1'b0;
+        end else if (dm_ack) begin
+            dm_valid <= 1'b0;
+            if (dm_cmd[31])
+                dm_done <= 1'b1;
+        end
+        if (dm_rvalid) begin
+            dm_rdata <= d_rd_q;
+            dm_done <= 1'b1;
+        end
+    end
+    ddr_arb u_arb (.clk(pclk), .cmd_ready(d_cmd_ready && ddr_ok), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr),
+                   .wr_data(d_wr_data), .wr_data_en(d_wr_en), .rd_data_valid(d_rd_valid),
+                   .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
+                   .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
+                   .c_valid(dm_valid), .c_wr(dm_cmd[31]), .c_line(dm_cmd[24:0]), .c_data(dm_wdata),
+                   .c_ack(dm_ack), .c_rvalid(dm_rvalid));
+    // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
+    // lineview.v's ring
+    reg  [15:0]  dcfg = 16'h0600;
+    always @(posedge clk)
+        if (we && addr == 8'h35)
+            dcfg <= wdata[15:0];
+    wire         ca_valid, ca_ack, db_valid, db_ack, db_rvalid;
+    wire [24:0]  ca_line, db_line;
+    wire [255:0] ca_data;
+    wire [2:0]   f_latest, f_n;
+    wire [7:0]   f_par, d_state;
+    wire [9:0]   f_lines;
+    wire [15:0]  d_frames;
+    wire         l_ev, l_first, r_we;
+    wire [8:0]   l_goal, r_wa;
+    wire [2:0]   r_slot_d, r_slot_i;
+    wire [31:0]  r_wd_d, r_wd_i;
+    cap_ddr u_capd (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
+                    .eof_f(cap_field), .eof_lines(cap_lines), .freeze(vid[1]), .pclk(pclk), .a_valid(ca_valid),
+                    .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
+                    .nfields(f_n), .flines(f_lines));
+    deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal), .latest(f_latest), .par(f_par),
+                   .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .top_f(dcfg[2]),
+                   .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(d_rd_q),
+                   .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa), .r_wd_d(r_wd_d),
+                   .r_wd_i(r_wd_i), .frames(d_frames), .state_o(d_state));
+    generate
+        if (PPC == 1) begin : g_lv
+            lineview u_lv (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .swap(swap), .ev(l_ev), .ev_first(l_first),
+                           .ev_goal(l_goal), .w_clk(pclk), .w_we(r_we), .w_slot_d(r_slot_d), .w_slot_i(r_slot_i),
+                           .w_wa(r_wa), .w_wd_d(r_wd_d), .w_wd_i(r_wd_i), .r(l_r), .g(l_g), .b(l_b));
+        end else begin : g_nolv
+            assign l_r = 8'd0;
+            assign l_g = 8'd0;
+            assign l_b = 8'd0;
+            assign l_ev = 1'b0;
+            assign l_first = 1'b0;
+            assign l_goal = 9'd0;
+        end
+    endgenerate
+    reg [29:0] dst_s0, dst_s;
+    always @(posedge clk) begin
+        dst_s0 <= {d_frames, d_state, f_latest, f_n};
+        dst_s <= dst_s0;
+    end
+    reg [18:0] ddr_s0, ddr_s;
+    always @(posedge clk) begin
+        ddr_s0 <= {dll_step, cal_info, dm_done, cal_fail, ddr_ok};
+        ddr_s <= ddr_s0;
+    end
+
     wire [31:0] f0, f1, f2, f3, f4;
     fmeter u_f0 (.clk(clk), .tick(tick), .f(pll_clk2), .count(f0));
     fmeter u_f1 (.clk(clk), .tick(tick), .f(in_llc), .count(f1));
@@ -382,7 +507,11 @@ module top (
             8'h31: rdata <= {cap_s[22], 9'd0, cap_s[21:0]};
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
+            8'h35: rdata <= {16'd0, dcfg};
+            8'h36: rdata <= {dst_s[29:14], dst_s[13:6], 2'd0, dst_s[5:0]};
             8'h38: rdata <= {grab_done_s, 15'd0, grab_cfg};
+            8'h40: rdata <= {8'd0, ddr_s[18:3], 5'd0, ddr_s[2:0]};
+            8'h48, 8'h49, 8'h4A, 8'h4B, 8'h4C, 8'h4D, 8'h4E, 8'h4F: rdata <= dm_rdata[32 * addr[2:0] +: 32];
             8'h39: rdata <= {8'd0, grab_rd};
             default: rdata <= 32'd0;
         endcase

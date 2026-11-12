@@ -28,6 +28,9 @@ module vcap #(
     output reg        we,
     output reg [16:0] wa,
     output reg [31:0] wd,
+    output reg [9:0]  w_ln,             // with we: the line and the pair of the word
+    output reg [8:0]  w_col,
+    output reg        eof = 1'b0,       // a clock: a field's picture is over (lines, field tell of it)
     output reg        f_we,             // at a line's start: the field (F) the store's line f_wa is of
     output reg [7:0]  f_wa,
     output reg        f_wd,
@@ -69,6 +72,7 @@ module vcap #(
         wd16 <= wide_s0;
         we <= 1'b0;
         f_we <= 1'b0;
+        eof <= 1'b0;
         if (trs) begin
             v <= b[5];
             if (!b[4]) begin                        // SAV
@@ -88,6 +92,7 @@ module vcap #(
                 in_line <= 1'b0;
                 if (b[5] && !v) begin               // the field's picture is over
                     lines <= ln + (in_line ? 10'd1 : 10'd0);
+                    eof <= 1'b1;
                     field <= b[6];
                     fields <= fields + 16'd1;
                 end
@@ -104,6 +109,8 @@ module vcap #(
             end else begin
                 wd <= {cb, y0, s[15:8], b};
                 wa <= base + {8'd0, col};
+                w_ln <= ln;
+                w_col <= col;
                 we <= !frz && col < 9'd360 && ln < LINES;
                 col <= col + 9'd1;
             end
@@ -118,6 +125,8 @@ module vcap #(
                 2'd3: begin
                     wd <= {cb, y0, cr, b};
                     wa <= base + {8'd0, col};
+                w_ln <= ln;
+                w_col <= col;
                     we <= !frz && col < 9'd360 && ln < LINES;
                     col <= col + 9'd1;
                 end

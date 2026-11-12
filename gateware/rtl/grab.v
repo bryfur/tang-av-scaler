@@ -21,11 +21,13 @@ module grab (
     reg [10:0] x, y, want;
     reg [3:0]  k;
     reg [23:0] d_q;
-    wire       hit = de && y == want && live && !k[3];
+    reg        yeq;
+    wire       hit = de && yeq && live && !k[3];
     always @(posedge clk) begin
         de_q <= de;
         vs_q <= vs;
         d_q <= rgb;
+        yeq <= y == want;
         a0 <= arm;
         a1 <= a0;
         a2 <= a1;
@@ -44,11 +46,11 @@ module grab (
             k <= 4'd0;
             want <= row;
         end else if (live && de_q && !de) begin
-            if (y == want) begin
+            if (yeq) begin
                 k <= k + 4'd1;
                 want <= want + {7'd0, step};
             end
-            if (k[3] || y == 11'd1079 || (y == want && k == 4'd7)) begin
+            if (k[3] || y == 11'd1079 || (yeq && k == 4'd7)) begin
                 live <= 1'b0;
                 done <= 1'b1;
             end

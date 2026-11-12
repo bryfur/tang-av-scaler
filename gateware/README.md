@@ -8,7 +8,7 @@ State on the board (2026-11-12):
 
 | | |
 |---|---|
-| Component in, HDMI out | 480i YPbPr -> 1080p60 (59.94 Hz), in colour: one field, 720 x 240, shown 1440 x 1080 (4:3), the two fields half a line apart. The output is not locked to the input (a slow tear). 480p, 720p, 1080i: decoder settings not found yet. |
+| Component in, HDMI out | 480i YPbPr -> 1080p60 (59.94 Hz), in colour: the fields kept in the SOM's DDR3, deinterlaced motion adaptive to 720 x 480 from the last four (weave where nothing moves, the lines' mean where something does), shown 1440 x 1080 (4:3, nearest pixel for now). No tear: a frame is made of whole fields (one repeated or dropped as the rates drift). 480p, 720p, 1080i: decoder settings not found yet. |
 | HDMI out | 1080p60 and 2160p30 clean on the sink's own counters (SN65DP159 as a redriver: as a retimer it corrupts 2.97 Gb/s). 2160p60: the link is clean and the sink sees scrambling, no picture yet. |
 | Audio | not started |
 
@@ -31,13 +31,17 @@ openFPGALoader 1.1.1 cannot parse a compressed one. It goes into the FPGA's SRAM
 | `rtl/pattern.v` | video timing and the test picture, 1, 2 or 4 pixels a clock |
 | `rtl/hdmi_scr.v`, `tmds.v` | HDMI's framing and HDMI 2.0's scrambling (from public patents: not proven on a sink), TMDS coding N characters a clock |
 | `rtl/gtx_quad.v` | the transceiver quad (generated: `tools/mkgtx.py`); its register file by `gowin/serdes.py`, no IDE |
-| `rtl/vcap.v`, `fbram.v`, `fbview.v` | the ADV7181D's pixel port into a frame store, the store as a 1080p picture |
+| `rtl/vcap.v`, `cap_ddr.v` | the ADV7181D's pixel port decoded, its fields into the DDR3 (eight slots, a bank each) |
+| `rtl/deint.v`, `lineview.v` | the motion adaptive deinterlacer (a line when the output wants it), its lines through a ring of eight as the 1080p picture |
+| `rtl/ddr3/`, `ddr_arb.v` | the DDR3: our own PHY, calibration and controller (from the fpc console; `pll_init.v` is Sipeed's, Apache 2.0), its port shared by the capture, the picture and the host |
+| `rtl/grab.v` | rows of the picture as sent, for the host to read: `tools/grab.py OUT.png` shows the output with no display |
 | `gowin/` | the build: `avb.tcl` makes the project, `csr_result.py` hands it the transceivers' register file, `run.tcl` runs it; pins `avb.cst`, clocks `avb.sdc` |
 | `tools/avb.py` | the monitor from the host: registers, the four I2C buses, the meters |
+| `tools/ddr.py` | the DDR3's calibration state, a write and read test through the monitor |
 | `tools/video.py`, `adv.py` | the component input: the ADV7181D's settings (and what was learnt about them), the capture's state, raw samples of the pixel port |
 | `tools/hdmi.py`, `clkgen.py`, `edid.py`, `scdc.py`, `linkq.py`, `ddcci.py` | HDMI up; the MS5351M; the sink's EDID, SCDC, error counters, and its own measure of the picture rate |
 | `tools/load.sh` | a bitstream into the SRAM through the XIAO's USB-JTAG bridge |
-| `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `video_tb.py [wide] [bottom]` |
+| `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `deint_tb.py [NFIELDS]` (the whole picture path with a model of the DDR3, against `model.py`) |
 | `test/loop.v` | a UART loop-back, to test the XIAO's wiring |
 
 The monitor's port: `AVB_TTY` (a serial device, or `tcp:HOST[:PORT]`), else the Wi-Fi link
