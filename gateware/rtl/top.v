@@ -387,8 +387,8 @@ module top (
         end
         if (we && addr == 8'h39)
             grab_ra <= wdata[13:0];
-        else if (addr == 8'h39 && u_mon.state == 4'd6)      // read: on to the next
-            grab_ra <= grab_ra + 14'd1;
+        else if (addr == 8'h39 && u_mon.state == 4'd6)      // read: on to the next (the step's next column)
+            grab_ra <= grab_ra + (grab_cfg[15:12] == 4'd0 ? 14'd1 : {10'd0, grab_cfg[15:12]});
     end
     grab u_grab (.clk(tx_clk), .de(v_de[0]), .vs(v_vs[0]), .rgb({v_r[7:0], v_g[7:0], v_b[7:0]}), .row(grab_cfg[10:0]),
                  .step(grab_cfg[15:12]), .arm(grab_arm), .done(grab_done), .rclk(clk), .ra(grab_ra), .rd(grab_rd));

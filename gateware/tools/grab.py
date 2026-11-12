@@ -2,7 +2,7 @@
 """grab.py [OUT.png] [--step N] [--rows A:B] [--width W]: the picture as the FPGA sends it (rtl/grab.v),
 read back through the monitor: with no display to look at.  Eight rows a frame, so a moving picture
 is torn between groups of rows; --step N takes every Nth row and column (default 2: 960 x 540 in
-about half a minute)."""
+about a quarter of one)."""
 import sys
 import time
 
@@ -25,8 +25,9 @@ def rows8(m, row, step, width):
     for k in range(8):
         m.w(GRABD, k << 11)
         buf = b""
-        for i in range(0, width, 240):
-            n = min(240, width - i)
+        cols = (width + step - 1) // step       # (a read moves on by the step)
+        for i in range(0, cols, 240):
+            n = min(240, cols - i)
             m.out += bytes([ord("R"), GRABD]) * n
             m.flush()
             t, want = time.time(), len(buf) + 4 * n
@@ -35,7 +36,7 @@ def rows8(m, row, step, width):
                 if time.time() - t > 5:
                     sys.exit("grab: the monitor stopped answering (%d of %d bytes)" % (len(buf), want))
                 time.sleep(0.001)
-        out.append([(buf[4 * i + 2], buf[4 * i + 1], buf[4 * i]) for i in range(width)])
+        out.append([(buf[4 * i + 2], buf[4 * i + 1], buf[4 * i]) for i in range(cols)])
     return out
 
 
@@ -45,7 +46,7 @@ def frame(m, step=2, first=0, last=1080, width=1920):
     for row in range(first, last, 8 * step):
         for line in rows8(m, row, step, width):
             if y < img.height:
-                for x, p in enumerate(line[::step]):
+                for x, p in enumerate(line):
                     img.putpixel((x, y), p)
                 y += 1
     return img

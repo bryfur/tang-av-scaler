@@ -31,7 +31,7 @@ static size_t tail_head, tail_used;
 /* the link's own exchange with the monitor (console_xfer): the UART's writers one at a time; the
  * FPGA's bytes to mon_buf while mon_want of them are waited for */
 static SemaphoreHandle_t mon_lock, mon_done;
-static uint8_t mon_buf[16];
+static uint8_t *volatile mon_buf;       /* (the caller's) */
 static volatile size_t mon_want, mon_n;
 
 static void from_fpga(void *arg)
@@ -164,19 +164,16 @@ bool console_busy(void)
 bool console_xfer(const uint8_t *tx, size_t txn, uint8_t *rx, size_t rxn, int ms)
 {
     bool ok = true;
-    if (rxn > sizeof mon_buf)
-        return false;
     xSemaphoreTake(mon_lock, portMAX_DELAY);
     xSemaphoreTake(mon_done, 0);
     mon_n = 0;
+    mon_buf = rx;
     mon_want = rxn;
     uart_write_bytes(FPGA_UART, tx, txn);
     state.to_fpga += txn;
     if (rxn) {
         ok = xSemaphoreTake(mon_done, pdMS_TO_TICKS(ms)) == pdTRUE;
         mon_want = 0;
-        if (ok)
-            memcpy(rx, mon_buf, rxn);
     }
     xSemaphoreGive(mon_lock);
     return ok;

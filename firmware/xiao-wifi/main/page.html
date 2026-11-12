@@ -84,6 +84,12 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="btns"><button type="button" onclick="video('again=1')">Bring up again</button></div>
 </section>
 </form>
+<section class="full"><h2>Screen capture</h2>
+<div class="f"><span>The picture going out, read back from the FPGA<small>the picture is held still while it is read</small></span>
+ <span class="seg"><label><input type="radio" name="gs" value="4" checked><span>480 &times; 270 &middot; 7 s</span></label><label><input type="radio" name="gs" value="2"><span>960 &times; 540 &middot; 25 s</span></label><label><input type="radio" name="gs" value="1"><span>1920 &times; 1080 &middot; 90 s</span></label></span>
+ <button class="pri" id="gb" onclick="grab()">Capture</button></div>
+<div id="gw" style="display:none"><img id="gi" alt="capture" style="width:100%;border-radius:8px;display:block;background:#000"><div class="btns"><a id="gl" download="avscaler.png"><button type="button">Save as PNG</button></a><small id="gt" style="align-self:center;color:var(--dim)"></small></div></div>
+</section>
 <section class="full"><h2>Status</h2><table><tbody id="vs"></tbody><tbody id="st"></tbody></table></section>
 <section><h2>Wi-Fi network</h2>
 <form id="wf" class="stack"><input type="text" name="ssid" placeholder="Network name" required>
@@ -161,5 +167,19 @@ async function ota(){
   msg('uploading '+f.size+' bytes...');
   try{msg(await (await fetch('/api/ota',{method:'POST',body:f})).text())}catch(e){msg('the upload failed')}
 }
-status(); setInterval(status,3000);
+// a capture: the link answers nothing else meanwhile
+let grabbing=false;
+async function grab(){
+  if(grabbing)return;grabbing=true;$('gb').disabled=true;const t0=Date.now(),step=document.querySelector('[name=gs]:checked').value;
+  const tick=setInterval(()=>$('gb').textContent='Capturing '+Math.round((Date.now()-t0)/1000)+' s',500);
+  try{
+    const r=await fetch('/api/grab?step='+step+'&t='+t0);if(!r.ok)throw await r.text();
+    const bmp=await createImageBitmap(await r.blob()),c=document.createElement('canvas');
+    c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);
+    const u=c.toDataURL('image/png');$('gi').src=u;$('gl').href=u;$('gw').style.display='';
+    $('gt').textContent=bmp.width+' x '+bmp.height+' in '+Math.round((Date.now()-t0)/1000)+' s';
+  }catch(e){msg('capture failed: '+e)}
+  clearInterval(tick);$('gb').textContent='Capture';$('gb').disabled=false;grabbing=false;
+}
+status(); setInterval(()=>{if(!grabbing)status()},3000);
 </script></body></html>
