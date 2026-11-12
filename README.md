@@ -36,6 +36,61 @@ and a capture device. The table below is what it does now, on the board.
 | On screen | An on-screen display: what comes in and goes out, what is done to the picture, the delay, the lock, the FPGA's temperature. |
 | Control | A web page on the XIAO: every setting (applied as it is changed, kept across power cycles), status, a screen capture of the output read back from the FPGA, firmware update over Wi-Fi. |
 
+## What it looks like
+
+Two frozen frames of Killzone (PS2, its widescreen mode), each in and out. "The plain way" is the
+two 480i fields as the console sent them, woven into a frame and stretched to 1080p (bilinear),
+which is about what a simple scaler or a display does. "The scaler" is its 1080p output (motion
+adaptive deinterlacing, noise reduction medium, SMAA with diagonals and corners at edge threshold
+12, FSR 1 with sharpening 8/16). Nothing went through a camera or a capture device: the fields are
+read out of the FPGA's memory and the output is read back from its last stage, pixel for pixel
+(`gateware/tools/still.py`).
+
+### Whole frames
+
+All are 1920 x 1080 and the page shows them smaller: click one for every pixel.
+
+In the game, the plain way:
+
+[![In the game, the plain way](docs/compare/game-plain.png)](docs/compare/game-plain.png)
+
+The scaler:
+
+[![In the game, the scaler](docs/compare/game-scaler.png)](docs/compare/game-scaler.png)
+
+A results screen, the plain way:
+
+[![A results screen, the plain way](docs/compare/scores-plain.png)](docs/compare/scores-plain.png)
+
+The scaler:
+
+[![A results screen, the scaler](docs/compare/scores-scaler.png)](docs/compare/scores-scaler.png)
+
+The game's frame with its left half the plain way and its right half the scaler's:
+
+[![The left half the plain way, the right half the scaler's](docs/compare/game-split.png)](docs/compare/game-split.png)
+
+The frames as they came, the fields woven and nothing else (720 x 480):
+[the game](docs/compare/game-480i.png), [the results screen](docs/compare/scores-480i.png).
+
+### Parts, three times the size
+
+![The tower and its guy wires](docs/compare/tower.png)
+
+![Palms behind the crosshair](docs/compare/palms.png)
+
+![Hanging foliage](docs/compare/foliage.png)
+
+![The gun](docs/compare/gun.png)
+
+![HUD text](docs/compare/hud-text.png)
+
+![The ammunition counter](docs/compare/ammo.png)
+
+![The results screen's text](docs/compare/scores-text.png)
+
+![The results screen's buttons](docs/compare/scores-buttons.png)
+
 ## How it is put together
 
 - **The picture's path is logic** (`gateware/rtl/`): every pixel, at 148.5 MHz out. Each block has a

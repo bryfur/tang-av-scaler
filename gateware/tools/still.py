@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""still.py [OUTDIR] [--again]: stills for comparing what comes in with what goes out, of one frozen frame:
+"""still.py [OUTDIR] [--again] [--at X,Y ...]: stills for comparing what comes in with what goes out, of one frozen frame:
 
     in_480i_720x480.png     the two newest fields as the console sent them (the capture's samples,
                             read out of the DDR3), woven into one frame, nothing else done
@@ -10,7 +10,9 @@
     split_1920x1080.png     the left half of the plain one beside the right half of the scaler's
     compare_N.png           parts of the last two side by side, enlarged
 
---again: only the comparisons, from the stills already in OUTDIR.
+--again: only the comparisons, from the stills already in OUTDIR.  --at X,Y (as often as wanted):
+the parts compared are the 320 x 180 ones with these top left corners in the 1080p picture (else
+the four with most detail).
 
 The link (AV_HOST, default avscaler.local) freezes the picture and reads the output back; the fields
 come through the monitor (AVB_TTY, default the link's console port).  The on-screen text is off
@@ -47,17 +49,28 @@ def field(m, slot, lines=240):
     out = []
     for n0 in range(0, lines, 2):
         todo = range(n0, min(n0 + 2, lines))
-        for n in todo:
-            for c in range(45):
-                m.out += b"W" + bytes([DDR]) + (slot << 22 | n << 7 | c).to_bytes(4, "little")
-                m.out += bytes([ord("R"), DDR]) + b"".join(bytes([ord("R"), DDRD + k]) for k in range(8))
-        m.flush()
-        buf, t, want = b"", time.time(), len(todo) * 45 * 36
-        while len(buf) < want:
-            buf += m.read_raw()
-            if time.time() - t > 5:
-                sys.exit("still: the monitor stopped answering (field line %d)" % n0)
-            time.sleep(0.001)
+        want = len(todo) * 45 * 36
+        for attempt in range(10):
+            for n in todo:
+                for c in range(45):
+                    m.out += b"W" + bytes([DDR]) + (slot << 22 | n << 7 | c).to_bytes(4, "little")
+                    m.out += bytes([ord("R"), DDR]) + b"".join(bytes([ord("R"), DDRD + k]) for k in range(8))
+            m.flush()
+            buf, t = b"", time.time()
+            while len(buf) < want and time.time() - t < 1.5:
+                buf += m.read_raw()
+                time.sleep(0.001)
+            if len(buf) == want:
+                break
+            # a byte was lost on the way (the link is a radio): the monitor drops a command cut
+            # short after 40 ms of silence, the picture is frozen, so the lines are asked for again
+            quiet = time.time()
+            while time.time() - quiet < 0.3:
+                if m.read_raw():
+                    quiet = time.time()
+                time.sleep(0.005)
+        else:
+            sys.exit("still: the monitor stopped answering (field line %d)" % n0)
         for i in range(len(todo)):
             words = [int.from_bytes(buf[36 * (45 * i + c) + 4 + 4 * k:][:4], "little") for c in range(45) for k in range(8)]
             out.append([(w >> 24, w >> 16 & 255, w >> 8 & 255, w & 255) for w in words])
@@ -83,12 +96,13 @@ def line_rgb(words):
 
 
 def main():
-    a = [v for v in sys.argv[1:] if v != "--again"]
+    at = [tuple(int(t) for t in v.split(",")) for k, v in enumerate(sys.argv[1:]) if k and sys.argv[k] == "--at"]
+    a = [v for k, v in enumerate(sys.argv[1:]) if not v.startswith("--") and (k == 0 or sys.argv[k] != "--at")]
     out = a[0] if a else "stills"
     os.makedirs(out, exist_ok=True)
     if "--again" in sys.argv:           # the comparisons made again from the stills that are there
         basic, ours = (Image.open(os.path.join(out, n)).convert("RGB") for n in ("in_basic_1920x1080.png", "out_1920x1080.png"))
-        compare(out, basic, ours, basic.getpixel((100, 540)) != (0, 0, 0) or ours.getpixel((100, 540)) != (0, 0, 0))
+        compare(out, basic, ours, basic.getpixel((100, 540)) != (0, 0, 0) or ours.getpixel((100, 540)) != (0, 0, 0), at)
         return
     was = api()["set"]
     api(osd=0, freeze=1)
@@ -125,7 +139,7 @@ def main():
     basic = Image.new("RGB", (1920, 1080))
     basic.paste(frame.crop((x0, y0, x0 + w, y0 + h)).resize((ow, 1080), Image.BILINEAR), ((1920 - ow) // 2, 0))
     basic.save(os.path.join(out, "in_basic_1920x1080.png"))
-    compare(out, basic, ours, wide)
+    compare(out, basic, ours, wide, at)
     print("%s: in_480i_720x480.png, in_basic_1920x1080.png, out_1920x1080.png, split_1920x1080.png, compare_1..4.png" % out)
 
 
@@ -141,7 +155,7 @@ def label(im, xy, text):
     d.text((xy[0] + 8, xy[1] + 4), text, font=font, fill=(255, 255, 255))
 
 
-def compare(out, basic, ours, wide):
+def compare(out, basic, ours, wide, at=()):
     """the plain picture and the scaler's: the frame's left half of the one beside the right half of
     the other; and parts of both, three times the size, side by side: where the picture has most detail"""
     A, B = "480i in: fields woven, stretched", "1080p out: the scaler"
@@ -154,8 +168,10 @@ def compare(out, basic, ours, wide):
     g = ours.convert("L").resize((48, 27))
     cells = sorted(((abs(g.getpixel((x, y)) - g.getpixel((x + 1, y))) + abs(g.getpixel((x, y)) - g.getpixel((x, y + 1))), x, y)
                     for y in range(2, 24, 4) for x in range(8 if not wide else 2, 40 if not wide else 46, 6)), reverse=True)
-    for n, (_, cx, cy) in enumerate(cells[:4]):
-        bx, by = min(max(cx * 40 - 140, 0), 1920 - 320), min(max(cy * 40 - 90, 0), 1080 - 180)
+    # (or the parts named: --at X,Y their top left corners in the 1920 x 1080 picture)
+    corners = list(at) or [(cx * 40 - 140, cy * 40 - 90) for _, cx, cy in cells[:4]]
+    for n, (bx, by) in enumerate(corners):
+        bx, by = min(max(bx, 0), 1920 - 320), min(max(by, 0), 1080 - 180)
         box = (bx, by, bx + 320, by + 180)
         cmp_ = Image.new("RGB", (2 * 960 + 20, 540), "white")
         cmp_.paste(basic.crop(box).resize((960, 540), Image.NEAREST), (0, 0))
