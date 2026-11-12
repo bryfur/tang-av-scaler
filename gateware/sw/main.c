@@ -137,16 +137,20 @@ void *memcpy(void *d, const void *s, size_t n)
 
 int main(void)
 {
-    uint32_t t_sec, t_osd, n = 0;
+    uint32_t t_sec, t_osd, t_lock, n = 0;
 
     REG(R_CPUM + 1) = LINK_MAGIC;
     REG(R_SPIS) = 1;                    /* (a request from before this began: gone) */
     st.build = BUILD;
     osd_init();
     board_init();
-    t_sec = t_osd = ms();
+    t_sec = t_osd = t_lock = ms();
     for (;;) {
         service();
+        if (ms() - t_lock >= 100) {
+            t_lock = ms();
+            board_lock();
+        }
         if (ms() - t_osd >= 250) {
             t_osd += 250;
             REG(R_CPUM) = ++n;

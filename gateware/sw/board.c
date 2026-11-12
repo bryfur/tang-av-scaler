@@ -6,6 +6,10 @@
  *    59.94 Hz picture), the SN65DP159 a redriver, the display's SCDC, the lanes out of reset, the
  *    ADV7181D to 480i component through its CP core;
  *  - the settings into the scaler's registers;
+ *  - the frame lock: the output's frames kept in step with the input's fields: the clock chip's
+ *    frequency trimmed, ten times a second, so that a frame is begun LOCK_AT after a field's end
+ *    (the scaler's LAT register says how long after it was): no field shown twice or left out, and
+ *    the picture's delay the same all the time;
  *  - each second: what comes in and goes out; the part of the picture shown (all, as set, or where
  *    the fields have picture: border.v); the decoder's sampling phase (as set, or tuned: every
  *    phase tried on a still picture against focus.v, the sharpest kept).
@@ -23,7 +27,10 @@ static uint32_t grab_ms;                /* a screen capture holds the fields sti
 static bool grabbing;
 
 /* ---- the MS5351M (Si5351A's registers): CLK0, CLK1 (inverted), CLK2 at 891 MHz / 6 = 148.5 MHz,
- * or 148.5 / 1.001 ---- */
+ * or 148.5 / 1.001.  The VCO / 25 MHz = 35 + b / PLL_C: b's steps are 0.028 ppm, for the frame lock ---- */
+#define PLL_C   1000000u
+static uint32_t pll_b0;                 /* b for the rate itself: 640000 (35.64), or 604396 (35.64 / 1.001) */
+static uint8_t pll_now[8];              /* the PLL's eight registers as they are */
 static void reg8(uint8_t *r, uint32_t p1, uint32_t p2, uint32_t p3)
 {
     r[0] = p3 >> 8;
@@ -36,13 +43,35 @@ static void reg8(uint8_t *r, uint32_t p1, uint32_t p2, uint32_t p3)
     r[7] = p2;
 }
 
+/* the PLL's registers for b = pll_b0 + trim */
+static void pll_regs(uint8_t *r, int32_t trim)
+{
+    const uint32_t b = pll_b0 + trim, f = (uint32_t)((uint64_t)128 * b / PLL_C);
+    reg8(r, 128 * 35 + f - 512, 128 * b - PLL_C * f, PLL_C);
+}
+
+/* the clock moved by trim steps of b: the registers that change written (and seen to be) */
+static bool pll_trim(int32_t trim)
+{
+    uint8_t r[8];
+    bool ok = true;
+    pll_regs(r, trim);
+    for (int k = 0; k < 8; k++)
+        if (r[k] != pll_now[k]) {
+            ok &= i2c_sure(BUS_PLL, 0x60, 26 + k, r[k]);
+            pll_now[k] = r[k];
+        }
+    return ok;
+}
+
 static bool clkgen(bool ntsc)
 {
-    /* the VCO / 25 MHz = 35 + b/c: 35.64 (16/25), or 35.64 / 1.001 (55/91) */
-    const uint32_t a = 35, b = ntsc ? 55 : 16, c = ntsc ? 91 : 25, f = 128 * b / c;
     uint8_t pll[8], msd[8];
     bool ok = true;
-    reg8(pll, 128 * a + f - 512, 128 * b - c * f, c);
+    pll_b0 = ntsc ? 604396 : 640000;
+    pll_regs(pll, 0);
+    for (int k = 0; k < 8; k++)
+        pll_now[k] = pll[k];
     reg8(msd, 128 * 6 - 512, 0, 1);
     ok &= i2c_sure(BUS_PLL, 0x60, 3, 0xFF);                 /* outputs off */
     for (int k = 0; k < 8; k++)
@@ -194,6 +223,58 @@ static uint8_t crop_was = 255, wide_was, phase_was;
 static int counted;                     /* seconds the border has been looked for */
 static int settle;                      /* seconds until the decoder's picture is to be trusted (after a bring-up) */
 
+/* ---- the frame lock ---- */
+#define LOCK_AT    50                   /* a frame begun this long after a field's end: 0.5 ms (in 10 us) */
+#define LOCK_MAX   300                  /* ppm either way at most */
+static int32_t lock_i;                  /* the errors' sum */
+static int32_t lock_u;                  /* the trim now, ppm x 256 */
+static int lock_good;                   /* steps in a row near enough */
+
+void board_lock(void)
+{
+    uint32_t lat = REG(R_LAT);
+    int32_t e, u;
+    if (!set.flock || !set.on || st.host) {
+        if (lock_u) {
+            lock_u = lock_i = 0;
+            pll_trim(0);
+        }
+        st.lock = 0, st.lock_err = 0, st.lock_ppm10 = 0;
+        return;
+    }
+    if (st.fields_s < 45 || !st.up_ok || lat != REG(R_LAT)) {
+        if (st.fields_s < 45)
+            st.lock = 1;                /* (the clock as it was: the input may come back) */
+        return;
+    }
+    /* how far the frame's start is from where it should be: the nearer way round a field's time */
+    e = (int32_t)(lat & 0xFFF) - LOCK_AT;
+    while (e > 834)
+        e -= 1668;
+    while (e < -834)
+        e += 1668;
+    /* late (the output slow): the clock up.  4 ppm for each 10 us, and the sum's part (not while
+     * the trim is at its end); 25 ppm a step at most */
+    u = 1024 * e + 10 * lock_i;
+    if (u > LOCK_MAX * 256)
+        u = LOCK_MAX * 256;
+    else if (u < -LOCK_MAX * 256)
+        u = -LOCK_MAX * 256;
+    else
+        lock_i += e;
+    if (u > lock_u + 25 * 256)
+        u = lock_u + 25 * 256;
+    if (u < lock_u - 25 * 256)
+        u = lock_u - 25 * 256;
+    lock_u = u;
+    /* (a ppm is 35.6 steps of b) */
+    pll_trim((int32_t)(((int64_t)u * 9115) >> 16));
+    lock_good = e >= -5 && e <= 5 ? lock_good + 1 : 0;
+    st.lock = lock_good >= 20 ? 3 : 2;
+    st.lock_err = e;
+    st.lock_ppm10 = u * 10 / 256;
+}
+
 static void bringup(void)
 {
     uint32_t mode = REG(R_MODE);
@@ -228,6 +309,7 @@ static void bringup(void)
         phase_was = set.phase;
     }
     picture();
+    lock_u = lock_i = lock_good = 0;
     st.up_ok = ok;
     st.ups++;
     want_measure = true;                /* (the part shown stays until it is found again) */

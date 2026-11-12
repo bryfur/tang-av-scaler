@@ -50,12 +50,13 @@ struct link_settings {
     uint8_t dn;             /* the sharpening leaves noise alone */
     uint8_t phase;          /* the decoder's sampling phase, 0 to 31 */
     uint8_t osd;            /* the on-screen text */
-    uint8_t rsvd[3];
+    uint8_t flock;          /* the output's frames kept in step with the input's fields (the clock trimmed) */
+    uint8_t rsvd[2];
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
 
 #define LINK_SETTINGS_DEFAULT { .on = 1, .ntsc = 1, .thr = 6, .aa = 1, .aa_thr = 12, .sharp = 8, .audio = 1, \
-                                .aa_diag = 1, .aa_corner = 1, .crop = 1, .nr = 2, .dn = 1, .crop_w = 720, .crop_h = 480 }
+                                .aa_diag = 1, .aa_corner = 1, .crop = 1, .nr = 2, .dn = 1, .flock = 1, .crop_w = 720, .crop_h = 480 }
 
 struct link_status {
     uint32_t magic;         /* LINK_MAGIC */
@@ -75,6 +76,11 @@ struct link_status {
     uint16_t show_x, show_w, show_y, show_h;    /* the part shown */
     int16_t temp4;          /* the chip's temperature, degrees C x 4 (-32768: not measured) */
     uint16_t delay_us10;    /* a field's end to its lines shown, in 10 us */
+    uint8_t lock;           /* the frame lock: 0 off, 1 no input to follow, 2 getting there, 3 in step */
+    uint8_t rsvd;
+    int16_t lock_err;       /* how far the frame's start is from where it should be, in 10 us */
+    int16_t lock_ppm10;     /* the clock's trim, in tenths of a ppm */
+    uint16_t rsvd2;
     struct link_settings set;
 };
 

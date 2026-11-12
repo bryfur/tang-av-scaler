@@ -138,11 +138,18 @@ void osd_update(void)
     str("DELAY ");
     if (in) {
         fix(st.delay_us10 / 10, 1);
-        str(" ms  ");
+        str(" ms ");
         fix(st.delay_us10 * 100u / 1668, 2);    /* (in frames of 16.68 ms) */
-        str(" frames  ");
+        str(" fr ");
         num(st.frames_s, 1);
         str(" fps");
+        if (st.lock >= 2) {
+            int p = st.lock_ppm10;
+            str(st.lock == 3 ? "  LOCKED " : "  locking ");
+            put(p < 0 ? '-' : '+');
+            fix(p < 0 ? -p : p, 1);
+            str("ppm");
+        }
     } else
         str("-");
 

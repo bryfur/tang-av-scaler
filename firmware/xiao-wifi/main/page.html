@@ -79,6 +79,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
 </section>
 <section><h2>Output</h2>
+<div class="f"><span>Frame lock<small id="lk">the output kept in step with the input</small></span><input class="sw" type="checkbox" name="lock"></div>
 <div class="f"><span>On-screen display<small>what comes in, what is done to it, the delay</small></span><input class="sw" type="checkbox" name="osd"></div>
 <div class="f"><span>Sound over HDMI<small>off sends DVI framing</small></span><input class="sw" type="checkbox" name="audio"></div>
 <div class="f"><span>Frame rate</span><span class="seg"><label><input type="radio" name="ntsc" value="1"><span>59.94 Hz</span></label><label><input type="radio" name="ntsc" value="0"><span>60 Hz</span></label></span></div>
@@ -142,6 +143,7 @@ async function vstat(){
     (v.temp_c>-100?pill(v.temp_c<85?'ok':'warn','FPGA '+v.temp_c.toFixed(1)+' &deg;C'):'');
   $('tn').textContent=['where in a pixel the decoder samples; Tune tries each on a still picture (pause the game)','tuning: about ten seconds...','tuned: the sharpest is '+(v.tune_gain-100)+' % sharper than the worst','the picture moved while tuning: pause the game and try again','no picture to tune on'][v.tune]||'';
   if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
+  $('lk').textContent=['the output kept in step with the input','no input to follow','getting in step: '+(v.lock_us/1000).toFixed(2)+' ms to go, clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm','in step (clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm): every field shown once, the delay steady'][v.relay?v.lock:0];
   $('shown').textContent='showing '+v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2];
   $('vs').innerHTML=
     row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':

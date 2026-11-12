@@ -53,9 +53,10 @@ struct scaler_settings {
     uint8_t nr;         /* temporal noise reduction where the picture is still: 0 none, 1 to 3 */
     bool dn;            /* the sharpening leaves noise alone */
     uint8_t phase;      /* the decoder's sampling phase (its DLL: 0 to 31) */
-    bool osd;           /* the on-screen text (the FPGA's CPU writes it) (new settings go at the end: the
-                         * ones kept in flash are read as far as they go; a byte of padding the compiler
-                         * left at the end was kept too, as 0, and is the next setting's first value) */
+    bool osd;           /* the on-screen text (the FPGA's CPU writes it) */
+    bool nolock;        /* the output NOT kept in step with the input (so said because this byte was
+                         * padding in what older firmware kept: 0, the lock on) (new settings go at the
+                         * end: the ones kept in flash are read as far as they go) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
@@ -74,6 +75,9 @@ struct scaler_state {
     bool cpu;           /* the FPGA's CPU runs its program */
     bool relay;         /* ... and the scaler: the link relays (else the link runs it itself, the old way) */
     uint32_t cpu_build; /* the program's time (gateware/sw) */
+    uint8_t lock;       /* the frame lock: 0 off, 1 no input to follow, 2 getting there, 3 in step */
+    int16_t lock_err;   /* how far the frame's start is from where it should be, in 10 us */
+    int16_t lock_ppm10; /* the clock's trim, in tenths of a ppm */
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
 void link_start(void);
