@@ -23,6 +23,10 @@ pre{background:#111;color:#ddd;padding:.6em;overflow:auto;max-height:22em;font-s
 <label><input type="checkbox" name="aa_corner"> keep corners</label>
 <label><input type="checkbox" name="aa_dbg"> show what it finds</label>
 <label>sharpening <input type="number" name="sharp" min="0" max="16"> /16</label><br>
+<label>shown <select name="crop"><option value="0">the whole signal</option><option value="1">the picture, found (fills the screen)</option><option value="2">as set</option></select></label>
+<label>from <input type="number" name="crop_x" min="0" max="719">, <input type="number" name="crop_y" min="0" max="479"></label>
+<label>size <input type="number" name="crop_w" min="64" max="720"> x <input type="number" name="crop_h" min="64" max="480"></label>
+<button type="button" onclick="video('measure=1')">Find again</button><br>
 <label><input type="checkbox" name="swap"> swap Cb/Cr</label>
 <label><input type="checkbox" name="top1"> top field is F=1</label>
 <label><input type="checkbox" name="pattern"> test picture</label>
@@ -67,7 +71,8 @@ async function vstat(){
       ' &middot; '+yes(v.ok,'brought up','NOT brought up')+' ('+v.ups+'x)')+
     row('Output','1080p &middot; transceiver PLL '+yes(v.pll,'locked','not locked')+' &middot; display '+yes(v.hpd,'present','not seen'))+
     row('Input',v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
-      yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out');
+      yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out')+
+    row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480');
   if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}}
 }
 async function video(body){msg(await (await fetch('/api/video',{method:'POST',body})).text());vfill=true;vstat()}

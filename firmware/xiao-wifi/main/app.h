@@ -45,8 +45,11 @@ struct scaler_settings {
     bool audio;         /* HDMI's data islands: the sound and the InfoFrames (else DVI's plain blanking) */
     bool aa_dbg;        /* what SMAA finds shown in the picture's place */
     bool aa_diag;       /* SMAA's diagonal patterns */
-    bool aa_corner;     /* SMAA's corners kept (new settings go at the end: the ones kept in flash
-                         * are read as far as they go) */
+    bool aa_corner;     /* SMAA's corners kept */
+    uint8_t crop;       /* the part of the 720 x 480 shown, filling the output: 0 all of it, 1 where the
+                         * picture is found to be (the black round a game's picture left out), 2 as set */
+    uint16_t crop_x, crop_w, crop_y, crop_h;    /* (new settings go at the end: the ones kept in flash
+                                                 * are read as far as they go) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
@@ -56,11 +59,13 @@ struct scaler_state {
     uint32_t build, ups;
     uint16_t pix, lines, fields_s, frames_s;
     uint32_t llc_khz;
+    uint16_t show_x, show_w, show_y, show_h;    /* the part shown now */
 };
 void scaler_start(void);
 void scaler_get(struct scaler_state *s, struct scaler_settings *v);
 void scaler_set(const struct scaler_settings *v);
 void scaler_again(void);
+void scaler_measure(void);      /* where the picture is: found again */
 
 /* wifi.c: the saved network, or the firmware's own access point to be given one */
 void wifi_start(void);

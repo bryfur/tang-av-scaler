@@ -8,6 +8,9 @@
  *    its CP core; the picture's settings (deinterlacing, anti-aliasing, sharpening);
  *  - each second: is it still up (after a reload: again), and what the capture and
  *    the deinterlacer say, for the web page;
+ *  - the part of the picture shown (the scaler fills the output with it): all, as set, or where
+ *    the FPGA finds picture in the fields (border.v: it only grows, so a dark scene takes nothing
+ *    away; found again after a bring-up or when asked);
  *  - the settings (kept in NVS), changed from the web page: POST /api/video.
  *
  * While a host is on the console's TCP port the scaler is left to it (its tools write the same
@@ -29,7 +32,8 @@ static const char *TAG = "scaler";
 
 enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, R_I2C_SH = 0x05, R_FREQ = 0x10,
        R_GT_CTRL = 0x20, R_GT_STAT = 0x21, R_MODE = 0x25, R_HDMI = 0x26, R_VID = 0x30, R_CAP = 0x31,
-       R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36 };
+       R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36,
+       R_GEOM = 0x3A, R_BORDER = 0x3E, R_BORDERL = 0x3F };
 #define MAGIC 0x31425641u
 #define DP_OE (1u << 2)
 #define IN_RESET_N (1u << 3)
@@ -37,9 +41,9 @@ enum { BUS_PLL, BUS_DP, BUS_DDC, BUS_IN };
 
 static struct scaler_state state;
 static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 20, .sharp = 8,
-                                      .audio = true, .aa_diag = true, .aa_corner = true};
+                                      .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480};
 static SemaphoreHandle_t lock;          /* set, state, dirty */
-static bool dirty, again;
+static bool dirty, again, measure;
 
 /* ---- the monitor ---- */
 static uint8_t out[2048];
@@ -252,6 +256,42 @@ static void picture(void)
     flush();
 }
 
+/* the scaler's part of the source (gateware/sim/fsr.py geom()) */
+static void geom(unsigned x0, unsigned cw, unsigned y0, unsigned ch)
+{
+    int32_t dx = (int32_t)((cw * 65536u + 720) / 1440), dy = (int32_t)((ch * 65536u + 540) / 1080);
+    wr(R_GEOM, (uint32_t)((int32_t)(x0 * 65536u) + dx / 2 - 32768 + 4096 - 240 * dx));
+    wr(R_GEOM + 1, (uint32_t)dx);
+    wr(R_GEOM + 2, (uint32_t)((int32_t)(y0 * 65536u) + dy / 2 - 32768));
+    wr(R_GEOM + 3, (uint32_t)dy);
+    flush();
+}
+
+/* where the fields have had picture since the count began, as a part of the frame; false: nowhere
+ * yet, or too little to be a game's whole picture (a dark scene with a few lights) */
+static bool border(uint16_t *b)
+{
+    uint32_t x, l, x2, l2;
+    for (int t = 0; t < 4; t++) {
+        if (!rd(R_BORDER, &x) || !rd(R_BORDERL, &l) || !rd(R_BORDER, &x2) || !rd(R_BORDERL, &l2))
+            return false;
+        if (x == x2 && l == l2)
+            break;
+    }
+    if (x != x2 || l != l2 || !(x >> 31))
+        return false;
+    unsigned x0 = x & 0x1FF, x1 = x >> 16 & 0x1FF, l0 = l & 0x3FF, l1 = l >> 16 & 0x3FF;
+    if (x1 < x0 || l1 < l0 || x1 > 359 || l1 > 239)
+        return false;
+    if (2 * (x1 - x0 + 1) < 560 || 2 * (l1 - l0 + 1) < 380)
+        return false;
+    b[0] = 2 * x0;
+    b[1] = 2 * (x1 - x0 + 1);
+    b[2] = 2 * l0;
+    b[3] = 2 * (l1 - l0 + 1);
+    return true;
+}
+
 static bool bringup(void)
 {
     uint32_t mode, stat, x;
@@ -299,6 +339,9 @@ static bool bringup(void)
 static void task(void *arg)
 {
     bool up_ok = false;
+    uint16_t shown[4] = {0, 720, 0, 480}, want[4];
+    int counted = 0;                    /* seconds the border has been looked for */
+    uint8_t crop_was = 255;
     uint32_t fields_was = 0, frames_was = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
@@ -325,9 +368,43 @@ static void task(void *arg)
                 if (redo || gt != 0xF0F || (ctrl & (IN_RESET_N | DP_OE)) != (IN_RESET_N | DP_OE)) {
                     up_ok = bringup();
                     s.ups++;
+                    crop_was = 255;
                 } else if (dirty)
                     picture();
                 s.ok = up_ok;
+                /* the part shown */
+                struct scaler_settings c;
+                bool again_m;
+                xSemaphoreTake(lock, portMAX_DELAY);
+                c = set;
+                again_m = measure;
+                measure = false;
+                xSemaphoreGive(lock);
+                if (c.crop != crop_was || again_m) {
+                    wr(R_BORDER, 40);           /* (the luma picture is above) */
+                    flush();
+                    counted = 0;
+                    if (c.crop != crop_was)
+                        shown[1] = 0;           /* (set, whatever it was) */
+                    crop_was = c.crop;
+                }
+                want[0] = 0, want[1] = 720, want[2] = 0, want[3] = 480;
+                if (c.crop == 2 && c.crop_w >= 64 && c.crop_h >= 64 && c.crop_x + c.crop_w <= 720 &&
+                    c.crop_y + c.crop_h <= 480)
+                    want[0] = c.crop_x, want[1] = c.crop_w, want[2] = c.crop_y, want[3] = c.crop_h;
+                if (c.crop == 1) {
+                    /* (three seconds of fields first; until then, and with nothing found, as it is) */
+                    if (++counted < 3 || !border(want)) {
+                        if (shown[1] != 0)
+                            memcpy(want, shown, sizeof want);
+                    }
+                }
+                if (memcmp(want, shown, sizeof want)) {
+                    geom(want[0], want[1], want[2], want[3]);
+                    memcpy(shown, want, sizeof shown);
+                    ESP_LOGI(TAG, "shown: %u x %u from %u, %u", want[1], want[3], want[0], want[2]);
+                }
+                s.show_x = shown[0], s.show_w = shown[1], s.show_y = shown[2], s.show_h = shown[3];
                 rd(R_GT_STAT, &gt);
                 rd(R_CAP, &cap);
                 rd(R_FIELDS, &fields);
@@ -388,6 +465,13 @@ void scaler_set(const struct scaler_settings *v)
         nvs_commit(h);
         nvs_close(h);
     }
+}
+
+void scaler_measure(void)
+{
+    xSemaphoreTake(lock, portMAX_DELAY);
+    measure = true;
+    xSemaphoreGive(lock);
 }
 
 void scaler_again(void)

@@ -12,7 +12,8 @@
  *                          the FPGA's SRAM by itself (gowin.c) and answers with what happened
  *   GET  /api/video        JSON: the scaler as the link runs it (scaler.c): the picture in, the settings
  *   POST /api/video        a form, any of: on, ntsc, mode, thr, aa, aa_thr, sharp, swap, top1, pattern, freeze, audio, aa_dbg,
- *                          aa_diag, aa_corner
+ *                          aa_diag, aa_corner, crop (0 all, 1 found, 2 set), crop_x, crop_w, crop_y, crop_h;
+ *                          measure=1: the picture's place found again
  *                          (numbers; 0 or 1 for the switches), again=1 (everything brought up again)
  *   POST /api/restart
  *
@@ -356,7 +357,7 @@ static esp_err_t post_load(httpd_req_t *req)
 
 static esp_err_t get_video(httpd_req_t *req)
 {
-    static char out[720];
+    static char out[960];
     struct scaler_state t;
     struct scaler_settings v;
     scaler_get(&t, &v);
@@ -365,10 +366,12 @@ static esp_err_t get_video(httpd_req_t *req)
                      "{\"host\":%s,\"fpga\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
                      "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
-                     "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d}}",
+                     "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
+                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u},\"shown\":[%u,%u,%u,%u]}",
                      B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
-                     v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner);
+                     v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
+                     v.crop_h, t.show_x, t.show_w, t.show_y, t.show_h);
 #undef B
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, out, n);
@@ -406,8 +409,15 @@ static esp_err_t post_video(httpd_req_t *req)
     NUM("aa_dbg", v.aa_dbg, 1)
     NUM("aa_diag", v.aa_diag, 1)
     NUM("aa_corner", v.aa_corner, 1)
+    NUM("crop", v.crop, 2)
+    NUM("crop_x", v.crop_x, 719)
+    NUM("crop_w", v.crop_w, 720)
+    NUM("crop_y", v.crop_y, 479)
+    NUM("crop_h", v.crop_h, 480)
 #undef NUM
     scaler_set(&v);
+    if (field(body, "measure", f, sizeof f) && atoi(f))
+        scaler_measure();
     if (field(body, "again", f, sizeof f) && atoi(f))
         scaler_again();
     return httpd_resp_sendstr(req, "set\n");

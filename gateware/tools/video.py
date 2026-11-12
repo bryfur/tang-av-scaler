@@ -10,6 +10,8 @@
                                         # threshold --aa (20); sharpening --sharp 0-16 (8)
     video.py freeze | run               # the fields in memory kept as they are (a still picture) | not
     video.py stat                       # what the capture sees
+    video.py crop [X0 CW Y0 CH | auto]  # the part of the 720 x 480 the scaler shows (nothing: all of it;
+                                        # auto: where border.v finds picture over three seconds)
     video.py raw [MODE]                 # 1024 raw samples of the pixel port (0 now, 1 from a sync code,
                                         # 2 from the start of a line of picture)
     video.py pattern                    # back to the test picture
@@ -23,6 +25,7 @@ import adv
 import avb
 
 VID, CAP, FIELDS, RAW, RAWD, DEINT, DSTAT = 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36
+GEOM, BORDER, BORDERL = 0x3A, 0x3E, 0x3F
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -39,6 +42,23 @@ def stat(m):
     print("deinterlacer: %d fields seen, newest in slot %d, %.0f frames/s, %s, newest field %s, mode %d thr %d"
           % (d & 7, d >> 3 & 7, (((m.r(DSTAT) >> 16) - f0) & 0xFFFF) / 0.5, "four fields in order" if st >> 6 & 1 else "NO field history (bob)",
              "bottom" if st >> 5 & 1 else "top", m.r(DEINT) & 3, m.r(DEINT) >> 8 & 0xFF))
+
+
+def border(m):
+    """where the fields have had picture since BORDER was written: (x0, cw, y0, ch) in the frame, or None"""
+    x, l = m.r(BORDER), m.r(BORDERL)
+    if not x >> 31:
+        return None
+    x0, x1, l0, l1 = x & 0x1FF, x >> 16 & 0x1FF, l & 0x3FF, l >> 16 & 0x3FF
+    return 2 * x0, 2 * (x1 - x0 + 1), 2 * l0, 2 * (l1 - l0 + 1)
+
+
+def crop(m, part):
+    sys.path.insert(0, os.path.join(HERE, "../sim"))
+    import fsr
+    for k, v in enumerate(fsr.geom(*part)):
+        m.w(GEOM + k, v & 0xFFFFFFFF)
+    m.flush()
 
 
 def raw(m, mode):
@@ -67,6 +87,19 @@ def main():
     a = sys.argv[1:]
     if a[:1] == ["stat"]:
         stat(avb.Mon())
+        return
+    if a[:1] == ["crop"]:
+        m = avb.Mon()
+        part = tuple(int(v) for v in a[1:5]) if len(a) >= 5 else ()
+        if a[1:2] == ["auto"]:
+            m.w(BORDER, 40)
+            m.flush()
+            time.sleep(3)
+            part = border(m)
+            print("picture found: %s" % (part,))
+            part = part if part and part[1] >= 560 and part[3] >= 380 else ()
+        crop(m, part)
+        print("shown: %s" % (part or "all",))
         return
     if a[:1] == ["raw"]:
         d = raw(avb.Mon(), int(a[1]) if len(a) > 1 else 1)

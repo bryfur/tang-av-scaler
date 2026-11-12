@@ -37,6 +37,11 @@
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
 //                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
+//   3A-3D RW GEOM   the part of the source the scaler shows (sim/fsr.py geom(): XR, DX, YS, DY)
+//   3E RW  BORDER   border.v: where the captured fields have picture: a write starts it again (7:0 the
+//                    luma a pixel of picture is above); read: 8:0 the first pair of pixels, 24:16 the
+//                    last, 31 there was picture
+//   3F R   BORDERL  9:0 the first line of a field with picture, 25:16 the last
 //   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state,
 //                    31:16 frames it has begun
 //   31 R   CAP       vcap.v: 10:0 the Y samples of a line, 20:11 the lines of picture of a field,
@@ -270,6 +275,18 @@ module top (
                 .we(fb_we), .wa(), .wd(fb_wd), .w_ln(cap_ln), .w_col(cap_col), .eof(cap_eof), .f_we(), .f_wa(), .f_wd(), .pix(cap_pix), .lines(cap_lines), .field(cap_field),
                 .fields(cap_fields), .arm(raw_arm), .mode(raw_mode), .done(raw_done), .rclk(clk),
                 .ra(raw_ra), .rd(raw_rd));
+    reg  [7:0]  bd_thr = 8'd40;
+    reg         bd_clr = 1'b0;
+    wire        bd_any;
+    wire [8:0]  bd_x0, bd_x1;
+    wire [9:0]  bd_l0, bd_l1;
+    always @(posedge clk)
+        if (we && addr == 8'h3E) begin
+            bd_thr <= wdata[7:0];
+            bd_clr <= !bd_clr;
+        end
+    border u_border (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .thr(bd_thr), .clr(bd_clr),
+                     .any(bd_any), .x_min(bd_x0), .x_max(bd_x1), .ln_min(bd_l0), .ln_max(bd_l1));
     reg                  vid_s0, vid_on, swap_s0, swap;
     reg [4:0]            sharp_s0, sharp;
     always @(posedge tx_clk) begin
@@ -447,9 +464,22 @@ module top (
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
     reg  [31:0]  dcfg = 32'h140D0600;
-    always @(posedge clk)
+    reg  [27:0]  g_xr = -28'sd7876608;
+    reg  [16:0]  g_dx = 17'd32768;
+    reg  [26:0]  g_ys = -27'sd18205;
+    reg  [16:0]  g_dy = 17'd29127;
+    always @(posedge clk) begin
         if (we && addr == 8'h35)
             dcfg <= wdata;
+        if (we && addr == 8'h3A)
+            g_xr <= wdata[27:0];
+        if (we && addr == 8'h3B)
+            g_dx <= wdata[16:0];
+        if (we && addr == 8'h3C)
+            g_ys <= wdata[26:0];
+        if (we && addr == 8'h3D)
+            g_dy <= wdata[16:0];
+    end
     wire         ca_valid, ca_ack, db_valid, db_ack, db_rvalid;
     wire [24:0]  ca_line, db_line;
     wire [255:0] ca_data;
@@ -492,7 +522,14 @@ module top (
         if (PPC == 1) begin : g_lv
             wire [7:0]  e_y, e_cb, e_cr;
             wire [24:0] e_xy;
-            easu u_easu (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
+            // (the scaler's part of the source: set while nothing depends on a frame of it)
+            reg [88:0] geo0, geo;
+            always @(posedge tx_clk) begin
+                geo0 <= {g_xr, g_dx, g_ys, g_dy};
+                geo <= geo0;
+            end
+            easu u_easu (.g_xr(geo[88:61]), .g_dx(geo[60:44]), .g_ys(geo[43:17]), .g_dy(geo[16:0]),
+                         .clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
                          .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
                          .o_cr(e_cr));
             dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .d({p_x, p_y}), .q(e_xy));
@@ -597,6 +634,12 @@ module top (
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
+            8'h3E: rdata <= {bd_any, 6'd0, bd_x1, 7'd0, bd_x0};
+            8'h3F: rdata <= {6'd0, bd_l1, 6'd0, bd_l0};
+            8'h3A: rdata <= {{4{g_xr[27]}}, g_xr};
+            8'h3B: rdata <= {15'd0, g_dx};
+            8'h3C: rdata <= {{5{g_ys[26]}}, g_ys};
+            8'h3D: rdata <= {15'd0, g_dy};
             8'h36: rdata <= {dst_s[29:14], dst_s[13:6], 2'd0, dst_s[5:0]};
             8'h38: rdata <= {grab_done_s, 15'd0, grab_cfg};
             8'h50: rdata <= au_ls;

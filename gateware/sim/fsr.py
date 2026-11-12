@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """fsr.py: the scaler: AMD's FSR 1 edge adaptive spatial upsampling (EASU: ffx_fsr1.h FsrEasuF, MIT
-licence), 720 x 480 to 1440 x 1080, as the hardware does it, and as the shader does for comparison.
+licence), a part of the 720 x 480 picture (all of it, or less: geom()) to 1440 x 1080, as the hardware
+does it, and as the shader does for comparison (the whole picture only).
 
 The shader, per output pixel: the 12 source pixels round it; from their luma an edge direction and
 an "edge-ness" (len), interpolated between the four nearest pixels' own; a Lanczos-like kernel
@@ -10,15 +11,17 @@ greatest of the four nearest.
 The hardware (rtl/easu.v, rtl/easu_ana.v):
 - each source pixel's own part of the direction and len is worked out once, as the pixels stream by
   (analysis(): dx, dy the luma differences across it, ls = lenX^2 + lenY^2 in 64ths);
-- the output's place between source pixels takes 2 x 9 values (1440/720 = 2, 1080/480 = 9/4): the
-  four pixels' parts are weighed by whole numbers (72nds);
+- an output pixel's place in the source is counted up in 65536ths (geom(): a start and a step each
+  way); between source pixels it is taken as one of 8 x 8 places (across: k/8, the nearest; down:
+  (2k + 1)/16); the four pixels' parts are weighed by whole numbers (128ths);
 - the direction is put in one of 32 bins over the half turn, len in one of 8, and the 12 weights
-  for (place, direction, len) come from a table (table(): 4608 entries, the weights in 256ths,
-  their sum 256: the division by the weights' sum is in the table).
+  for (place, direction, len) come from a table (table(): the weights in 256ths, their sum 256: the
+  division by the weights' sum is in the table).  The table has the upper four places down only
+  (8192 entries): a lower one is its mirror image's (the rows and the direction turned over).
 
     fsr.py table OUT                # the table for $readmemh: OUT0.hex to OUT3.hex, three weights
                                     # of 10 bits a line each
-    fsr.py picture IN.png OUT.png [float|nearest|sharpN]   # a 720 x 480 picture scaled, as the
+    fsr.py picture IN.png OUT.png [float|nearest|hw|sharpN] [X0,CW,Y0,CH]  # a 720 x 480 picture scaled, as the
                                                       # hardware (default), the shader, by the nearest
                                                       # pixel, or the hardware's with RCAS at N/16
 """
@@ -27,19 +30,22 @@ import sys
 
 TAPS = [(0, -1), (1, -1), (-1, 0), (0, 0), (1, 0), (2, 0), (-1, 1), (0, 1), (1, 1), (2, 1), (0, 2), (1, 2)]
 NANG, NLEN = 32, 8
-PX = [0.75, 0.25]                                   # an output column's place between two source ones
+NPX, NPY = 8, 8                                     # places between source pixels: k/8 across, (2k + 1)/16 down
+OW, OH, OX0 = 1440, 1080, 240                       # the output picture, its first column in the raster
+MIRROR = [10, 11, 6, 7, 8, 9, 2, 3, 4, 5, 0, 1]     # TAPS with the rows turned over (ty -> 1 - ty)
 TAN = [round(1024 * math.tan((2 * k - 1) * math.pi / 64)) for k in range(1, 9)]    # the bins' edges, to 45 degrees
-LEN_TH = [-(-(2 * j - 1) * 9216 // 14) for j in range(1, 8)]                      # len's levels' edges
+LEN_TH = [-(-(2 * j - 1) * 16384 // 14) for j in range(1, 8)]                     # len's levels' edges
 RECIP = [0] + [4096 // v for v in range(1, 256)]
 
 
-def phase_y(oy):
-    """an output row: (the source row above its place, the place below it in 18ths)"""
-    return (8 * oy - 5) // 18, (8 * oy - 5) % 18
-
-
-def phase_x(ox):
-    return (2 * ox - 1) // 4, PX[ox & 1]
+def geom(x0=0, cw=720, y0=0, ch=480):
+    """the part of the source the output shows, cw x ch pixels from (x0, y0): (XR, DX, YS, DY) as the
+    hardware has them: a raster column x's place is XR + x DX, a row y's YS + y DY, in 65536ths of a
+    source pixel (pixel n's middle at n); the place across with a sixteenth more (to the nearest
+    eighth, when the rest is cut off)"""
+    dx = (cw * 65536 + OW // 2) // OW
+    dy = (ch * 65536 + OH // 2) // OH
+    return (x0 * 65536 + dx // 2 - 32768 + 4096 - OX0 * dx, dx, y0 * 65536 + dy // 2 - 32768, dy)
 
 
 def kernel(ppx, ppy, dx, dy, ln):
@@ -61,15 +67,15 @@ def kernel(ppx, ppy, dx, dy, ln):
 
 
 def table():
-    """[py 0-8][px 0-1][ang][len]: 12 weights in 256ths, their sum 256; py: the place below the
-    row above in 18ths is 2 py + 1"""
+    """[ky 0-3][kx 0-7][ang][len]: 12 weights in 256ths, their sum 256; the place below the row
+    above is (2 ky + 1)/16, right of the column to the left kx/8"""
     out = {}
-    for py in range(9):
-        for px in range(2):
+    for py in range(NPY // 2):
+        for px in range(NPX):
             for ang in range(NANG):
                 th = ang * math.pi / NANG
                 for li in range(NLEN):
-                    ws = kernel(PX[px], (2 * py + 1) / 18, math.cos(th), math.sin(th), li / (NLEN - 1))
+                    ws = kernel(px / NPX, (2 * py + 1) / (2 * NPY), math.cos(th), math.sin(th), li / (NLEN - 1))
                     tot = sum(ws)
                     q = [round(w / tot * 256) for w in ws]
                     q[max(range(12), key=lambda k: q[k])] += 256 - sum(q)
@@ -111,21 +117,24 @@ def angle_bin(ax, ay):
     return t % 32
 
 
-def scale_hw(pix, ana, w, h, tab):
-    """rtl/easu.v: pix h rows of w (y, cb, cr) -> 1080 rows of 1440"""
+def scale_hw(pix, ana, w, h, tab, g=None):
+    """rtl/easu.v: pix h rows of w (y, cb, cr) -> 1080 rows of 1440; g: geom()'s"""
+    xr, dx, ys, dy = g or geom()
     out = []
     cx = lambda x: min(max(x, 0), w - 1)
     cy = lambda y: min(max(y, 0), h - 1)
-    for oy in range(h * 9 // 4):
-        fy, ky = phase_y(oy)
-        wy = (18 - ky, ky)
+    for oy in range(OH):
+        yp = ys + oy * dy
+        fy, ky = yp >> 16, yp >> 13 & 7
+        wy = (15 - 2 * ky, 2 * ky + 1)
+        mirror = ky >= NPY // 2
         rows = [pix[cy(fy + d)] for d in (-1, 0, 1, 2)]
         arow = [ana[cy(fy)], ana[cy(fy + 1)]]
         line = []
-        for ox in range(w * 2):
-            fx = (2 * ox - 1) // 4
-            px = ox & 1
-            wx = (1, 3) if px == 0 else (3, 1)
+        for ox in range(OW):
+            xp = xr + (ox + OX0) * dx
+            fx, px = xp >> 16, xp >> 13 & 7
+            wx = (8 - px, px)
             ax = ay = al = 0
             for j in range(2):
                 for i in range(2):
@@ -136,8 +145,12 @@ def scale_hw(pix, ana, w, h, tab):
                     al += wgt * a[2]
             ang = angle_bin(ax, ay)
             li = sum(1 for t in LEN_TH if al >= t)
-            wts = tab[(ky - 1) // 2, px, ang, li]
             taps = [rows[ty + 1][cx(fx + tx)] for tx, ty in TAPS]
+            if mirror:
+                wts = tab[NPY - 1 - ky, px, (NANG - ang) % NANG, li]
+                taps = [taps[m] for m in MIRROR]
+            else:
+                wts = tab[ky, px, ang, li]
             near = [taps[3], taps[4], taps[7], taps[8]]
             p = []
             for c in range(3):
@@ -248,8 +261,8 @@ def main():
         tab = table()
         # four files, three weights each (rtl/easu.v's four ROMs): OUT0.hex ... OUT3.hex
         fs = [open("%s%d.hex" % (a[1][:-4] if a[1].endswith(".hex") else a[1], k), "w") for k in range(4)]
-        for py in range(16):
-            for px in range(2):
+        for py in range(NPY // 2):
+            for px in range(NPX):
                 for ang in range(NANG):
                     for li in range(NLEN):
                         q = tab.get((py, px, ang, li), [0] * 12)
@@ -271,10 +284,11 @@ def main():
         elif how == "nearest":
             out = scale_nearest(pix, w, h)
         else:
-            out = scale_hw(pix, analysis([[p[0] for p in row] for row in pix], w, h), w, h, table())
+            crop = [int(v) for v in a[4].split(",")] if len(a) > 4 else []
+            out = scale_hw(pix, analysis([[p[0] for p in row] for row in pix], w, h), w, h, table(), geom(*crop))
             if how.startswith("sharp"):
                 out = rcas(out, int(how[5:] or 16))
-        res = Image.new("RGB", (2 * w, h * 9 // 4))
+        res = Image.new("RGB", (len(out[0]), len(out)))
         res.putdata([to_rgb(p) for row in out for p in row])
         res.save(a[2])
 

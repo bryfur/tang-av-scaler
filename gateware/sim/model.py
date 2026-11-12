@@ -46,6 +46,20 @@ def picture_fields(path, n):
     return out
 
 
+def border(fields, thr=40):
+    """border.v: (first pair, last pair, first line, last line) with picture over the fields, None if none"""
+    b = None
+    for f in fields:
+        for n, line in enumerate(f):
+            run = 0
+            for q, (cb, y0, cr, y1) in enumerate(line):
+                lit = y0 > thr and y1 > thr
+                was, run = run, (0 if not lit else 1 if q == 0 else min(run + 1, 4))
+                if lit and q != 0 and was >= 3:
+                    b = (q - 3, q, n, n) if b is None else (min(b[0], q - 3), max(b[1], q), min(b[2], n), max(b[3], n))
+    return b
+
+
 def luma(line):
     return [v for w in line for v in (w[1], w[3])]
 
@@ -148,10 +162,11 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
     return [upsample(line) for line in lines]
 
 
-def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False):
-    """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b)"""
+def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
+               crop=()):
+    """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
     pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner)
     w, h = len(pix[0]), len(pix)
-    out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table()), sharp)
+    out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp)
     return [[(0, 0, 0)] * 240 + [rgb(*p) for p in row] + [(0, 0, 0)] * 240 for row in out]

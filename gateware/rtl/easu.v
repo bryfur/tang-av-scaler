@@ -1,7 +1,7 @@
-// easu.v: the scaler: the 720 x 480 picture in the ring (lstream.v) to 1440 x 1080 in the middle of
+// easu.v: the scaler: the 720 x 480 picture in the ring (lstream.v), or a part of it, to 1440 x 1080 in the middle of
 // 1920 x 1080, FSR 1's edge adaptive upsampling as sim/fsr.py has it (scale_hw()): for each output
 // pixel the twelve source pixels round it, weighed by a table's entry for the pixel's place between
-// them (2 x 9 places), the edge's direction there (32 bins) and its strength (8 levels); held
+// them (8 x 8 places), the edge's direction there (32 bins) and its strength (8 levels); held
 // between the least and greatest of the nearest four.  Y'CbCr out (rcas.v goes on from there).
 //
 // The ring: eight lines, a line's place its number's low three bits, 1024 words of 54 bits
@@ -77,6 +77,13 @@ module easu (
     input      [9:0]  w_x,
     input      [53:0] w_d,
 
+    // the part of the source shown (fsr.py geom(); they stay as they are): a raster column's place
+    // g_xr + x g_dx, a row's g_ys + y g_dy, in 65536ths of a source pixel
+    input signed [27:0] g_xr,
+    input      [16:0] g_dx,
+    input signed [26:0] g_ys,
+    input      [16:0] g_dy,
+
     output     [7:0]  o_y,
     output     [7:0]  o_cb,
     output     [7:0]  o_cr
@@ -84,11 +91,13 @@ module easu (
     localparam LAT = 26;
     localparam W = 720, H = 480;
 
-    // the row: fy the source row above its place (-1 to H - 1), py its place below it (2 py + 1
-    // eighteenths); the four source rows' places in the ring; the weights of the four pixels'
-    // analyses for both columns' places
-    reg signed [10:0] fy = -11'sd1;
-    reg [3:0]  py = 4'd6;
+    // the row: fy the source row above its place (-1 to H - 1), ky its place below it; the four
+    // source rows' places in the ring; the weights of the four pixels' analyses
+    reg signed [26:0] yp = 27'sd0;      // the row's place
+    wire signed [10:0] fy = yp[26:16];
+    wire [2:0] ky = yp[15:13];          // below fy: (2 ky + 1) sixteenths
+    wire       mir = ky[2];             // the lower half: the table's entry for the mirror image
+    wire [1:0] kyt = mir ? ~ky[1:0] : ky[1:0];
     reg        eol = 1'b0, eol_q = 1'b0, eol_q2 = 1'b0, last = 1'b0;
     reg [2:0]  slot [0:3] /* synthesis syn_ramstyle = "registers" */;
     function [2:0] rowslot(input signed [10:0] v);
@@ -98,7 +107,7 @@ module easu (
             rowslot = c[2:0];
         end
     endfunction
-    wire [4:0] wy0 = 5'd17 - {py, 1'b0}, wy1 = {py, 1'b1};
+    wire [4:0] wy0 = 5'd15 - {1'b0, ky, 1'b0}, wy1 = {1'b0, ky, 1'b1};
     wire signed [10:0] fy5 = fy + 11'sd5;
     always @(posedge clk) begin
         eol <= de && x == 13'd1918;
@@ -106,13 +115,7 @@ module easu (
         eol_q <= eol;
         eol_q2 <= eol_q;
         if (eol) begin
-            if (last) begin
-                fy <= -11'sd1;
-                py <= 4'd6;
-            end else begin
-                fy <= py >= 4'd5 ? fy + 11'sd1 : fy;
-                py <= py >= 4'd5 ? py - 4'd5 : py + 4'd4;
-            end
+            yp <= last ? g_ys : yp + $signed({10'd0, g_dy});
         end
         if (eol_q) begin
             slot[0] <= rowslot(fy - 11'sd1);
@@ -127,12 +130,20 @@ module easu (
         end
     end
 
-    // 1, 2: the column asked of the ring: the newest of the four, (2 (x - 240) - 1) / 4 + 2, in 0 to W - 1
-    wire signed [13:0] ox2 = {1'b0, x, 1'b0} - 14'sd481;
-    wire signed [11:0] cn = (ox2 >>> 2) + 12'sd2;
+    // the column's place: xq the pixel's now at x (counted on from g_xr at x = 0), xc: it has a source
+    // column more than the pixel before
+    // 1, 2: the column asked of the ring: the newest of the four, the one left of its place and 2, in 0 to W - 1
+    reg signed [27:0] xq = 28'sd0;
+    reg        xc = 1'b0;
+    wire signed [27:0] x_from = x == 13'd0 ? g_xr : xq;
+    wire signed [27:0] x_next = x_from + $signed({11'd0, g_dx});
+    wire signed [12:0] cn = $signed(xq[27:16]) + 13'sd2;
     reg [9:0]  ra_n;                    // (a register of its own before the eight beside the lines)
-    always @(posedge clk)
+    always @(posedge clk) begin
+        xq <= x_next;
+        xc <= x_next[16] != x_from[16];
         ra_n <= cn < 0 ? 10'd0 : cn > W - 1 ? W - 1 : cn[9:0];
+    end
     reg [53:0] q [0:7] /* synthesis syn_ramstyle = "registers" */;
     genvar k;
     generate
@@ -166,10 +177,14 @@ module easu (
     // 3: the four rows' words; 4: the window, four columns of four rows, a new column at each odd pixel
     reg [53:0] cd [0:3] /* synthesis syn_ramstyle = "registers" */;
     reg [53:0] win [0:15] /* synthesis syn_ramstyle = "registers" */;     // [row][col]: col 3 the newest
-    reg [29:0] odd, inw;                // ([k]: of the pixel k + 1 clocks on)
+    reg [29:0] odd, inw;                // ([k]: of the pixel k + 1 clocks on; odd: a new source column)
+    reg [2:0]  kxs [0:15] /* synthesis syn_srlstyle = "registers" */;     // its place right of the column: eighths
     integer    i, j;
     always @(posedge clk) begin
-        odd <= {odd[28:0], x[0]};
+        odd <= {odd[28:0], xc};
+        kxs[0] <= xq[15:13];
+        for (i = 1; i <= 15; i = i + 1)
+            kxs[i] <= kxs[i - 1];
         inw <= {inw[28:0], de && x >= 13'd240 && x < 13'd1680};
         for (i = 0; i < 4; i = i + 1) begin
             cd[i] <= q[slot[i]];
@@ -184,36 +199,39 @@ module easu (
     function [23:0] pixel(input [53:0] w);
         pixel = w[25:2];
     endfunction
-    wire [287:0] taps4 = {pixel(win[14]), pixel(win[13]),
-                          pixel(win[11]), pixel(win[10]), pixel(win[9]), pixel(win[8]),
-                          pixel(win[7]), pixel(win[6]), pixel(win[5]), pixel(win[4]),
-                          pixel(win[2]), pixel(win[1])};     // tap t at [24 t +: 24]
+    // (for a mirror image the rows the other way up)
+    wire [287:0] taps_n = {pixel(win[14]), pixel(win[13]),
+                           pixel(win[11]), pixel(win[10]), pixel(win[9]), pixel(win[8]),
+                           pixel(win[7]), pixel(win[6]), pixel(win[5]), pixel(win[4]),
+                           pixel(win[2]), pixel(win[1])};    // tap t at [24 t +: 24]
+    wire [287:0] taps_m = {pixel(win[2]), pixel(win[1]),
+                           pixel(win[7]), pixel(win[6]), pixel(win[5]), pixel(win[4]),
+                           pixel(win[11]), pixel(win[10]), pixel(win[9]), pixel(win[8]),
+                           pixel(win[14]), pixel(win[13])};
+    wire [287:0] taps4 = mir ? taps_m : taps_n;
 
-    // 5, 6: the four analyses times their weight (their row's, times 3 or 1 by the column and the
-    // pixel's place: an odd pixel is a quarter past the left column: 3 of it, 1 of the right; an
-    // even one 1, 3); 7: a register; 8: summed
-    wire signed [15:0] qdx [0:3], qdy [0:3];
-    wire signed [15:0] qls [0:3];
-    reg signed [16:0] pdx [0:3], pdy [0:3];
-    reg signed [16:0] pls [0:3];
+    // 5, 6: the four analyses times their weight (their row's sixteenths times their column's
+    // eighths, by the pixel's place); 7: a register; 8: summed
+    wire signed [16:0] qdx [0:3], qdy [0:3];
+    wire signed [16:0] qls [0:3];
+    reg signed [17:0] pdx [0:3], pdy [0:3];
+    reg signed [17:0] pls [0:3];
     reg signed [18:0] ax, ay;
     reg [16:0] al;
-    reg [5:0]  wy1r [0:1], wy3r [0:1];
+    reg [6:0]  wg [0:3];
     genvar gi;
     generate
         for (gi = 0; gi < 4; gi = gi + 1) begin : g_q       // gi: {row, col} of f g / j k
             localparam WI = (gi[1] ? 8 : 4) + (gi[0] ? 2 : 1);
-            wire [5:0] wgt = odd[5] != gi[0] ? wy3r[gi[1]] : wy1r[gi[1]];
-            easu_mul #(.AW(9), .BW(7)) u_dx (.clk(clk), .a(win[WI][53:45]), .b({1'b0, wgt}), .p(qdx[gi]));
-            easu_mul #(.AW(9), .BW(7)) u_dy (.clk(clk), .a(win[WI][44:36]), .b({1'b0, wgt}), .p(qdy[gi]));
-            easu_mul #(.AW(9), .BW(7)) u_ls (.clk(clk), .a({1'b0, win[WI][35:28]}), .b({1'b0, wgt}), .p(qls[gi]));
+            wire [3:0] wxs = gi[0] ? {1'b0, kxs[4]} : 4'd8 - {1'b0, kxs[4]};
+            always @(posedge clk)
+                wg[gi] <= wxs * (gi[1] ? wy1 : wy0);
+            easu_mul #(.AW(9), .BW(8)) u_dx (.clk(clk), .a(win[WI][53:45]), .b({1'b0, wg[gi]}), .p(qdx[gi]));
+            easu_mul #(.AW(9), .BW(8)) u_dy (.clk(clk), .a(win[WI][44:36]), .b({1'b0, wg[gi]}), .p(qdy[gi]));
+            easu_mul #(.AW(9), .BW(8)) u_ls (.clk(clk), .a({1'b0, win[WI][35:28]}), .b({1'b0, wg[gi]}), .p(qls[gi]));
         end
     endgenerate
     always @(posedge clk) begin
-        wy1r[0] <= {1'b0, wy0};
-        wy1r[1] <= {1'b0, wy1};
-        wy3r[0] <= wy0 * 2'd3;
-        wy3r[1] <= wy1 * 2'd3;
         for (i = 0; i < 4; i = i + 1) begin
             pdx[i] <= qdx[i];
             pdy[i] <= qdy[i];
@@ -260,8 +278,8 @@ module easu (
         sy9 <= ay[18];
         zx9 <= ax == 19'sd0;
         zy9 <= ay == 19'sd0;
-        li9 <= (al >= 17'd659) + (al >= 17'd1975) + (al >= 17'd3292) + (al >= 17'd4608) + (al >= 17'd5925) +
-               (al >= 17'd7242) + (al >= 17'd8558);
+        li9 <= (al >= 17'd1171) + (al >= 17'd3511) + (al >= 17'd5852) + (al >= 17'd8192) + (al >= 17'd10533) +
+               (al >= 17'd12874) + (al >= 17'd15214);
         swp <= aay > aax;
         opp <= sx9 != sy9 && !zx9 && !zy9;
         dm <= aay > aax ? aay : aax;
@@ -284,8 +302,8 @@ module easu (
         t = ge[0] + ge[1] + ge[2] + ge[3] + ge[4] + ge[5] + ge[6] + ge[7];
         if (swp13)
             t = 5'd16 - t;
-        bin = opp13 ? 5'd0 - t : t;
-        ta <= {py, odd[15], bin, li13};
+        bin = opp13 != mir ? 5'd0 - t : t;      // (a mirror image's direction the other way)
+        ta <= {kyt, kxs[15], bin, li13};
     end
 
     // 15 to 17: the table; the twelve pixels wait for it
