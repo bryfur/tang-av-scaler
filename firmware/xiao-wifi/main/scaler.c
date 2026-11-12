@@ -339,7 +339,7 @@ static bool bringup(void)
 
 static void task(void *arg)
 {
-    bool up_ok = false;
+    bool up_ok = false, seen = false;
     uint16_t shown[4] = {0, 720, 0, 480}, want[4];
     int counted = 0;                    /* seconds the border has been looked for */
     uint8_t crop_was = 255;
@@ -371,8 +371,15 @@ static void task(void *arg)
                     up_ok = bringup();
                     s.ups++;
                     crop_was = 255;
-                } else if (dirty)
-                    picture();
+                    seen = true;
+                } else {
+                    /* (found up after this firmware's own restart: the bring-up before it stands) */
+                    if (!seen)
+                        up_ok = true;
+                    seen = true;
+                    if (dirty)
+                        picture();
+                }
                 s.ok = up_ok;
                 /* the part shown */
                 struct scaler_settings c;
