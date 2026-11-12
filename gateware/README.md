@@ -8,7 +8,7 @@ State on the board (2026-11-12):
 
 | | |
 |---|---|
-| Component in, HDMI out | 480i YPbPr -> 1080p60 (59.94 Hz), in colour: the fields kept in the SOM's DDR3, deinterlaced motion adaptive to 720 x 480 from the last four (weave where nothing moves, the lines' mean where something does), anti-aliased (SMAA 1x, the orthogonal patterns), scaled to 1440 x 1080 (4:3) by FSR 1: its edge adaptive upsampling (EASU), table driven, and its sharpening (RCAS, on luma). No tear: a frame is made of whole fields (one repeated or dropped as the rates drift). 480p, 720p, 1080i: decoder settings not found yet. |
+| Component in, HDMI out | 480i YPbPr -> 1080p60 (59.94 Hz), in colour: the fields kept in the SOM's DDR3, deinterlaced motion adaptive to 720 x 480 from the last four (weave where nothing moves, the lines' mean where something does), anti-aliased (SMAA 1x, the orthogonal and the diagonal patterns; a view of what it finds in the picture's place), scaled to 1440 x 1080 (4:3) by FSR 1: its edge adaptive upsampling (EASU), table driven, and its sharpening (RCAS, on luma). No tear: a frame is made of whole fields (one repeated or dropped as the rates drift). 480p, 720p, 1080i: decoder settings not found yet. |
 | HDMI out | 1080p60 and 2160p30 clean on the sink's own counters (SN65DP159 as a redriver: as a retimer it corrupts 2.97 Gb/s). 2160p60: the link is clean and the sink sees scrambling, no picture yet. |
 | Audio | the PCM1808's clocks and samples (`rtl/audio_in.v`: alive on the board, `tools/audio.py`), and HDMI's data islands for them (`rtl/hdmi_audio.v`: samples, N/CTS, audio and AVI InfoFrames; decoded and checked in simulation, `sim/audio_tb.py`). Off by default (HDMI register bit 2, the web page's "sound over HDMI"): not yet tried on a display. fs is the pixel clock / 3072 = 48.34 kHz. |
 
@@ -44,7 +44,7 @@ openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in t
 | `rtl/gtx_quad.v` | the transceiver quad (generated: `tools/mkgtx.py`); its register file by `gowin/serdes.py`, no IDE |
 | `rtl/vcap.v`, `cap_ddr.v` | the ADV7181D's pixel port decoded, its fields into the DDR3 (eight slots, a bank each) |
 | `rtl/deint.v`, `lstream.v` | the motion adaptive deinterlacer (a line when the output wants it); its lines made a 4:4:4 stream, each pixel with its part of the scaler's edge analysis |
-| `rtl/smaa.v` | the anti-aliasing: SMAA's edges, searches (15 pixels each way), area table and mixing on the 480-line stream (`sim/smaa.py`) |
+| `rtl/smaa.v` | the anti-aliasing: SMAA's edges, searches (15 pixels each way, 8 along the diagonals), area tables and mixing on the 480-line stream (`sim/smaa.py`) |
 | `rtl/easu.v` | the scaler: FSR 1's EASU with the kernel from a table by the pixel's place, the edge's direction (32 bins) and strength (8 levels): 56.9 dB from the shader on a real frame (`sim/fsr.py`) |
 | `rtl/ddr3/`, `ddr_arb.v` | the DDR3: our own PHY, calibration and controller (from the fpc console; `pll_init.v` is Sipeed's, Apache 2.0), its port shared by the capture, the picture and the host |
 | `rtl/grab.v` | rows of the picture as sent, for the host to read: `tools/grab.py OUT.png` shows the output with no display |
@@ -55,7 +55,7 @@ openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in t
 | `tools/video.py`, `adv.py` | the component input: the ADV7181D's settings (and what was learnt about them), the capture's state, raw samples of the pixel port |
 | `tools/hdmi.py`, `clkgen.py`, `edid.py`, `scdc.py`, `linkq.py`, `ddcci.py` | HDMI up; the MS5351M; the sink's EDID, SCDC, error counters, and its own measure of the picture rate |
 | `tools/load.sh`, `flash.sh` | a bitstream into the SRAM, or into the SOM's flash, through the XIAO's USB-JTAG bridge |
-| `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `audio_tb.py` (the data islands decoded), `deint_tb.py [NFIELDS]` (Verilator: the whole picture path with a model of the DDR3, against `model.py`, `smaa.py` and `fsr.py`, pixel for pixel; `aa=T` with the anti-aliasing, `sharp=N` the sharpening) |
+| `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `audio_tb.py` (the data islands decoded), `deint_tb.py [NFIELDS]` (Verilator: the whole picture path with a model of the DDR3, against `model.py`, `smaa.py` and `fsr.py`, pixel for pixel; `aa=T` with the anti-aliasing, `diag` its diagonal patterns, `aadbg` its view of what it finds, `sharp=N` the sharpening, `pic=FILE` a still picture in) |
 | `test/loop.v` | a UART loop-back, to test the XIAO's wiring |
 
 The monitor's port: `AVB_TTY` (a serial device, or `tcp:HOST[:PORT]`), else the Wi-Fi link

@@ -36,7 +36,8 @@ enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, 
 enum { BUS_PLL, BUS_DP, BUS_DDC, BUS_IN };
 
 static struct scaler_state state;
-static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 20, .sharp = 8};
+static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 20, .sharp = 8,
+                                      .audio = true, .aa_diag = true};
 static SemaphoreHandle_t lock;          /* set, state, dirty */
 static bool dirty, again;
 
@@ -245,7 +246,7 @@ static void picture(void)
     s = set;
     dirty = false;
     xSemaphoreGive(lock);
-    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (s.top1 ? 4 : 0) | (s.mode & 3));
+    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_diag ? 1u : 0) << 18 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (s.top1 ? 4 : 0) | (s.mode & 3));
     wr(R_HDMI, s.audio ? 6 : 0);        /* the video guard band and the data islands, or DVI's blanking */
     wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
     flush();

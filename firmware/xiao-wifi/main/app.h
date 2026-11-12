@@ -43,8 +43,9 @@ struct scaler_settings {
     uint8_t sharp;      /* RCAS sharpening, 0 (none) to 16 */
     bool swap, top1, pattern, freeze;
     bool audio;         /* HDMI's data islands: the sound and the InfoFrames (else DVI's plain blanking) */
-    bool aa_dbg;        /* what SMAA finds shown in the picture's place (new settings go at the end: the
-                         * ones kept in flash are read as far as they go) */
+    bool aa_dbg;        /* what SMAA finds shown in the picture's place */
+    bool aa_diag;       /* SMAA's diagonal patterns (new settings go at the end: the ones kept in flash
+                         * are read as far as they go) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */

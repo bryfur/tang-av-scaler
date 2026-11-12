@@ -17,6 +17,10 @@
 //            each column): for the column N + 2 behind.  The four searches (left, right, up, down:
 //            how far the edge runs, to N; which way it turns there), then the area table
 //            ({the turns 4, the two lengths 4 each} -> {the part cut off above the edge, below})
+//            With diag: first, for a pixel with a top edge, the two diagonal lines through it
+//            (SMAA's diagonal patterns: along each, to ND = 8 pixels, the run of pixels with both
+//            edges; the edges that cross at its ends; a second table): if they give a weight the
+//            pixel has that, and neither search across.
 //   mixing   of the line above the weights' (it wants the weights below): the pixel with the one of
 //            its four neighbours whose weight is greatest; chroma with the one above or below only
 //
@@ -27,15 +31,18 @@
 
 `ifndef SMAA_HEX
 `define SMAA_HEX "smaa.hex"
+`define SMAA_DHEX "smaad.hex"
 `endif
 
-module smaa_rom (
+module smaa_rom #(
+    parameter FILE = ""
+) (
     input             clk,
     input      [11:0] a,
     output reg [15:0] q
 );
     reg [15:0] mem [0:4095];
-    initial $readmemh(`SMAA_HEX, mem);
+    initial $readmemh(FILE, mem);
     reg [15:0] q1;
     always @(posedge clk) begin
         q1 <= mem[a];
@@ -52,6 +59,7 @@ module smaa #(
     input             en,
     input      [7:0]  thr,
     input             dbg,
+    input             diag,             // the diagonal patterns too
     input             i_v,
     input      [9:0]  i_x,
     input      [9:0]  i_j,
@@ -211,15 +219,22 @@ module smaa #(
                 vm[2 * i + 1] = 1'b0;
             end
     end
-    // the columns before: all their lines for the last N + 3 (cv[k]: column w1_x - 1 - k); the
+    // the columns before: all their lines for the last N + 11 (cv[k]: column w1_x - 1 - k; the
+    // diagonals look nine columns to the middle one's left); the
     // middle line's {top, left} and the line above's left for the last 2N + 3 (hk)
-    reg [65:0] cv [0:17] /* synthesis syn_ramstyle = "registers" */;
+    reg [65:0] cv [0:25] /* synthesis syn_ramstyle = "registers" */;
     reg [2:0]  hk [0:32] /* synthesis syn_ramstyle = "registers" */;
     // the middle column: w1_x - 17, hk[16], cv[16]; the one before it cv[17]
     // hz(o): column middle + o, -16 <= o <= 16: {top, left, left of the line above}
     reg [15:0] ls, rs, us, ds;          // each search's stops
     reg [31:0] lc, rc, uc, dc;          // each's turns ({down or own, up or other}) at each step
     reg        s_v = 1'b0, s_et, s_el;
+    // the diagonals: along "/" (a) and "\\" (b), to the left and to the right, the eight pixels that
+    // carry the line on; the pixels that start them; at each distance the two edges crossing there
+    reg [8:1]  ga_l, ga_r, gb_l, gb_r;
+    reg        sa, sb;
+    reg [17:0] ca_l, cb_r;              // (distance d at bits 2d+1:2d: {a top edge, a left edge})
+    reg [15:0] ca_r, cb_l;
     reg [10:0] s_x;
     reg [9:0]  s_r;
     // (the lines of a column: line r + m is 16 - m lines back from e)
@@ -230,7 +245,7 @@ module smaa #(
         if (w1_v) begin
             cv[0] <= vm;
             hk[0] <= {vm[32], vm[33], vm[35]};
-            for (i = 1; i <= 17; i = i + 1)
+            for (i = 1; i <= 25; i = i + 1)
                 cv[i] <= cv[i - 1];
             for (i = 1; i <= 32; i = i + 1)
                 hk[i] <= hk[i - 1];
@@ -252,6 +267,23 @@ module smaa #(
                 ds[i] <= `ET(cv[16], i + 1) | `ET(cv[17], i + 1) | !`EL(cv[16], i + 1) | (i == 15);
                 dc[2 * i +: 2] <= {`ET(cv[16], i + 1), `ET(cv[17], i + 1)};
             end
+            // (cv[16 - o]: the column o to the middle one's right)
+            sa <= `EL(cv[16], 0);
+            sb <= `EL(cv[15], 0);
+            for (i = 1; i <= 8; i = i + 1) begin
+                ga_l[i] <= `ET(cv[16 + i], i) & `EL(cv[16 + i], i);
+                ga_r[i] <= `ET(cv[16 - i], -i) & `EL(cv[16 - i], -i);
+                gb_l[i] <= `ET(cv[16 + i], -i) & `EL(cv[16 + i - 1], -i);
+                gb_r[i] <= `ET(cv[16 - i], i) & `EL(cv[16 - i - 1], i);
+            end
+            for (i = 0; i <= 8; i = i + 1) begin
+                ca_l[2 * i +: 2] <= {`ET(cv[16 + i + 1], i), `EL(cv[16 + i], i)};
+                cb_r[2 * i +: 2] <= {`ET(cv[16 - i - 1], i), `EL(cv[16 - i - 1], i)};
+            end
+            for (i = 0; i <= 7; i = i + 1) begin
+                ca_r[2 * i +: 2] <= {`ET(cv[16 - i - 1], -i), `EL(cv[16 - i - 1], -i - 1)};
+                cb_l[2 * i +: 2] <= {`ET(cv[16 + i + 1], -i), `EL(cv[16 + i], -i - 1)};
+            end
         end
     end
     // the first stop of each, and the turn there
@@ -268,9 +300,27 @@ module smaa #(
     reg [10:0] q_x, q2_x, q3_x;
     reg [9:0]  q_r, q2_r, q3_r;
     reg [5:0]  fl, fr, fu, fd;
+    // a diagonal search: {the line goes on past the eighth pixel, pixels before it stops (0-7)}
+    function [3:0] dsearch(input [8:1] on);
+        integer n;
+        begin
+            dsearch = 4'b1111;
+            for (n = 8; n >= 1; n = n - 1)
+                if (!on[n])
+                    dsearch = n - 1;
+        end
+    endfunction
+    reg [11:0] fda, fdb;                // the diagonal table's addresses: {the turns 2 and 2, the lengths 4 and 4}
+    reg        ga, gb, ga2, gb2, ga3, gb3;
+    reg [3:0]  t_al, t_ar, t_bl, t_br, d1a, d2a, d1b, d2b;
+    reg [1:0]  c1a, c2a, c1b, c2b;
+    wire [15:0] ada, adb;
+    smaa_rom #(.FILE(`SMAA_DHEX)) u_da (.clk(clk), .a(fda), .q(ada));
+    smaa_rom #(.FILE(`SMAA_DHEX)) u_db (.clk(clk), .a(fdb), .q(adb));
+    reg [8:0]  dwr, dwg;
     wire [15:0] ah, av;                 // {above, below} of the top edge; {other side, own} of the left
-    smaa_rom u_ah (.clk(clk), .a({fr[5:4], fl[5:4], fl[3:0], fr[3:0]}), .q(ah));
-    smaa_rom u_av (.clk(clk), .a({fd[5:4], fu[5:4], fu[3:0], fd[3:0]}), .q(av));
+    smaa_rom #(.FILE(`SMAA_HEX)) u_ah (.clk(clk), .a({fr[5:4], fl[5:4], fl[3:0], fr[3:0]}), .q(ah));
+    smaa_rom #(.FILE(`SMAA_HEX)) u_av (.clk(clk), .a({fd[5:4], fu[5:4], fu[3:0], fd[3:0]}), .q(av));
     reg        k_v = 1'b0;
     reg [10:0] k_x;
     reg [9:0]  k_r;
@@ -286,6 +336,26 @@ module smaa #(
         fr <= first(rs, rc);
         fu <= first(us, uc);
         fd <= first(ds, dc);
+        // the diagonals' lengths (one more where the line was not seen to end, on the side that has
+        // the pixel's own start), the edges crossing at their ends (none where it did not end)
+        t_al = dsearch(ga_l);
+        t_ar = dsearch(ga_r);
+        t_bl = dsearch(gb_l);
+        t_br = dsearch(gb_r);
+        d1a = sa ? {1'b0, t_al[2:0]} + {3'd0, t_al[3]} : 4'd0;
+        d2a = {1'b0, t_ar[2:0]};
+        d1b = {1'b0, t_bl[2:0]};
+        d2b = sb ? {1'b0, t_br[2:0]} + {3'd0, t_br[3]} : 4'd0;
+        c1a = sa && t_al[3] ? 2'd0 : ca_l[2 * d1a +: 2];
+        c2a = t_ar[3] ? 2'd0 : ca_r[2 * d2a[2:0] +: 2];
+        c1b = t_bl[3] ? 2'd0 : cb_l[2 * d1b[2:0] +: 2];
+        c2b = sb && t_br[3] ? 2'd0 : cb_r[2 * d2b +: 2];
+        fda <= {c1a, c2a, d1a, d2a};
+        fdb <= {c1b, c2b, d1b, d2b};
+        ga <= diag && {1'b0, d1a} + {1'b0, d2a} > 5'd2;
+        gb <= diag && {1'b0, d1b} + {1'b0, d2b} > 5'd2;
+        {ga3, ga2} <= {ga2, ga};
+        {gb3, gb2} <= {gb2, gb};
         {q3_v, q2_v} <= {q2_v, q_v};
         {q3_x, q2_x} <= {q2_x, q_x};
         {q3_r, q2_r} <= {q2_r, q_r};
@@ -299,6 +369,15 @@ module smaa #(
         k_wu <= q3_et ? ah[15:8] : 8'd0;        // the one above this much of it
         k_wl <= q3_el ? av[7:0] : 8'd0;         // the pixel of the one to its left
         k_wo <= q3_el ? av[15:8] : 8'd0;        // the one to its left of it
+        // the diagonals' (the table's {first, second}: the second diagonal's the other way round)
+        dwr = (ga3 ? {1'b0, ada[15:8]} : 9'd0) + (gb3 ? {1'b0, adb[7:0]} : 9'd0);
+        dwg = (ga3 ? {1'b0, ada[7:0]} : 9'd0) + (gb3 ? {1'b0, adb[15:8]} : 9'd0);
+        if (q3_et && (dwr != 9'd0 || dwg != 9'd0)) begin
+            k_wt <= dwr[8] ? 8'hFF : dwr[7:0];
+            k_wu <= dwg[8] ? 8'hFF : dwg[7:0];
+            k_wl <= 8'd0;
+            k_wo <= 8'd0;
+        end
     end
 
     // ---- mixing ----

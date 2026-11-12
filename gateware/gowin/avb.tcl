@@ -31,8 +31,9 @@ puts $f "`define AVB_PPC $ppc"
 exec python3 $gw/sim/fsr.py table $out/easu >@ stdout
 foreach k {0 1 2 3} { puts $f "`define EASU_HEX$k \"$out/easu$k.hex\"" }
 # the anti-aliasing's area table (sim/smaa.py table)
-exec python3 $gw/sim/smaa.py table $out/smaa.hex
+exec python3 $gw/sim/smaa.py table $out/smaa.hex $out/smaad.hex
 puts $f "`define SMAA_HEX \"$out/smaa.hex\""
+puts $f "`define SMAA_DHEX \"$out/smaad.hex\""
 close $f
 
 cd $out

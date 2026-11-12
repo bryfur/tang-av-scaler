@@ -34,6 +34,7 @@ module lstream #(
     input      [31:0] r_wd_i,
     input             aa_en,
     input             aa_dbg,
+    input             aa_diag,
     input      [7:0]  aa_thr,
 
     output reg        w_we = 1'b0,
@@ -129,7 +130,7 @@ module lstream #(
     wire       o_v, o_last;
     wire [9:0] o_x, o_j;
     wire [7:0] o_y, o_c;
-    smaa #(.W(W), .H(H), .N(FL - 4)) u_aa (.clk(clk), .en(aa_en), .dbg(aa_dbg), .thr(aa_thr), .i_v(r_v), .i_x(r_x), .i_j(r_j),
+    smaa #(.W(W), .H(H), .N(FL - 4)) u_aa (.clk(clk), .en(aa_en), .dbg(aa_dbg), .diag(aa_diag), .thr(aa_thr), .i_v(r_v), .i_x(r_x), .i_j(r_j),
                                          .i_last(r_last), .i_y(r_y), .i_c(r_c), .o_v(o_v), .o_x(o_x), .o_j(o_j),
                                          .o_last(o_last), .o_y(o_y), .o_c(o_c));
 

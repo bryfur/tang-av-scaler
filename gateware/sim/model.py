@@ -28,6 +28,24 @@ def field(t):
     return out
 
 
+def picture_fields(path, n):
+    """n fields (as field()'s) of a still 720 x 480 picture from a file"""
+    from PIL import Image
+    im = Image.open(path).convert("YCbCr").resize((2 * PAIRS, 2 * LINES))
+    px = im.load()
+    c = lambda v: min(240, max(16, v))
+    out = []
+    for t in range(n):
+        f = []
+        for k in range(LINES):
+            yf = 2 * k + (t & 1)
+            f.append([(c((px[2 * q, yf][1] + px[2 * q + 1, yf][1] + 1) >> 1), min(235, max(16, px[2 * q, yf][0])),
+                       c((px[2 * q, yf][2] + px[2 * q + 1, yf][2] + 1) >> 1), min(235, max(16, px[2 * q + 1, yf][0])))
+                      for q in range(PAIRS)])
+        out.append(f)
+    return out
+
+
 def luma(line):
     return [v for w in line for v in (w[1], w[3])]
 
@@ -121,19 +139,19 @@ def upsample(line):
     return out
 
 
-def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False):
+def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines"""
     lines = deinterlace(fields, pars, mode, thr)
     if smaa_thr is not None:
         import smaa
-        lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg)
+        lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag)
     return [upsample(line) for line in lines]
 
 
-def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False):
+def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag)
     w, h = len(pix[0]), len(pix)
     out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table()), sharp)
     return [[(0, 0, 0)] * 240 + [rgb(*p) for p in row] + [(0, 0, 0)] * 240 for row in out]

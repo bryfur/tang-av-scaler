@@ -16,8 +16,8 @@ it is scaled.
 3. Each pixel is mixed with the neighbour (left, right, top, bottom) whose weight is greatest.
 
     smaa.py picture IN.png OUT.png [edges]    # a picture through it (edges: the edges found, as a picture)
-    smaa.py table OUT.hex                     # the areas for $readmemh: {pattern 4, left 4, right 4} ->
-                                              # {above 8, below 8}
+    smaa.py table OUT.hex [DIAG.hex]          # the areas for $readmemh: {pattern 4, left 4, right 4} ->
+                                              # {above 8, below 8}; and the diagonals' table
 """
 import math
 import sys
@@ -87,6 +87,104 @@ def pattern_area(pat, left, right):
     return min(255, round(a[0] * 255)), min(255, round(a[1] * 255))
 
 
+# ---- the diagonal patterns [SMAA: SMAACalculateDiagWeights; AreaTex.py areadiag] ----
+ND = 8              # the diagonal searches' reach
+EDGESDIAG = [(0, 0), (1, 0), (0, 2), (1, 2), (2, 0), (3, 0), (2, 2), (3, 2),
+             (0, 1), (1, 1), (0, 3), (1, 3), (2, 1), (3, 1), (2, 3), (3, 3)]
+# each pattern's line or two lines (their mean is taken), end points less (d, d) at the second
+DIAGLINES = {0: [((1, 1), (1, 1)), ((1, 0), (1, 0))], 1: [((1, 0), (0, 0)), ((1, 0), (1, 0))],
+             2: [((0, 0), (1, 0)), ((1, 0), (1, 0))], 3: [((1, 0), (1, 0))],
+             4: [((1, 1), (0, 0)), ((1, 1), (1, 0))], 5: [((1, 1), (0, 0)), ((1, 0), (1, 0))],
+             6: [((1, 1), (1, 0))], 7: [((1, 1), (1, 0)), ((1, 0), (1, 0))],
+             8: [((0, 0), (1, 1)), ((1, 0), (1, 1))], 9: [((1, 0), (1, 1))],
+             10: [((0, 0), (1, 1)), ((1, 0), (1, 0))], 11: [((1, 0), (1, 1)), ((1, 0), (1, 0))],
+             12: [((1, 1), (1, 1))], 13: [((1, 1), (1, 1)), ((1, 0), (1, 1))],
+             14: [((1, 1), (1, 1)), ((1, 1), (1, 0))], 15: [((1, 1), (1, 1)), ((1, 0), (1, 0))]}
+SAMPLES = 30
+
+
+def area1(p1, p2, px, py):
+    """the part of the pixel at (px, py) on the line p1 -> p2's left, by sampling"""
+    if p1 == p2:
+        return 1.0
+    xm, ym = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+    a, b = p2[1] - p1[1], p1[0] - p2[0]
+    n = 0
+    for i in range(SAMPLES):
+        cx = a * (px + i / (SAMPLES - 1) - xm)
+        for j in range(SAMPLES):
+            n += cx + b * (py + j / (SAMPLES - 1) - ym) > 0
+    return n / (SAMPLES * SAMPLES)
+
+
+def diag_area(pat, left, right):
+    """the diagonal table's entry: a crossing-edge pattern (EDGESDIAG's place), the distances to the
+    line's two ends -> two weights in 255ths"""
+    d = left + right + 1
+    r = g = 0.0
+    lines = DIAGLINES[pat]
+    for p1, q in lines:
+        p2 = (q[0] + d, q[1] + d)
+        r += 1 - area1(p1, p2, 1 + left, left)
+        g += area1(p1, p2, 1 + left, 1 + left)
+    return min(255, round(r / len(lines) * 255)), min(255, round(g / len(lines) * 255))
+
+
+_dtab = {}
+
+
+def diag_lookup(e1, e2, left, right):
+    k = (e1, e2, left, right)
+    if k not in _dtab:
+        _dtab[k] = diag_area(EDGESDIAG.index((e1, e2)), left, right)
+    return _dtab[k]
+
+
+def diag_weights(E, x, r, nd=ND):
+    """a pixel with a top edge: the weights (r, g) of the diagonal lines through it, (0, 0) if none"""
+    both = lambda cx, cy: E(cx, cy) == (1, 1)
+
+    def search1(dx, dy):                # along a "/": pixels with both edges
+        z, cx, cy, w = -1, x, r, True
+        while z < nd - 1 and w:
+            cx, cy, z = cx + dx, cy + dy, z + 1
+            w = both(cx, cy)
+        return z, w
+
+    def search2(dx, dy):                # along a "\": a top edge, and the pixel to the right's left edge
+        z, cx, cy, w = -1, x, r, True
+        while z < nd - 1 and w:
+            cx, cy, z = cx + dx, cy + dy, z + 1
+            w = E(cx, cy)[1] == 1 and E(cx + 1, cy)[0] == 1
+        return z, w
+    wr = wg = 0
+    # the first diagonal: down to the left, up to the right
+    if E(x, r)[0]:
+        d1, e1 = search1(-1, 1)
+        d1 += int(e1)
+    else:
+        d1, e1 = 0, False
+    d2, e2 = search1(1, -1)
+    if d1 + d2 > 2:
+        c1 = 0 if e1 else 2 * E(x - d1 - 1, r + d1)[1] + E(x - d1, r + d1)[0]
+        c2 = 0 if e2 else 2 * E(x + d2 + 1, r - d2)[1] + E(x + d2 + 1, r - d2 - 1)[0]
+        a = diag_lookup(c1, c2, d1, d2)
+        wr, wg = wr + a[0], wg + a[1]
+    # the second: up to the left, down to the right
+    d1, e1 = search2(-1, -1)
+    if E(x + 1, r)[0]:
+        d2, e2 = search2(1, 1)
+        d2 += int(e2)
+    else:
+        d2, e2 = 0, False
+    if d1 + d2 > 2:
+        c1 = 0 if e1 else 2 * E(x - d1 - 1, r - d1)[1] + E(x - d1, r - d1 - 1)[0]
+        c2 = 0 if e2 else 2 * E(x + d2 + 1, r + d2)[1] + E(x + d2 + 1, r + d2)[0]
+        a = diag_lookup(c1, c2, d1, d2)
+        wr, wg = wr + a[1], wg + a[0]
+    return min(wr, 255), min(wg, 255)
+
+
 _tab = {}
 
 
@@ -97,7 +195,7 @@ def lookup(pat, left, right):
     return _tab[k]
 
 
-def weights(e, w, h, n=N):
+def weights(e, w, h, n=N, diag=False):
     """[row][col] -> (top, up_of_top, left, left_of_left): with a top edge, top: how much the pixel
     takes of the one above, up_of_top: how much the one above takes of it; the same for a left
     edge"""
@@ -108,6 +206,11 @@ def weights(e, w, h, n=N):
         for x in range(w):
             el, et = e[r][x]
             wt = wu = wl = wo = 0
+            if et and diag:             # a diagonal line through a top edge is found first: then no other
+                wt, wu = diag_weights(E, x, r)
+                if wt or wu:
+                    line.append((wt, wu, 0, 0))
+                    continue
             if et:
                 # leftwards: the boundary on the left of pixel x - i
                 i = 0
@@ -166,7 +269,7 @@ def blend(pix, wts, w, h):
     return out
 
 
-def smaa_words(lines, thr=T, n=N, dbg=False):
+def smaa_words(lines, thr=T, n=N, dbg=False, diag=False):
     """rtl/smaa.v: the picture as lines of 4:2:2 words (cb, y0, cr, y1) -> the same: luma mixed as
     blend() does; a chroma sample mixed only with the one above or below it (a pixel carries one:
     Cb the even pixels, Cr the odd)"""
@@ -174,7 +277,7 @@ def smaa_words(lines, thr=T, n=N, dbg=False):
     y = [[v for wd in line for v in (wd[1], wd[3])] for line in lines]
     c = [[v for wd in line for v in (wd[0], wd[2])] for line in lines]
     e = edges(y, w, h, thr)
-    wts = weights(e, w, h, n)
+    wts = weights(e, w, h, n, diag)
     W = lambda x, r: wts[r][x] if 0 <= x < w and 0 <= r < h else (0, 0, 0, 0)
     mix = lambda a, b, k: a + (((b - a) * k + 128) >> 8)
     out = []
@@ -208,9 +311,9 @@ def smaa_words(lines, thr=T, n=N, dbg=False):
     return out
 
 
-def smaa(pix, w, h, thr=T, n=N):
+def smaa(pix, w, h, thr=T, n=N, diag=False):
     e = edges([[p[0] for p in row] for row in pix], w, h, thr)
-    return blend(pix, weights(e, w, h, n), w, h), e
+    return blend(pix, weights(e, w, h, n, diag), w, h), e
 
 
 def main():
@@ -221,7 +324,7 @@ def main():
         im = Image.open(a[1]).convert("RGB")
         w, h = im.size
         pix = [[fsr.to_ycc(im.getpixel((x, y))) for x in range(w)] for y in range(h)]
-        out, e = smaa(pix, w, h)
+        out, e = smaa(pix, w, h, diag="diag" in a)
         res = Image.new("RGB", (w, h))
         if len(a) > 3 and a[3] == "edges":
             res.putdata([(255 * el, 255 * et, 0) for row in e for el, et in row])
@@ -236,6 +339,14 @@ def main():
                     for right in range(16):
                         ab, be = lookup(pat, left, right)
                         f.write("%04x\n" % (ab << 8 | be))
+        if len(a) > 2:              # the diagonals': {end 1's edges 2, end 2's 2, the distances 4 and 4}
+            with open(a[2], "w") as f:
+                for e1 in range(4):
+                    for e2 in range(4):
+                        for left in range(16):
+                            for right in range(16):
+                                r, g = diag_lookup(e1, e2, left, right) if left <= ND and right <= ND else (0, 0)
+                                f.write("%04x\n" % (r << 8 | g))
 
 
 if __name__ == "__main__":
