@@ -1,54 +1,111 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
 <title>AV scaler</title>
 <style>
-body{font:15px/1.45 system-ui,sans-serif;margin:1.2em auto;max-width:44em;padding:0 1em;color:#222;background:#fafafa}
-h1{font-size:1.3em}h2{font-size:1.05em;margin:1.4em 0 .4em;border-bottom:1px solid #ccc}
-table{border-collapse:collapse}td{padding:.12em .8em .12em 0;vertical-align:top}td:first-child{color:#666}
-input,select{font:inherit;padding:.25em;margin:.15em 0}label{margin-right:1.2em;white-space:nowrap}input[type=number]{width:4.5em}button{font:inherit;padding:.3em .9em}
-pre{background:#111;color:#ddd;padding:.6em;overflow:auto;max-height:22em;font-size:12px}
-.ok{color:#080}.bad{color:#b00}#msg{color:#06c;white-space:pre-wrap}
+:root{--bg:#0f1115;--card:#181b22;--line:#272b35;--text:#e7e9ee;--dim:#8b92a3;--acc:#5b9dff;--ok:#3ecf8e;--bad:#ff6b6b;--warn:#f5b84a;--in:#0f1115}
+@media(prefers-color-scheme:light){:root{--bg:#f3f4f7;--card:#fff;--line:#e2e5ec;--text:#1b1e26;--dim:#667085;--acc:#2f6fed;--ok:#12995f;--bad:#d43c3c;--warn:#b7791f;--in:#f6f7f9}}
+*{box-sizing:border-box}
+body{font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;color:var(--text);background:var(--bg)}
+header{display:flex;align-items:center;gap:.6em 1em;flex-wrap:wrap;padding:1em 1.2em;max-width:64em;margin:auto}
+h1{font-size:1.25em;margin:0;font-weight:650;letter-spacing:-.01em}
+#pills{display:flex;gap:.5em;flex-wrap:wrap;margin-left:auto}
+.pill{font-size:.82em;padding:.22em .7em;border-radius:99px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.pill:before{content:"";display:inline-block;width:.55em;height:.55em;border-radius:50%;background:var(--dim);margin-right:.45em}
+.pill.ok{color:var(--text)}.pill.ok:before{background:var(--ok)}.pill.bad{color:var(--text)}.pill.bad:before{background:var(--bad)}.pill.warn:before{background:var(--warn)}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,25em),1fr));gap:1em;padding:0 1.2em 2em;max-width:64em;margin:auto}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1em 1.1em}
+section.full{grid-column:1/-1}
+h2{font-size:.78em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 .8em;font-weight:600}
+.f{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4em 1em;padding:.5em 0;min-height:2.6em}
+.f+.f{border-top:1px solid var(--line)}
+.f>span:first-child{flex:1 1 9em}.f small{display:block;color:var(--dim);font-size:.82em;line-height:1.3}
+.sub{padding-left:1em}
+input,select,button{font:inherit;color:inherit}
+select,input[type=number],input[type=text],input[type=password]{background:var(--in);border:1px solid var(--line);border-radius:8px;padding:.35em .55em}
+input[type=number]{width:4.6em}
+select:focus,input:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.sw{appearance:none;-webkit-appearance:none;width:2.6em;height:1.5em;border-radius:99px;background:var(--line);position:relative;cursor:pointer;transition:background .15s;flex:none;margin:0}
+.sw:after{content:"";position:absolute;left:.18em;top:.18em;width:1.14em;height:1.14em;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px #0005}
+.sw:checked{background:var(--acc)}.sw:checked:after{transform:translateX(1.1em)}
+.rg{display:flex;align-items:center;gap:.7em;flex:none}
+input[type=range]{width:9.5em;flex:1;accent-color:var(--acc)}.rg:has(input[type=range]){flex:0 1 13em}
+@media(max-width:30em){.rg:has(input[type=range]){flex:1 1 100%}}
+output{min-width:2.2em;text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
+.seg{display:inline-flex;background:var(--in);border:1px solid var(--line);border-radius:9px;padding:2px;flex:none}
+.seg label{padding:.26em .7em;border-radius:7px;cursor:pointer;font-size:.92em;color:var(--dim);white-space:nowrap}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--card);box-shadow:0 0 0 1px var(--line);color:var(--text)}
+.seg label:has(input:focus-visible){outline:2px solid var(--acc)}
+button{background:var(--in);border:1px solid var(--line);border-radius:8px;padding:.38em .9em;cursor:pointer}
+button:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btns{display:flex;gap:.6em;flex-wrap:wrap;margin-top:.8em}
+table{border-collapse:collapse;width:100%}td{padding:.3em .8em .3em 0;vertical-align:top}td:first-child{color:var(--dim);white-space:nowrap;width:1%}
+tr+tr td,tbody+tbody td{border-top:1px solid var(--line)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}
+pre{background:#0a0b0e;color:#cfd3dc;padding:.7em;border-radius:8px;overflow:auto;max-height:20em;font-size:12px;margin:.6em 0 0}
+details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
+.crop{display:none}.crop.on{display:flex}
+#msg{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.5em 1em;box-shadow:0 6px 24px #0006;white-space:pre-wrap;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
+#msg.on{opacity:1}
+.stack{display:grid;gap:.5em;max-width:22em}.stack input{width:100%}
 </style></head><body>
-<h1>AV scaler</h1>
+<header><h1>AV scaler</h1><div id="pills"></div></header>
 <div id="msg"></div>
-<h2>Picture</h2><table id="vs"></table>
-<form id="vf">
-<label><input type="checkbox" name="on"> the link runs the scaler</label>
-<label>rate <select name="ntsc"><option value="1">59.94 Hz</option><option value="0">60 Hz</option></select></label><br>
-<label>deinterlacing <select name="mode"><option value="0">motion adaptive</option><option value="1">bob</option><option value="2">weave</option></select></label>
-<label>motion threshold <input type="number" name="thr" min="0" max="255"></label><br>
-<label><input type="checkbox" name="aa"> anti-aliasing (SMAA)</label>
-<label>edge threshold <input type="number" name="aa_thr" min="1" max="255"></label>
-<label><input type="checkbox" name="aa_diag"> diagonals</label>
-<label><input type="checkbox" name="aa_corner"> keep corners</label>
-<label><input type="checkbox" name="aa_dbg"> show what it finds</label>
-<label>sharpening <input type="number" name="sharp" min="0" max="16"> /16</label><br>
-<label>shown <select name="crop"><option value="0">the whole signal</option><option value="1">the picture, found (fills the screen)</option><option value="2">as set</option></select></label>
-<label>from <input type="number" name="crop_x" min="0" max="719">, <input type="number" name="crop_y" min="0" max="479"></label>
-<label>size <input type="number" name="crop_w" min="64" max="720"> x <input type="number" name="crop_h" min="64" max="480"></label>
-<button type="button" onclick="video('measure=1')">Find again</button>
-<label><input type="checkbox" name="wide"> 16:9 (the game set to widescreen)</label><br>
-<label><input type="checkbox" name="swap"> swap Cb/Cr</label>
-<label><input type="checkbox" name="top1"> top field is F=1</label>
-<label><input type="checkbox" name="pattern"> test picture</label>
-<label><input type="checkbox" name="freeze"> freeze</label><br>
-<label><input type="checkbox" name="audio"> sound over HDMI (off = DVI framing)</label><br>
-<button>Apply</button> <button type="button" onclick="video('again=1')">Bring up again</button></form>
-<h2>Status</h2><table id="st"></table>
-<h2>FPGA</h2><table id="fp"></table><button onclick="fpga()">Read over JTAG</button>
-<h2>Wi-Fi network</h2>
-<form id="wf"><input name="ssid" placeholder="network name" required><br>
-<input name="pass" type="password" placeholder="password"><br>
-<button>Save and join</button></form>
-<h2>Firmware update</h2>
-<input type="file" id="fw"> <button onclick="ota()">Upload and restart</button>
-<h2>FPGA console (last output)</h2><pre id="con"></pre>
-<h2>Firmware log</h2><pre id="log"></pre>
+<main>
+<form id="vf" style="display:contents">
+<section><h2>Picture</h2>
+<div class="f"><span>Fill the screen<small>what part of the signal is shown</small></span>
+ <span class="seg"><label><input type="radio" name="crop" value="1"><span>Auto</span></label><label><input type="radio" name="crop" value="0"><span>Whole signal</span></label><label><input type="radio" name="crop" value="2"><span>Manual</span></label></span></div>
+<div class="f sub crop" id="c_auto"><span><small id="shown"></small></span><button type="button" onclick="video('measure=1')">Find again</button></div>
+<div class="f sub crop" id="c_man"><span>From / size</span><span class="rg"><input type="number" name="crop_x" min="0" max="719"><input type="number" name="crop_y" min="0" max="479"><input type="number" name="crop_w" min="64" max="720"><input type="number" name="crop_h" min="64" max="480"></span></div>
+<div class="f"><span>Widescreen (16:9)<small>for a game set to widescreen</small></span><input class="sw" type="checkbox" name="wide"></div>
+<div class="f"><span>Sharpening</span><span class="rg"><input type="range" name="sharp" min="0" max="16"><output></output></span></div>
+<div class="f"><span>Freeze</span><input class="sw" type="checkbox" name="freeze"></div>
+</section>
+<section><h2>Anti-aliasing</h2>
+<div class="f"><span>SMAA</span><input class="sw" type="checkbox" name="aa"></div>
+<div class="f"><span>Edge threshold<small>lower catches more edges</small></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
+<div class="f"><span>Diagonal edges</span><input class="sw" type="checkbox" name="aa_diag"></div>
+<div class="f"><span>Keep corners sharp</span><input class="sw" type="checkbox" name="aa_corner"></div>
+<div class="f"><span>Show what it finds<small>edges green, blends blue and red</small></span><input class="sw" type="checkbox" name="aa_dbg"></div>
+</section>
+<section><h2>Deinterlacing</h2>
+<div class="f"><span>Method</span><span class="seg"><label><input type="radio" name="mode" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="mode" value="1"><span>Bob</span></label><label><input type="radio" name="mode" value="2"><span>Weave</span></label></span></div>
+<div class="f"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
+<div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
+</section>
+<section><h2>Output</h2>
+<div class="f"><span>Sound over HDMI<small>off sends DVI framing</small></span><input class="sw" type="checkbox" name="audio"></div>
+<div class="f"><span>Frame rate</span><span class="seg"><label><input type="radio" name="ntsc" value="1"><span>59.94 Hz</span></label><label><input type="radio" name="ntsc" value="0"><span>60 Hz</span></label></span></div>
+<div class="f"><span>Test picture</span><input class="sw" type="checkbox" name="pattern"></div>
+<div class="f"><span>Swap Cb / Cr</span><input class="sw" type="checkbox" name="swap"></div>
+<div class="f"><span>Run the scaler<small>off leaves the FPGA to a host tool</small></span><input class="sw" type="checkbox" name="on"></div>
+<div class="btns"><button type="button" onclick="video('again=1')">Bring up again</button></div>
+</section>
+</form>
+<section class="full"><h2>Status</h2><table><tbody id="vs"></tbody><tbody id="st"></tbody></table></section>
+<section><h2>Wi-Fi network</h2>
+<form id="wf" class="stack"><input type="text" name="ssid" placeholder="Network name" required>
+<input name="pass" type="password" placeholder="Password"><div><button class="pri">Save and join</button></div></form></section>
+<section><h2>Maintenance</h2>
+<div class="f"><span>Firmware update<small>avwifi.bin</small></span><button onclick="ota()">Upload</button><input type="file" id="fw" style="flex:1 1 100%;font-size:.9em"></div>
+<div class="f"><span>FPGA over JTAG<small id="fp">not read</small></span><button onclick="fpga()">Read</button></div>
+</section>
+<section class="full"><h2>Logs</h2>
+<details><summary>FPGA console (last output)</summary><pre id="con"></pre></details>
+<details><summary>Firmware log</summary><pre id="log"></pre></details></section>
+</main>
 <script>
-const $=i=>document.getElementById(i), msg=t=>$('msg').textContent=t;
+const $=i=>document.getElementById(i);
+let mt;const msg=t=>{const m=$('msg');m.textContent=t;m.classList.add('on');clearTimeout(mt);mt=setTimeout(()=>m.classList.remove('on'),3500)};
 const row=(k,v)=>'<tr><td>'+k+'</td><td>'+v+'</td></tr>';
 const yes=(b,t,f)=>'<span class="'+(b?'ok':'bad')+'">'+(b?t:f)+'</span>';
+const pill=(c,t)=>'<span class="pill '+c+'">'+t+'</span>';
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const vf=$('vf');
+function outs(){for(const o of vf.querySelectorAll('output'))o.textContent=o.previousElementSibling.value;
+  const c=vf.elements.crop.value;$('c_auto').classList.toggle('on',c=='1');$('c_man').classList.toggle('on',c=='2')}
 async function status(){
   try{
     const s=await (await fetch('/api/status')).json(), w=s.wifi, j=s.jtag, c=s.console, f=s.firmware;
@@ -58,14 +115,21 @@ async function status(){
       row('JTAG','port '+j.port+' &middot; '+(j.connected?'in use by '+j.peer:'free')+' &middot; '+j.sessions+' sessions, '+j.bits+' bits, TCK '+j.tck_ns+' ns (fastest '+j.fastest_ns+')')+
       row('Console','port '+c.port+' at '+c.baud+' baud &middot; '+(c.tcp?'client '+c.peer:'no client')+(c.usb?' &middot; USB':'')+' &middot; '+c.to_fpga+' bytes out, '+c.from_fpga+' in')+
       row('Firmware',esc(f.version)+' &middot; built '+f.built+' &middot; '+f.chip+', slot '+f.slot+' &middot; up '+f.uptime_s+' s, '+f.heap+' bytes free');
-    vstat();
+    await vstat();
     $('con').textContent=await (await fetch('/api/console')).text();
     $('log').textContent=await (await fetch('/api/log')).text();
-  }catch(e){msg('no answer from the link')}
+  }catch(e){$('pills').innerHTML=pill('bad','no answer from the link')}
 }
 let vfill=true;
 async function vstat(){
-  const v=await (await fetch('/api/video')).json(), f=$('vf').elements;
+  const v=await (await fetch('/api/video')).json(), f=vf.elements;
+  const sig=v.fields_s>=49&&v.fields_s<=61;
+  $('pills').innerHTML=v.host?pill('warn','left to a host tool'):!v.set.on?pill('warn','scaler not run'):
+    pill(v.fpga&&v.ok?'ok':'bad',v.fpga?(v.ok?'Scaler up':'Not brought up'):'No FPGA image')+
+    pill(sig?'ok':'bad',sig?'Input '+v.pix+' &times; '+v.lines*2+'i':'No input')+
+    pill(v.pll?'ok':'bad','1080p out'+(v.set.ntsc?' 59.94':' 60'))+
+    pill(v.hpd?'ok':'','Display '+(v.hpd?'connected':'not seen'));
+  $('shown').textContent='showing '+v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2];
   $('vs').innerHTML=
     row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':
       yes(v.fpga,'FPGA answers (build '+new Date(v.build*1000).toISOString().slice(0,16).replace('T',' ')+')','no FPGA image answers')+
@@ -73,17 +137,22 @@ async function vstat(){
     row('Output','1080p &middot; transceiver PLL '+yes(v.pll,'locked','not locked')+' &middot; display '+yes(v.hpd,'present','not seen'))+
     row('Input',v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
       yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out')+
-    row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480');
-  if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}}
+    row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'));
+  if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;
+    if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}outs()}
 }
-async function video(body){msg(await (await fetch('/api/video',{method:'POST',body})).text());vfill=true;vstat()}
-$('vf').onsubmit=e=>{e.preventDefault();const f=$('vf').elements,p=new URLSearchParams();
-  for(const e of f){if(!e.name)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
-  video(p)};
+async function video(body){try{msg(await (await fetch('/api/video',{method:'POST',body})).text())}catch(e){msg('no answer from the link')}vfill=true;vstat()}
+// a setting changed: sent at once (a slider: when it is let go)
+let st;
+function send(){const p=new URLSearchParams();
+  for(const e of vf.elements){if(!e.name||e.type=='radio'&&!e.checked)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
+  video(p)}
+vf.addEventListener('input',outs);
+vf.addEventListener('change',()=>{clearTimeout(st);st=setTimeout(send,150)});
+vf.onsubmit=e=>{e.preventDefault();send()};
 async function fpga(){
   const f=await (await fetch('/api/fpga')).json();
-  $('fp').innerHTML=f.busy?row('JTAG','in use by a client'):
-    row('ID code',f.idcode+' '+yes(f.answers,'answers','nothing answers'))+row('Status register',f.status);
+  $('fp').innerHTML=f.busy?'in use by a client':'ID '+f.idcode+' '+yes(f.answers,'answers','nothing answers')+' &middot; status '+f.status;
 }
 $('wf').onsubmit=async e=>{e.preventDefault();
   msg(await (await fetch('/api/wifi',{method:'POST',body:new URLSearchParams(new FormData($('wf')))})).text())};
