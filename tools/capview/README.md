@@ -17,5 +17,7 @@ As a service of the user's (it starts at boot if lingering is on):
 
     cp capview.service ~/.config/systemd/user/ && systemctl --user enable --now capview
 
+**Sound**: the page's switch plays the dongle's audio (ALSA `--sound`, AAC) beside whichever picture.
+
 It needs Python 3 and ffmpeg (for H.265 a GPU with VA-API HEVC encoding at `/dev/dri/renderD128`:
-`--render`), nothing else. No sound.
+`--render`), nothing else.

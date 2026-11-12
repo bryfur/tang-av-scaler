@@ -19,6 +19,7 @@ somebody watches H.265.
     /stream           the JPEG frames as multipart/x-mixed-replace
     /h264 /h265 /x265 the encoded stream: the MP4's header, then fragments from the next key frame on
                       (one encoder at a time: whoever watches has it)
+    /audio            the dongle's sound: AAC in fragmented MP4 (the page's "sound" switch)
     /snapshot.jpg     the newest JPEG frame
     /status           JSON: frames a second, bit rates, viewers
 """
@@ -37,13 +38,15 @@ PAGE = rb"""<!doctype html><html><head><meta charset="utf-8"><title>capture</tit
 <style>html,body{margin:0;height:100%;background:#111;color:#999;font:13px system-ui,sans-serif}
 #v,#h{display:block;margin:auto;max-width:100vw;max-height:100vh;cursor:pointer;background:#000}
 #bar{position:fixed;left:.6em;bottom:.4em;background:#000a;padding:.15em .5em}a{color:#9cf}
-select{font:inherit;background:#222;color:#ccc;border:1px solid #555}</style></head><body>
+select{font:inherit;background:#222;color:#ccc;border:1px solid #555}label{margin:0 .6em}</style></head><body>
 <canvas id="v" width="1920" height="1080" title="click: full screen"></canvas>
 <video id="h" muted autoplay playsinline style="display:none" title="click: full screen"></video>
+<audio id="au"></audio>
 <div id="bar"><select id="mode"><option value="mjpeg">Motion-JPEG (as the dongle sends it)</option>
 <option value="h264">H.264 (encoded by the GPU)</option>
 <option value="h265">H.265 (encoded by the GPU: not for Apple's decoder)</option>
-<option value="x265">H.265 (encoded in software: six processor cores)</option></select> <span id="s">connecting...</span></div>
+<option value="x265">H.265 (encoded in software: six processor cores)</option></select>
+<label><input type="checkbox" id="snd"> sound</label> <span id="s">connecting...</span></div>
 <script>
 const $=i=>document.getElementById(i),v=$('v'),h=$('h'),s=$('s'),c=v.getContext('2d');
 const CODECS={h264:'video/mp4; codecs="avc1.64002A"',h265:'video/mp4; codecs="hvc1.1.6.L153.B0"',x265:'video/mp4; codecs="hvc1.1.6.L123.B0"'};
@@ -106,6 +109,42 @@ async function coded(g,kind){
       err=String(e.message||e)+me;say(kind+': '+err);await wait(2000)}}
   }
 }
+// the sound: its own stream (AAC) beside whichever picture, kept at the newest too
+let sgen=0;
+async function sound(g){
+  const au=$('au'),MS=window.ManagedMediaSource||window.MediaSource,T='audio/mp4; codecs="mp4a.40.2"';
+  while(g==sgen){
+    const ms=new MS(),ac=new AbortController();
+    au.disableRemotePlayback=true;au.src=URL.createObjectURL(ms);
+    try{
+      await new Promise(f=>ms.addEventListener('sourceopen',f,{once:true}));
+      const sb=ms.addSourceBuffer(T);
+      const r=await fetch('/audio',{cache:'no-store',signal:ac.signal});
+      if(r.status!=200)throw new Error((await r.text()).trim()||('HTTP '+r.status));
+      const rd=r.body.getReader();
+      const tick=setInterval(()=>{
+        if(g!=sgen){ac.abort();return}
+        const b=au.buffered;if(!b.length)return;
+        const end=b.end(b.length-1),lag=end-au.currentTime;
+        if(lag>0.4||au.currentTime<b.start(b.length-1))au.currentTime=end-0.08;
+        au.playbackRate=lag>0.2?1.05:1;
+        if(au.paused)au.play().catch(e=>{snote='click the page for sound'});else snote='';
+        if(!sb.updating&&b.start(0)<end-10)try{sb.remove(0,end-5)}catch(e){}
+      },250);
+      try{
+        for(;;){
+          const {value,done}=await rd.read();if(done)throw new Error('the sound ended');
+          while(sb.updating)await new Promise(f=>sb.addEventListener('updateend',f,{once:true}));
+          sb.appendBuffer(value);
+        }
+      }finally{clearInterval(tick);ac.abort()}
+    }catch(e){if(g==sgen){snote='sound: '+String(e.message||e);say(snote);await wait(2000)}}
+  }
+}
+let snote='';
+$('snd').onchange=()=>{sgen++;snote='';localStorage.capsound=$('snd').checked?1:0;
+  if($('snd').checked)sound(sgen);else{$('au').pause();$('au').removeAttribute('src');$('au').load()}};
+document.addEventListener('click',()=>{if($('snd').checked&&$('au').paused)$('au').play().catch(()=>{})});
 function start(){
   gen++;err='';note='';
   const m=$('mode').value;localStorage.capmode=m;
@@ -114,9 +153,10 @@ function start(){
 }
 $('mode').onchange=start;
 if(localStorage.capmode)$('mode').value=localStorage.capmode;
+if(localStorage.capsound==1){$('snd').checked=true;sound(++sgen)}
 setInterval(()=>{const t=performance.now(),d=(t-t0)/1000,e=$('mode').value!='mjpeg'?h:v;
   s.innerHTML=err?err:(shown/d).toFixed(0)+' frames/s &middot; '+(bytes*8/d/1e6).toFixed(1)+' Mbit/s &middot; '+
-    (e.videoWidth||e.width)+' x '+(e.videoHeight||e.height)+(note?' &middot; '+note:'')+' &middot; <a href="/snapshot.jpg" target="_blank">snapshot</a>';
+    (e.videoWidth||e.width)+' x '+(e.videoHeight||e.height)+(note?' &middot; '+note:'')+(snote?' &middot; '+snote:'')+' &middot; <a href="/snapshot.jpg" target="_blank">snapshot</a>';
   shown=0;bytes=0;t0=t},2000);
 start();
 </script></body></html>"""
@@ -299,7 +339,71 @@ class Source:
             return (self.n, self.frame) if self.n != after else (after, None)
 
 
-def handler(src):
+class Sound:
+    """the dongle's sound (ALSA) as AAC in fragmented MP4, while somebody listens: the MP4's header,
+    its fragments to each listener's queue"""
+
+    def __init__(self, a):
+        self.a = a
+        self.cond = threading.Condition()
+        self.hq = []
+        self.init = None
+        self.error = ""
+        if a.sound:
+            threading.Thread(target=self.run, daemon=True).start()
+
+    def run(self):
+        while True:
+            with self.cond:
+                while not self.hq:
+                    self.cond.wait(1)
+            p = subprocess.Popen(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "alsa", "-ac", "2", "-ar", "48000",
+                                  "-thread_queue_size", "64", "-i", self.a.sound, "-c:a", "aac", "-b:a", "160k",
+                                  "-f", "mp4", "-movflags", "frag_every_frame+empty_moov+default_base_moof", "pipe:1"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+            f = p.stdout
+            init, moof = b"", None
+            try:
+                while self.hq:
+                    head = f.read(8)
+                    if len(head) < 8:
+                        self.error = p.stderr.read().decode(errors="replace").strip()[-300:]
+                        break
+                    size, kind = struct.unpack(">I4s", head)
+                    body = b""
+                    while len(body) < size - 8:
+                        more = f.read(size - 8 - len(body))
+                        if not more:
+                            break
+                        body += more
+                    data = head + body
+                    if kind in (b"ftyp", b"moov"):
+                        init += data
+                        if kind == b"moov":
+                            self.init = init
+                    elif kind == b"moof":
+                        moof = data
+                    elif kind == b"mdat" and moof:
+                        with self.cond:
+                            for q in self.hq:
+                                try:
+                                    q.put_nowait(moof + data)
+                                except queue.Full:
+                                    while not q.empty():
+                                        q.get_nowait()
+                                    q.put_nowait(None)
+                        moof = None
+            finally:
+                p.kill()
+                p.wait()
+                self.init = None
+                with self.cond:
+                    for q in self.hq:
+                        q.put(None)
+            time.sleep(0.5)
+
+
+def handler(src, snd):
     class H(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"           # (the page's frames on one connection)
 
@@ -396,6 +500,40 @@ def handler(src):
                         if q in src.hq:
                             src.hq.remove(q)
                         src.wanted_until = max(src.wanted_until, time.time() + 3)
+            elif path == "/audio":
+                self.close_connection = True
+                if not snd.a.sound:
+                    self.send(404, "text/plain", b"no sound device given (--sound)\n")
+                    return
+                q = queue.Queue(maxsize=400)
+                with snd.cond:
+                    snd.hq.append(q)
+                    snd.cond.notify_all()
+                try:
+                    t = time.time()
+                    while snd.init is None:
+                        if time.time() - t > 6:
+                            self.send(503, "text/plain", ("no sound from the dongle. " + snd.error + "\n").encode())
+                            return
+                        time.sleep(0.05)
+                    while not q.empty():
+                        q.get_nowait()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/mp4")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    self.wfile.write(snd.init)
+                    while True:
+                        data = q.get(timeout=10)
+                        if data is None:
+                            return
+                        self.wfile.write(data)
+                except (BrokenPipeError, ConnectionResetError, OSError, queue.Empty):
+                    pass
+                finally:
+                    with snd.cond:
+                        if q in snd.hq:
+                            snd.hq.remove(q)
             elif path == "/stream":
                 self.close_connection = True
                 self.send_response(200)
@@ -432,9 +570,10 @@ def main():
     ap.add_argument("--qp", type=int, default=27, help="H.265's quantiser: lower is better and bigger (22-32)")
     ap.add_argument("--vf", default="format=nv12,hwupload", help="the filter before the GPU's encoder")
     ap.add_argument("--hevc", default="-profile:v main -tier main -level 5.1 -aud 1", help="more of hevc_vaapi's options")
+    ap.add_argument("--sound", default="hw:CARD=U15389", help="the dongle's ALSA device (empty: no sound)")
     ap.add_argument("--render", default="/dev/dri/renderD128", help="the GPU's VA-API device")
     a = ap.parse_args()
-    srv = ThreadingHTTPServer(("0.0.0.0", a.port), handler(Source(a)))
+    srv = ThreadingHTTPServer(("0.0.0.0", a.port), handler(Source(a), Sound(a)))
     srv.daemon_threads = True
     print("capture on http://0.0.0.0:%d/" % a.port, flush=True)
     srv.serve_forever()
