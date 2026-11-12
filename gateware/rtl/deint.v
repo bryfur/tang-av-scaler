@@ -202,7 +202,7 @@ module deint #(
         end
         case (st)
             S_IDLE:
-                if (start) begin
+                if (start && !start_clr) begin
                     start_clr <= 1'b1;
                     fstart <= 1'b1;
                     frames <= frames + 16'd1;

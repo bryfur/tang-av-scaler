@@ -41,6 +41,7 @@ void app_main(void)
     wifi_start();
     web_start();
     xvc_start();
+    scaler_start();
 
     /* An update is on trial until something has reached it over the network (the tool that sent
      * it asks for its status; so does the web page): then it is kept.  One that nobody can reach

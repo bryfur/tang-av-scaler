@@ -27,6 +27,34 @@ struct console_state {
 };
 void console_get(struct console_state *s);
 size_t console_tail(char *dst, size_t max);     /* the last bytes the FPGA sent */
+bool console_busy(void);                        /* a host is on the TCP port */
+/* the link's own words with the FPGA's monitor: tx sent whole, then rxn bytes of answer waited for
+ * (not passed on to a listener); false if they do not come in ms */
+bool console_xfer(const uint8_t *tx, size_t txn, uint8_t *rx, size_t rxn, int ms);
+
+/* scaler.c: the board brought up and kept up by the link itself; the picture's settings */
+struct scaler_settings {
+    bool on;            /* the link runs the scaler (else it is left alone) */
+    bool ntsc;          /* the picture rate 60/1.001 Hz */
+    uint8_t mode;       /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave */
+    uint8_t thr;        /* its motion threshold */
+    bool aa;            /* SMAA */
+    uint8_t aa_thr;     /* its edge threshold */
+    bool swap, top1, pattern, freeze;
+};
+struct scaler_state {
+    bool host;          /* a host has the console: nothing done */
+    bool fpga;          /* the bring-up image answers */
+    bool ok;            /* brought up, every chip set */
+    bool hpd, pll, hist;
+    uint32_t build, ups;
+    uint16_t pix, lines, fields_s, frames_s;
+    uint32_t llc_khz;
+};
+void scaler_start(void);
+void scaler_get(struct scaler_state *s, struct scaler_settings *v);
+void scaler_set(const struct scaler_settings *v);
+void scaler_again(void);
 
 /* wifi.c: the saved network, or the firmware's own access point to be given one */
 void wifi_start(void);

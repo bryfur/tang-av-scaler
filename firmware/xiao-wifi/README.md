@@ -11,6 +11,24 @@ serial port too when a cable is in.
 | The FPGA's UART (D6, D7, 1 Mbaud) | TCP 2323, raw bytes; the USB serial port | `tools/avx.py console`, `tools/avx.py pty` |
 | Status, settings, updates | http://avscaler.local/ | a browser, or `tools/avx.py` |
 
+## The scaler run by the link
+
+With the bring-up image in the FPGA (`gateware/`), the link brings the board up by itself and keeps
+it up (`main/scaler.c`): the clock chip, the HDMI redriver, the display's SCDC, the transceiver
+lanes, the ADV7181D for 480i component, the picture's settings; again after the FPGA is reloaded or
+a display is plugged in. No host and no script: power, a source, a display.
+
+The web page's **Picture** section shows what comes in and goes out and sets: the picture rate
+(59.94 or 60 Hz), the deinterlacing (motion adaptive, bob, weave) and its motion threshold, the
+anti-aliasing and its edge threshold, Cb/Cr swapped, the field order, the test picture, a freeze.
+The settings are kept in flash. The same over HTTP: `GET /api/video`, `POST /api/video` (a form:
+`mode=1&aa=0`, ...; `again=1` brings everything up again).
+
+While a host is on the console port (`gateware/tools/*.py`), the link leaves the scaler to it.
+
+The FPGA itself still has to be loaded after power-on (`gateware/tools/load.sh`, over the USB
+cable) until the bitstream is written to the SOM's flash.
+
 ## State on the board (2026-11-12, an ESP32-C5 in rev C-B)
 
 Works: joining a network, the FPGA's UART on TCP 2323, the status page, updates over Wi-Fi; and with
@@ -73,6 +91,7 @@ model on fpga (gcc), openFPGALoader here.
 | File | |
 |---|---|
 | `main/board.h` | the XIAO's pads by chip, the ports, the UART's rate |
+| `main/scaler.c` | the board brought up and kept up through the FPGA's monitor; the picture's settings |
 | `main/jtag.c`, `tap.c` | JTAG bit-banged on the GPIO registers; the link's own scans (Gowin ID code, status) |
 | `main/xvc_core.c`, `xvc.c` | the XVC protocol (portable: test/ runs it); its TCP server |
 | `main/console.c` | the FPGA's UART to TCP and USB |

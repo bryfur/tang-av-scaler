@@ -10,6 +10,9 @@
  *                          slot, then a restart into it
  *   POST /api/load?sum=N   the body is a bitstream (the .fs file's bits as bytes); the link loads it into
  *                          the FPGA's SRAM by itself (gowin.c) and answers with what happened
+ *   GET  /api/video        JSON: the scaler as the link runs it (scaler.c): the picture in, the settings
+ *   POST /api/video        a form, any of: on, ntsc, mode, thr, aa, aa_thr, swap, top1, pattern, freeze
+ *                          (numbers; 0 or 1 for the switches), again=1 (everything brought up again)
  *   POST /api/restart
  *
  * No passwords: whoever reaches the port on the local network may use it, as with the JTAG port. */
@@ -350,6 +353,60 @@ static esp_err_t post_load(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t get_video(httpd_req_t *req)
+{
+    static char out[640];
+    struct scaler_state t;
+    struct scaler_settings v;
+    scaler_get(&t, &v);
+#define B(x) ((x) ? "true" : "false")
+    int n = snprintf(out, sizeof out,
+                     "{\"host\":%s,\"fpga\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
+                     "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
+                     "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"swap\":%d,"
+                     "\"top1\":%d,\"pattern\":%d,\"freeze\":%d}}",
+                     B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
+                     t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
+                     v.aa_thr, v.swap, v.top1, v.pattern, v.freeze);
+#undef B
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_send(req, out, n);
+}
+
+static esp_err_t post_video(httpd_req_t *req)
+{
+    char body[300], f[12];
+    struct scaler_state t;
+    struct scaler_settings v;
+    if (req->content_len == 0 || req->content_len >= sizeof body)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "a form: mode=0&aa=1&...");
+    size_t got = 0;
+    while (got < req->content_len) {
+        int r = httpd_req_recv(req, body + got, req->content_len - got);
+        if (r <= 0)
+            return ESP_FAIL;
+        got += r;
+    }
+    body[got] = 0;
+    scaler_get(&t, &v);
+#define NUM(name, dst, max) if (field(body, name, f, sizeof f)) { int x = atoi(f); dst = x < 0 ? 0 : x > (max) ? (max) : x; }
+    NUM("on", v.on, 1)
+    NUM("ntsc", v.ntsc, 1)
+    NUM("mode", v.mode, 2)
+    NUM("thr", v.thr, 255)
+    NUM("aa", v.aa, 1)
+    NUM("aa_thr", v.aa_thr, 255)
+    NUM("swap", v.swap, 1)
+    NUM("top1", v.top1, 1)
+    NUM("pattern", v.pattern, 1)
+    NUM("freeze", v.freeze, 1)
+#undef NUM
+    scaler_set(&v);
+    if (field(body, "again", f, sizeof f) && atoi(f))
+        scaler_again();
+    return httpd_resp_sendstr(req, "set\n");
+}
+
 static esp_err_t post_restart(httpd_req_t *req)
 {
     httpd_resp_sendstr(req, "restarting\n");
@@ -361,7 +418,7 @@ void web_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 12;
+    cfg.max_uri_handlers = 16;
     cfg.lru_purge_enable = true;
     cfg.recv_wait_timeout = 10;
     httpd_handle_t srv;
@@ -380,6 +437,8 @@ void web_start(void)
         {.uri = "/api/load", .method = HTTP_POST, .handler = post_load},
         {.uri = "/api/load", .method = HTTP_GET, .handler = get_load},
         {.uri = "/api/restart", .method = HTTP_POST, .handler = post_restart},
+        {.uri = "/api/video", .method = HTTP_GET, .handler = get_video},
+        {.uri = "/api/video", .method = HTTP_POST, .handler = post_video},
     };
     for (size_t k = 0; k < sizeof uris / sizeof uris[0]; k++)
         httpd_register_uri_handler(srv, &uris[k]);

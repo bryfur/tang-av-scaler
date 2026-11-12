@@ -1,16 +1,29 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AV scaler debug link</title>
+<title>AV scaler</title>
 <style>
 body{font:15px/1.45 system-ui,sans-serif;margin:1.2em auto;max-width:44em;padding:0 1em;color:#222;background:#fafafa}
 h1{font-size:1.3em}h2{font-size:1.05em;margin:1.4em 0 .4em;border-bottom:1px solid #ccc}
 table{border-collapse:collapse}td{padding:.12em .8em .12em 0;vertical-align:top}td:first-child{color:#666}
-input{font:inherit;padding:.25em;margin:.15em 0}button{font:inherit;padding:.3em .9em}
+input,select{font:inherit;padding:.25em;margin:.15em 0}label{margin-right:1.2em;white-space:nowrap}input[type=number]{width:4.5em}button{font:inherit;padding:.3em .9em}
 pre{background:#111;color:#ddd;padding:.6em;overflow:auto;max-height:22em;font-size:12px}
 .ok{color:#080}.bad{color:#b00}#msg{color:#06c;white-space:pre-wrap}
 </style></head><body>
-<h1>AV scaler debug link</h1>
+<h1>AV scaler</h1>
 <div id="msg"></div>
+<h2>Picture</h2><table id="vs"></table>
+<form id="vf">
+<label><input type="checkbox" name="on"> the link runs the scaler</label>
+<label>rate <select name="ntsc"><option value="1">59.94 Hz</option><option value="0">60 Hz</option></select></label><br>
+<label>deinterlacing <select name="mode"><option value="0">motion adaptive</option><option value="1">bob</option><option value="2">weave</option></select></label>
+<label>motion threshold <input type="number" name="thr" min="0" max="255"></label><br>
+<label><input type="checkbox" name="aa"> anti-aliasing (SMAA)</label>
+<label>edge threshold <input type="number" name="aa_thr" min="1" max="255"></label><br>
+<label><input type="checkbox" name="swap"> swap Cb/Cr</label>
+<label><input type="checkbox" name="top1"> top field is F=1</label>
+<label><input type="checkbox" name="pattern"> test picture</label>
+<label><input type="checkbox" name="freeze"> freeze</label><br>
+<button>Apply</button> <button type="button" onclick="video('again=1')">Bring up again</button></form>
 <h2>Status</h2><table id="st"></table>
 <h2>FPGA</h2><table id="fp"></table><button onclick="fpga()">Read over JTAG</button>
 <h2>Wi-Fi network</h2>
@@ -35,10 +48,27 @@ async function status(){
       row('JTAG','port '+j.port+' &middot; '+(j.connected?'in use by '+j.peer:'free')+' &middot; '+j.sessions+' sessions, '+j.bits+' bits, TCK '+j.tck_ns+' ns (fastest '+j.fastest_ns+')')+
       row('Console','port '+c.port+' at '+c.baud+' baud &middot; '+(c.tcp?'client '+c.peer:'no client')+(c.usb?' &middot; USB':'')+' &middot; '+c.to_fpga+' bytes out, '+c.from_fpga+' in')+
       row('Firmware',esc(f.version)+' &middot; built '+f.built+' &middot; '+f.chip+', slot '+f.slot+' &middot; up '+f.uptime_s+' s, '+f.heap+' bytes free');
+    vstat();
     $('con').textContent=await (await fetch('/api/console')).text();
     $('log').textContent=await (await fetch('/api/log')).text();
   }catch(e){msg('no answer from the link')}
 }
+let vfill=true;
+async function vstat(){
+  const v=await (await fetch('/api/video')).json(), f=$('vf').elements;
+  $('vs').innerHTML=
+    row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':
+      yes(v.fpga,'FPGA answers (build '+new Date(v.build*1000).toISOString().slice(0,16).replace('T',' ')+')','no FPGA image answers')+
+      ' &middot; '+yes(v.ok,'brought up','NOT brought up')+' ('+v.ups+'x)')+
+    row('Output','1080p &middot; transceiver PLL '+yes(v.pll,'locked','not locked')+' &middot; display '+yes(v.hpd,'present','not seen'))+
+    row('Input',v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
+      yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out');
+  if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}}
+}
+async function video(body){msg(await (await fetch('/api/video',{method:'POST',body})).text());vfill=true;vstat()}
+$('vf').onsubmit=e=>{e.preventDefault();const f=$('vf').elements,p=new URLSearchParams();
+  for(const e of f){if(!e.name)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
+  video(p)};
 async function fpga(){
   const f=await (await fetch('/api/fpga')).json();
   $('fp').innerHTML=f.busy?row('JTAG','in use by a client'):
