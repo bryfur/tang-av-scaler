@@ -34,6 +34,10 @@ foreach k {0 1 2 3} { puts $f "`define EASU_HEX$k \"$out/easu$k.hex\"" }
 exec python3 $gw/sim/smaa.py table $out/smaa.hex $out/smaad.hex
 puts $f "`define SMAA_HEX \"$out/smaa.hex\""
 puts $f "`define SMAA_DHEX \"$out/smaad.hex\""
+# the on-screen text's font (kept in the tree: tools/mkfont.py) and the CPU's program (sw/: make)
+puts $f "`define OSD_FONT \"$gw/rtl/osd_font.hex\""
+file copy -force [env GW_CPU $gw/sw/build/cpu.hex] $out/cpu.hex
+puts $f "`define CPU_HEX \"$out/cpu.hex\""
 close $f
 
 cd $out
@@ -41,8 +45,14 @@ create_project -name avb -dir $out -pn GW5AST-LV138PG484AC1/I0 -device_version [
 cd $out/avb
 add_file -type verilog $out/defines.v
 #   GW_SRCS   the sources, from gateware/ (default: the bring-up image's; a test's: test/loop.v)
-foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/vcap.v rtl/border.v rtl/focus.v rtl/grab.v rtl/cap_ddr.v rtl/deint.v rtl/lstream.v rtl/smaa.v rtl/easu.v rtl/rcas.v rtl/dline.v rtl/audio_in.v rtl/hdmi_audio.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
+foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/cpu.v rtl/osd.v rtl/vcap.v rtl/border.v rtl/focus.v rtl/grab.v rtl/cap_ddr.v rtl/deint.v rtl/lstream.v rtl/smaa.v rtl/easu.v rtl/rcas.v rtl/dline.v rtl/audio_in.v rtl/hdmi_audio.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
     add_file -type verilog $gw/$f
+}
+# the hard CPU's SoC (Gowin's RiscV_AE350_SOC, from the IDE's own files: its top in plain Verilog, the rest
+# encrypted; rtl/riscv_ae350_config.v and rtl/gw_dtcm_config.v are what its generator would write)
+if {[env GW_CST ""] eq ""} {
+    set ip [env GW_IP [file normalize ~/tools/gowin-standard-1.9.12.04/IDE/ipcore/RiscV_AE350_SOC/data]]
+    foreach f {riscv_ae350_top.v riscv_ae350_soc.v} { add_file -type verilog $ip/$f }
 }
 #   GW_CST    the pins (gowin/avb.cst); a test's own: no clock constraints with it
 # the transceivers' register file (gowin/serdes.py): the place and route takes it with the design
@@ -57,6 +67,7 @@ if {[env GW_CST ""] ne ""} {
 set_option -synthesis_tool gowinsynthesis
 set_option -top_module top
 set_option -verilog_std v2001
+set_option -include_path "$gw/rtl;$out"
 set_option -multi_file_compilation_unit 1
 # IN_SCL/IN_SDA and the VGA DDC sit on the slave-SPI configuration pins, the I2C pins are I/O
 set_option -use_mspi_as_gpio 1

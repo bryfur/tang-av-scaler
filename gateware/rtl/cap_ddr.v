@@ -67,7 +67,10 @@ module cap_ddr (
     reg [275:0] fifo [0:15] /* synthesis syn_ramstyle = "distributed_ram" */;
     reg [4:0]   wp = 5'd0, rp = 5'd0;
     wire [275:0] head = fifo[rp[3:0]];
-    assign a_valid = wp != rp;
+    // (a_valid a register: what it gates is wide)
+    reg         av = 1'b0;
+    wire [4:0]  wp_n = t1 != t2 ? wp + 5'd1 : wp, rp_n = a_ack ? rp + 5'd1 : rp;
+    assign a_valid = av;
     assign a_line = {head[275:273], 5'd0, head[272:256]};
     assign a_data = head[255:0];
     always @(posedge pclk) begin
@@ -77,12 +80,11 @@ module cap_ddr (
         u0 <= etg;
         u1 <= u0;
         u2 <= u1;
-        if (t1 != t2) begin
+        if (t1 != t2)
             fifo[wp[3:0]] <= {hold_a, hold};
-            wp <= wp + 5'd1;
-        end
-        if (a_ack)
-            rp <= rp + 5'd1;
+        wp <= wp_n;
+        rp <= rp_n;
+        av <= wp_n != rp_n;
         if (u1 != u2) begin
             latest <= e_slot;
             par[e_slot] <= e_f;

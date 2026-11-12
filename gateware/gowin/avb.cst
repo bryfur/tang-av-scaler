@@ -215,6 +215,8 @@ IO_LOC  "ddr_dqs[1]"    V9,V8;
 IO_PORT "ddr_dqs[1]"    IO_TYPE=SSTL15D PULL_MODE=NONE DRIVE=8 BANK_VCCIO=1.5;
 IO_LOC  "ddr_dqs[0]"    Y3,AA3;
 IO_PORT "ddr_dqs[0]"    IO_TYPE=SSTL15D PULL_MODE=NONE DRIVE=8 BANK_VCCIO=1.5;
+// The hard CPU's core clock is PLL_R[0]'s CLKOUT1, wired inside the chip (Gowin MUG1031 8.3.2)
+INS_LOC "u_pll/u" PLL_R[0];
 INS_LOC "u_ddr_pll/u" PLL_L[0];
 INS_LOC "u_ddr3/u_dp/u_phy/u_dll" DDRDLLM_BL;
 INS_LOC "u_ddr3/u_dp/u_phy/u_div" LEFTSIDE[4];

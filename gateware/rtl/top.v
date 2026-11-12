@@ -1,4 +1,5 @@
-// top.v: AV board rev C-B bring-up image: the monitor (mon.v) on the XIAO's UART and what it reaches.
+// top.v: AV board rev C-B bring-up image: the monitor (mon.v) on the XIAO's UART and what it reaches;
+// the SOM's hard CPU (cpu.v) reaches the same registers, at 0xE8000000 + 4 x the register.
 //
 // Registers (32 bits):
 //   00 R   ID        "AVB1" (0x31425641)
@@ -28,6 +29,16 @@
 //                    DVI's plain blanking), 2 data islands: the sound and the InfoFrames
 //                    (hdmi_audio.v: with bit 1; 1080p60 only), 7:4 the scrambler's open choices
 //                    (hdmi_scr.v opt); 0 and 7:4 set before the lanes are started
+//   27 R   LAT      11:0 how old the newest field was when the frame now shown was begun (from the
+//                    field's last line), in 10 us
+//   28 RW  OSD      0 the on-screen text shown (osd.v)
+//   29 W   OSDW     a character of it: 16:8 where (line * 64 + column), 7:0 the character
+//   2A R   TEMP     the chip's temperature: 13:0 degrees C x 4 (signed), 31 measured
+//   60 RW  CPU      0 the hard CPU runs (else held in reset: for a new program)
+//   61 RW  CPUA     the program's word the next CPUD writes (it counts on)
+//   62 W   CPUD     a word of the CPU's program (0x80000000 + 4 x CPUA)
+//   64-67 RW CPUM   four words the CPU's program leaves for the host (sw/main.c: 64 counts up while
+//                    it runs, 65 says what it is)
 //   30 RW  VID       0 the picture is the component input's (else pattern.v's), 1 the fields in the
 //                    DDR3 are left as they are, 2 the pixel port is 16 bits wide (the CP core's:
 //                    vcap.v), 3 Cb and Cr the other way round, 4 the sharpening leaves noise alone
@@ -131,19 +142,67 @@ module top (
     inout  [3:0]  ddr_dqs,
     inout  [3:0]  ddr_dqs_n
 );
-    wire clk, pll_lock;
-    sys_pll u_pll (.clkin(sys_clk), .clk(clk), .lock(pll_lock));
+    wire clk, core_clk, pll_lock;
+    sys_pll u_pll (.clkin(sys_clk), .clk(clk), .core(core_clk), .lock(pll_lock));
 
-    wire [7:0]  addr;
-    wire [31:0] wdata;
-    wire        we;
+    // the register bus: the monitor's, and between its words the CPU's
+    wire [7:0]  m_addr, c_addr;
+    wire [31:0] m_wdata, c_wdata;
+    wire        m_we, c_we, c_own, m_stall, m_busy;
+    wire [7:0]  addr = c_own ? c_addr : m_addr;
+    wire [31:0] wdata = c_own ? c_wdata : m_wdata;
+    wire        we = c_own ? c_we : m_we;
     reg  [31:0] rdata;
     wire        hold;
-    mon #(.DIV(50)) u_mon (.clk(clk), .rx(esp_tx), .tx(esp_rx), .addr(addr), .wdata(wdata), .we(we),
-                          .rdata(rdata), .hold(hold));
+    mon #(.DIV(50)) u_mon (.clk(clk), .rx(esp_tx), .tx(esp_rx), .addr(m_addr), .wdata(m_wdata), .we(m_we),
+                          .rdata(rdata), .hold(hold), .stall(m_stall), .busy(m_busy));
+
+    // the hard CPU (cpu.v): its program's memory and its reset from the bus; four words for what it says
+    reg         cpu_run = 1'b1;
+    reg  [12:0] cpu_pa = 13'd0;
+    reg  [31:0] cpu_m0 = 32'd0, cpu_m1 = 32'd0, cpu_m2 = 32'd0, cpu_m3 = 32'd0;
+    wire        cpu_pwe = we && addr == 8'h62;
+    always @(posedge clk) begin
+        if (we && addr == 8'h60)
+            cpu_run <= wdata[0];
+        if (we && addr == 8'h61)
+            cpu_pa <= wdata[12:0];
+        else if (cpu_pwe)
+            cpu_pa <= cpu_pa + 13'd1;
+        if (we && addr == 8'h64)
+            cpu_m0 <= wdata;
+        if (we && addr == 8'h65)
+            cpu_m1 <= wdata;
+        if (we && addr == 8'h66)
+            cpu_m2 <= wdata;
+        if (we && addr == 8'h67)
+            cpu_m3 <= wdata;
+    end
+    cpu #(.HEX(`CPU_HEX)) u_cpu (.clk(clk), .core_clk(core_clk), .rst_n(pll_lock && cpu_run), .pm_we(cpu_pwe),
+                                .pm_wa(cpu_pa), .pm_wd(wdata), .stall(m_stall), .mon_busy(m_busy), .c_own(c_own),
+                                .c_we(c_we), .c_addr(c_addr), .c_wdata(c_wdata), .rdata(rdata), .txd(), .rxd(1'b1),
+                                .wfi());
+
+    // the chip's temperature (the ADC in its corner, in temperature mode: Gowin UG299): asked for
+    // every 0.67 s (beat), the answer some tens of ms later
+    wire        t_rdy;
+    wire [13:0] t_val;
+    reg         t_r0 = 1'b0, t_r1 = 1'b0;
+    reg  [14:0] temp = 15'd0;
 
     reg [24:0] beat = 25'd0;
     wire       tick = &beat;
+    always @(posedge clk) begin
+        t_r0 <= t_rdy;
+        t_r1 <= t_r0;
+        if (t_r0 && !t_r1)
+            temp <= {1'b1, t_val};
+    end
+    ADCULC #(.DYN_BKEN("FALSE"), .CLK_SEL(1'b0), .PIOCLK_SEL(1'b0), .VSEN_CTL(3'b000), .VSEN_CTL_SEL(1'b0),
+             .ADC_MODE(1'b0), .DIV_CTL(2'd0), .SAMPLE_CNT_SEL(3'd4), .RATE_CHANGE_CTRL(3'd4))
+        u_adc (.ADCINBK6A(1'b0), .ADCINBK6B(1'b0), .ADCINBK7A(1'b0), .ADCINBK7B(1'b0), .VSENCTL(3'b000),
+               .FSCAL_VALUE(10'd730), .OFFSET_VALUE(-12'sd1180), .ADCEN(1'b1), .CLK(clk), .DRSTN(pll_lock),
+               .ADCREQI(beat[24]), .ADCRDY(t_rdy), .ADCVALUE(t_val));
     always @(posedge clk)
         beat <= beat + 25'd1;
 
@@ -310,8 +369,21 @@ module top (
     dline #(.W(24 * PPC), .D(LAT)) u_dlp (.clk(tx_clk), .d({p_r, p_g, p_b}), .q(dl_p));
     wire [PPC - 1:0]      v_de, v_hs, v_vs, v_pre, v_gb, v_ucc;
     wire [8 * PPC - 1:0]  v_r, v_g, v_b;
-    assign {v_de, v_hs, v_vs, v_pre, v_gb, v_ucc} = dl_t;
-    assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {l_r, l_g, l_b} : dl_p;
+    // (the on-screen text over it, at one pixel a clock: osd.v, a few clocks more for everything)
+    reg                   osd_on = 1'b0;
+    always @(posedge clk)
+        if (we && addr == 8'h28)
+            osd_on <= wdata[0];
+    generate
+        if (PPC == 1) begin : g_osd
+            osd u_osd (.clk(tx_clk), .on(osd_on), .i_t(dl_t), .i_rgb(vid_on ? {l_r, l_g, l_b} : dl_p),
+                       .o_t({v_de, v_hs, v_vs, v_pre, v_gb, v_ucc}), .o_rgb({v_r, v_g, v_b}), .wclk(clk),
+                       .we(we && addr == 8'h29), .wa(wdata[16:8]), .wd(wdata[7:0]));
+        end else begin : g_noosd
+            assign {v_de, v_hs, v_vs, v_pre, v_gb, v_ucc} = dl_t;
+            assign {v_r, v_g, v_b} = dl_p;
+        end
+    endgenerate
     // the channels' control bits: 0 {VSYNC, HSYNC}; 1 {CTL1, CTL0}, 2 {CTL3, CTL2}: the video preamble
     // is CTL0 alone [HDMI 1.4 5.2.1.1], sent with the guard band
     // a data island's preamble is CTL0 and CTL2 [5.2.1.1]; its characters go to the encoders in the
@@ -528,6 +600,25 @@ module top (
                   .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),
                   .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
+    // how old the newest field is when a frame is begun: from the field's end (latest changes), in 10 us
+    reg  [9:0]   lt_div = 10'd0;
+    reg  [11:0]  lt_age = 12'd0, lt_f = 12'd0, lat_s0, lat_s;
+    reg  [2:0]   lt_l;
+    always @(posedge pclk) begin
+        lt_l <= f_latest;
+        lt_div <= lt_div == 10'd999 ? 10'd0 : lt_div + 10'd1;
+        if (f_latest != lt_l) begin
+            lt_age <= 12'd0;
+            lt_div <= 10'd0;
+        end else if (lt_div == 10'd999 && !(&lt_age))
+            lt_age <= lt_age + 12'd1;
+        if (d_fstart)
+            lt_f <= lt_age;
+    end
+    always @(posedge clk) begin
+        lat_s0 <= lt_f;
+        lat_s <= lat_s0;
+    end
     generate
         if (PPC == 1) begin : g_lv
             wire [7:0]  e_y, e_cb, e_cr;
@@ -644,6 +735,15 @@ module top (
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
+            8'h27: rdata <= {20'd0, lat_s};
+            8'h28: rdata <= {31'd0, osd_on};
+            8'h2A: rdata <= {temp[14], 17'd0, temp[13:0]};
+            8'h60: rdata <= {31'd0, cpu_run};
+            8'h61: rdata <= {19'd0, cpu_pa};
+            8'h64: rdata <= cpu_m0;
+            8'h65: rdata <= cpu_m1;
+            8'h66: rdata <= cpu_m2;
+            8'h67: rdata <= cpu_m3;
             8'h37: rdata <= {fo_n, fo_sum};
             8'h3E: rdata <= {bd_any, 6'd0, bd_x1, 7'd0, bd_x0};
             8'h3F: rdata <= {6'd0, bd_l1, 6'd0, bd_l0};

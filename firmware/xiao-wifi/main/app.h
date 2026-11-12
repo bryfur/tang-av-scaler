@@ -52,7 +52,8 @@ struct scaler_settings {
     bool wide;          /* the picture is 16:9's (a game set to widescreen): all 1920 columns */
     uint8_t nr;         /* temporal noise reduction where the picture is still: 0 none, 1 to 3 */
     bool dn;            /* the sharpening leaves noise alone */
-    uint8_t phase;      /* the decoder's sampling phase (its DLL: 0 to 31) (new settings go at the end: the
+    uint8_t phase;      /* the decoder's sampling phase (its DLL: 0 to 31) */
+    bool osd;           /* the on-screen text (the FPGA's CPU writes it) (new settings go at the end: the
                          * ones kept in flash are read as far as they go; a byte of padding the compiler
                          * left at the end was kept too, as 0, and is the next setting's first value) */
 };
@@ -68,6 +69,9 @@ struct scaler_state {
     uint8_t tune;       /* the sampling phase's tuning: 0 not asked, 1 at it, 2 done (the sharpest kept),
                          * 3 the picture moved meanwhile (as it was), 4 no fields to measure */
     uint16_t tune_gain; /* the sharpest phase's sharpness over the least's, in percent */
+    int16_t temp4;      /* the FPGA's temperature, degrees C x 4 (-32768: not measured) */
+    uint16_t delay_us10;/* the picture's delay, in 10 us (a field's end to its lines shown) */
+    bool cpu;           /* the FPGA's CPU runs its program */
 };
 void scaler_start(void);
 void scaler_get(struct scaler_state *s, struct scaler_settings *v);

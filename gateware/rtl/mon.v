@@ -7,6 +7,10 @@
 // silence, so a host that starts with a pause is in step.  Until the first command byte the
 // monitor says "AVB1\r\n" every 0.67 s: a sign of life with nothing asked.  Commands queue in a
 // 4096-byte FIFO: a write may hold the next command (hold, e.g. an I2C line still rising).
+//
+// The bus has a second master (the CPU: rtl/cpu.v): stall keeps the monitor from starting on a
+// word (it takes no command byte); busy: it is in the middle of one (the write's strobe, the
+// read's word).
 
 module mon #(parameter DIV = 50) (
     input             clk,
@@ -16,7 +20,9 @@ module mon #(parameter DIV = 50) (
     output reg [31:0] wdata,
     output reg        we = 1'b0,
     input      [31:0] rdata,        // of addr, a clock later
-    input             hold
+    input             hold,
+    input             stall,
+    output            busy
 );
     wire [7:0] rx_data;
     wire       rx_valid;
@@ -32,7 +38,7 @@ module mon #(parameter DIV = 50) (
     reg [11:0] wp = 12'd0, wp_d = 12'd0, rp = 12'd0;
     reg [7:0]  q;
     reg        popped = 1'b0;
-    wire       ready = wp_d != rp && !popped;
+    wire       ready = wp_d != rp && !popped && !stall;
     reg        pop;
     always @(posedge clk) begin
         if (rx_valid && wp + 12'd1 != rp) begin
@@ -68,6 +74,7 @@ module mon #(parameter DIV = 50) (
     endfunction
 
     always @* pop = ready && (state == S_CMD || state == S_ADDR || state == S_DATA);
+    assign busy = state == S_WR || state == S_HOLD || state == S_RD || state == S_RD2 || we;
 
     always @(posedge clk) begin
         we <= 1'b0;

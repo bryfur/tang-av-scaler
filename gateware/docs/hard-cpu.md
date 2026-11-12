@@ -1,9 +1,15 @@
 # What the SOM's hard CPU could do instead of FPGA logic
 
 The GW5AST-138 has a hard RISC-V core beside the fabric (Andes A25 "AE350", run at 800 MHz in the
-fpc console's design). The scaler does not use it yet: everything is logic, and what is slow and
-rare is done by the ESP32 through a UART (`firmware/xiao-wifi/main/scaler.c`). This note sorts the
-design's parts by whether the CPU would do them better.
+fpc console's design). Since 2026-11-12 the scaler has it (`rtl/cpu.v`, its program in `sw/`): it
+runs at 400 MHz beside the picture's path, reaches every register the monitor does, and writes the
+on-screen text. The rest is still logic, and what is slow and rare is still done by the ESP32
+through a UART (`firmware/xiao-wifi/main/scaler.c`). This note sorts the design's parts by whether
+the CPU would do them better; "Where it stands" at the end says what is done.
+
+What it does not change: the paths that are hard to close are every pixel's (the scaler, the
+sharpening, the deinterlacer), and those stay logic. The CPU makes the rest quicker to write and to
+change (a program is loaded in a second, `tools/cpu.py load`; a bitstream takes 25 minutes).
 
 ## The measure
 
@@ -52,3 +58,19 @@ for is whatever happens once a line, once a field, or once in a while.
 3. HDMI packets: InfoFrames, then audio.
 4. Cadence detection and adaptive thresholds.
 5. The on-screen display.
+
+## Where it stands (2026-11-12)
+
+- The core runs (`rtl/cpu.v`): the fpc console's configuration, the core clock 400 MHz from
+  PLL_R[0]'s CLKOUT1 (the system clock's PLL, placed there), the buses on the system's 50 MHz. Its
+  program is 32 KB of block RAM at 0x80000000, the bitstream's `sw/build/cpu.hex` in it; the
+  register bus can write it (`tools/cpu.py load`: 1.3 s). Its data is the core's own DLM.
+- The register bus at 0xE8000000 + 4 x the register: the CPU takes a turn between the monitor's
+  words (`sim/cpu_tb.py`). So anything the ESP32 or a host tool does through the monitor, the
+  program can do.
+- The on-screen text (item 5 above, done first because it was asked for): `rtl/osd.v` shows a grid
+  of characters; `sw/main.c` writes them from the scaler's registers four times a second.
+- Cost: 21 block RAMs (74 % used now), a few hundred LUTs, the system clock's Fmax 75 -> 58 MHz
+  (50 needed).
+- Not yet: its UART has no pins (the XIAO's spare lines would do); the ESP32 still brings the board
+  up and holds the settings. Next by the order above: the bring-up and the settings on the CPU.

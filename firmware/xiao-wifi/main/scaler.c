@@ -36,7 +36,7 @@ static const char *TAG = "scaler";
 enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, R_I2C_SH = 0x05, R_FREQ = 0x10,
        R_GT_CTRL = 0x20, R_GT_STAT = 0x21, R_MODE = 0x25, R_HDMI = 0x26, R_VID = 0x30, R_CAP = 0x31,
        R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36,
-       R_FOCUS = 0x37, R_GEOM = 0x3A, R_BORDER = 0x3E, R_BORDERL = 0x3F };
+       R_LAT = 0x27, R_OSD = 0x28, R_TEMP = 0x2A, R_CPUM = 0x64, R_FOCUS = 0x37, R_GEOM = 0x3A, R_BORDER = 0x3E, R_BORDERL = 0x3F };
 #define ADV 0x21
 #define ADV_DLL 0x6A                    /* the sampling phase: bits 4:0 */
 #define MAGIC 0x31425641u
@@ -256,6 +256,7 @@ static void picture(void)
     dirty = false;
     xSemaphoreGive(lock);
     wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_corner ? 1u : 0) << 19 | (s.aa_diag ? 1u : 0) << 18 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (uint32_t)(s.nr & 3) << 4 | (s.top1 ? 4 : 0) | (s.mode & 3));
+    wr(R_OSD, s.osd ? 1 : 0);
     wr(R_HDMI, s.audio ? 6 : 0);        /* the video guard band and the data islands, or DVI's blanking */
     wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.dn ? 16 : 0) | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
     flush();
@@ -414,7 +415,7 @@ static void task(void *arg)
     uint8_t crop_was = 255, phase_was = 255, tune_st = 0;
     uint16_t tune_gain = 0;
     bool wide_was = false;
-    uint32_t fields_was = 0, frames_was = 0;
+    uint32_t fields_was = 0, frames_was = 0, cpu_was = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         struct scaler_state s = {0};
@@ -522,6 +523,17 @@ static void task(void *arg)
                 rd(R_DSTAT, &dstat);
                 rd(R_FREQ + 1, &llc);
                 s.hpd = hpd;
+                {
+                    uint32_t t, l, c;
+                    rd(R_TEMP, &t);
+                    rd(R_LAT, &l);
+                    rd(R_CPUM, &c);
+                    s.temp4 = t >> 31 ? (int16_t)((int32_t)(t << 18) >> 18) : -32768;
+                    /* (the field's end to the frame's start, and a field's time to its lines: 16.3 ms) */
+                    s.delay_us10 = (l & 0xFFF) + 1630;
+                    s.cpu = c != cpu_was;
+                    cpu_was = c;
+                }
                 s.pll = gt >> 13 & 1;
                 s.pix = cap & 0x7FF;
                 s.lines = cap >> 11 & 0x3FF;

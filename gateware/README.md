@@ -14,6 +14,7 @@ State on the board (2026-11-12):
 
 ## Build, load, run
 
+    (cd sw && make)                          # the hard CPU's program (the bitstream takes sw/build/cpu.hex)
     GW_MODE=1080p60 GW_OUT=$PWD/gowin/build/vid gowin/build.sh    # Gowin 1.9.12 in fpc's fpga-tools container
     tools/video.py --load                    # load it (USB JTAG), HDMI up, the decoder set, the input shown
     tools/hdmi.py --load gowin/build/hdmi/avb/impl/pnr/avb.fs     # the test picture alone
@@ -43,6 +44,8 @@ openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in t
 | `rtl/audio_in.v`, `hdmi_audio.v` | the audio converter's clocks and I2S words; HDMI's data islands: a packet in each line's back porch |
 | `rtl/gtx_quad.v` | the transceiver quad (generated: `tools/mkgtx.py`); its register file by `gowin/serdes.py`, no IDE |
 | `rtl/vcap.v`, `cap_ddr.v` | the ADV7181D's pixel port decoded, its fields into the DDR3 (eight slots, a bank each) |
+| `rtl/cpu.v`, `sw/` | the SOM's hard CPU (an Andes A25, Gowin's RiscV_AE350_SOC from the IDE's own files) and its program: for what need not be logic ([docs/hard-cpu.md](docs/hard-cpu.md)); it reaches the registers at 0xE8000000 + 4 x the register. `cd sw && make` (on fpga) before a bitstream; `tools/cpu.py load` puts a new program into a running board |
+| `rtl/osd.v` | the on-screen text: 8 lines of 48 characters over the picture (the CPU's program writes them: what comes in and goes out, what is done to the picture, the delay, the chip's temperature); its font `rtl/osd_font.hex` (`tools/mkfont.py`) |
 | `rtl/border.v` | where the fields have picture (the first and last lit pixel pair and line since asked): for the part shown |
 | `rtl/focus.v` | how sharp a field is across its lines: for the decoder's sampling phase (`tools/video.py phase sweep`) |
 | `rtl/deint.v`, `lstream.v` | the motion adaptive deinterlacer (a line when the output wants it); its lines made a 4:4:4 stream, each pixel with its part of the scaler's edge analysis |
@@ -57,7 +60,7 @@ openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in t
 | `tools/video.py`, `adv.py` | the component input: the ADV7181D's settings (and what was learnt about them), the capture's state, raw samples of the pixel port |
 | `tools/hdmi.py`, `clkgen.py`, `edid.py`, `scdc.py`, `linkq.py`, `ddcci.py` | HDMI up; the MS5351M; the sink's EDID, SCDC, error counters, and its own measure of the picture rate |
 | `tools/load.sh`, `flash.sh` | a bitstream into the SRAM, or into the SOM's flash, through the XIAO's USB-JTAG bridge |
-| `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `audio_tb.py` (the data islands decoded), `deint_tb.py [NFIELDS]` (Verilator: the whole picture path with a model of the DDR3, against `model.py`, `smaa.py` and `fsr.py`, pixel for pixel; `aa=T` with the anti-aliasing, `diag` its diagonal patterns, `aadbg` its view of what it finds, `sharp=N` the sharpening, `pic=FILE` a still picture in, `crop=X0,CW,Y0,CH` a part of it shown, `nr=N` the noise reduction, `dn` the sharpening's, `noise=A` noise added to the fields) |
+| `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `audio_tb.py` (the data islands decoded), `osd_tb.py` (the on-screen text), `cpu_tb.py` (the CPU's turn on the register bus beside the monitor's), `deint_tb.py [NFIELDS]` (Verilator: the whole picture path with a model of the DDR3, against `model.py`, `smaa.py` and `fsr.py`, pixel for pixel; `aa=T` with the anti-aliasing, `diag` its diagonal patterns, `aadbg` its view of what it finds, `sharp=N` the sharpening, `pic=FILE` a still picture in, `crop=X0,CW,Y0,CH` a part of it shown, `nr=N` the noise reduction, `dn` the sharpening's, `noise=A` noise added to the fields) |
 | `test/loop.v` | a UART loop-back, to test the XIAO's wiring |
 
 The monitor's port: `AVB_TTY` (a serial device, or `tcp:HOST[:PORT]`), else the Wi-Fi link

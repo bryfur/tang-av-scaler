@@ -182,7 +182,8 @@ module deint #(
     // C1: new and old as used, the three differences' greatest
     reg [127:0] dn, m, dnr, dwr, md, dor, mab, dw2, mlc, mrr;
     reg         rdv = 1'b0;
-    reg [255:0] rdq;
+    reg [255:0] rdq, rdq2;
+    reg [3:0]   rde = 4'd0;             // (which of the four a word read is: a clock before it is kept)
     reg [7:0]   carry;                  // m of the pixel before these sixteen
     reg [79:0]  al;                     // a, 5 bits a pixel
     integer     n;
@@ -231,15 +232,18 @@ module deint #(
         s1_ac <= a_c;
         rdv <= b_rvalid;
         rdq <= rd_data;
-        if (rdv) begin
+        if (rdv)
             rx <= rx + 3'd1;
-            case (rx[1:0])
-                2'd0: d0 <= rdq;
-                2'd1: d1 <= rdq;
-                2'd2: d2 <= rdq;
-                default: d3 <= rdq;
-            endcase
-        end
+        rde <= rdv ? 4'd1 << rx[1:0] : 4'd0;
+        rdq2 <= rdq;
+        if (rde[0])
+            d0 <= rdq2;
+        if (rde[1])
+            d1 <= rdq2;
+        if (rde[2])
+            d2 <= rdq2;
+        if (rde[3])
+            d3 <= rdq2;
         case (st)
             S_IDLE:
                 if (start && !start_clr) begin

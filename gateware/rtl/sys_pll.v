@@ -1,9 +1,12 @@
 // sys_pll.v: the system clock, 50 MHz, from the SOM's 50 MHz oscillator through a PLL (the
-// oscillator's pin has no clock route of its own): x 24 is a VCO of 1200 MHz, / 24.
+// oscillator's pin has no clock route of its own): x 24 is a VCO of 1200 MHz, / 24.  And the hard
+// CPU's core clock, 400 MHz (/ 3): CLKOUT1 of PLL_R[0] is wired to the core inside the chip
+// (Gowin MUG1031 8.3.2), so this PLL is placed there (gowin/avb.cst).
 
 module sys_pll (
     input  wire clkin,
     output wire clk,
+    output wire core,
     output wire lock
 );
 
@@ -13,7 +16,7 @@ wire gnd = 1'b0;
 wire vcc = 1'b1;
 
 PLL u (
-    .LOCK(lock), .CLKOUT0(clk), .CLKOUT1(), .CLKOUT2(), .CLKOUT3(),
+    .LOCK(lock), .CLKOUT0(clk), .CLKOUT1(core), .CLKOUT2(), .CLKOUT3(),
     .CLKOUT4(), .CLKOUT5(), .CLKOUT6(), .CLKFBOUT(),
     .CLKIN(clkin), .CLKFB(gnd), .RESET(gnd), .PLLPWD(gnd), .RESET_I(gnd),
     .RESET_O(gnd), .FBDSEL(6'd0), .IDSEL(6'd0), .MDSEL(7'd0),
@@ -33,14 +36,14 @@ defparam u.MDIV_SEL = 24;
 defparam u.MDIV_FRAC_SEL = 0;
 defparam u.ODIV0_SEL = 24;
 defparam u.ODIV0_FRAC_SEL = 0;
-defparam u.ODIV1_SEL = 8;
+defparam u.ODIV1_SEL = 3;
 defparam u.ODIV2_SEL = 8;
 defparam u.ODIV3_SEL = 8;
 defparam u.ODIV4_SEL = 8;
 defparam u.ODIV5_SEL = 8;
 defparam u.ODIV6_SEL = 8;
 defparam u.CLKOUT0_EN = "TRUE";
-defparam u.CLKOUT1_EN = "FALSE";
+defparam u.CLKOUT1_EN = "TRUE";
 defparam u.CLKOUT2_EN = "FALSE";
 defparam u.CLKOUT3_EN = "FALSE";
 defparam u.CLKOUT4_EN = "FALSE";
