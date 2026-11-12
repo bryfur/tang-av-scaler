@@ -166,14 +166,15 @@ def blend(pix, wts, w, h):
     return out
 
 
-def smaa_words(lines, thr=T, n=N):
+def smaa_words(lines, thr=T, n=N, dbg=False):
     """rtl/smaa.v: the picture as lines of 4:2:2 words (cb, y0, cr, y1) -> the same: luma mixed as
     blend() does; a chroma sample mixed only with the one above or below it (a pixel carries one:
     Cb the even pixels, Cr the odd)"""
     h, w = len(lines), 2 * len(lines[0])
     y = [[v for wd in line for v in (wd[1], wd[3])] for line in lines]
     c = [[v for wd in line for v in (wd[0], wd[2])] for line in lines]
-    wts = weights(edges(y, w, h, thr), w, h, n)
+    e = edges(y, w, h, thr)
+    wts = weights(e, w, h, n)
     W = lambda x, r: wts[r][x] if 0 <= x < w and 0 <= r < h else (0, 0, 0, 0)
     mix = lambda a, b, k: a + (((b - a) * k + 128) >> 8)
     out = []
@@ -193,6 +194,14 @@ def smaa_words(lines, thr=T, n=N):
                     yy = mix(yy, y[r][x - 1], best)
                 else:
                     yy = mix(yy, y[r][x + 1], best)
+            if dbg:                 # rtl/smaa.v dbg: what was found, in the picture's place
+                vert = best in (a_top, a_bot)
+                if best:
+                    yy, cc = 128 + (best >> 1), 224 if vert == (x % 2 == 0) else 96
+                elif e[r][x] != (0, 0):
+                    yy, cc = 110, 64
+                else:
+                    yy, cc = (16 if y[r][x] < 16 else 12 + (y[r][x] >> 2)), 128
             ny.append(yy)
             nc.append(cc)
         out.append([(nc[2 * q], ny[2 * q], nc[2 * q + 1], ny[2 * q + 1]) for q in range(w // 2)])

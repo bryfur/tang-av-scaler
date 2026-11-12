@@ -245,7 +245,7 @@ static void picture(void)
     s = set;
     dirty = false;
     xSemaphoreGive(lock);
-    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (s.top1 ? 4 : 0) | (s.mode & 3));
+    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (s.top1 ? 4 : 0) | (s.mode & 3));
     wr(R_HDMI, s.audio ? 6 : 0);        /* the video guard band and the data islands, or DVI's blanking */
     wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
     flush();
@@ -355,9 +355,10 @@ void scaler_start(void)
     lock = xSemaphoreCreateMutex();
     nvs_handle_t h;
     if (nvs_open("av", NVS_READONLY, &h) == ESP_OK) {
-        struct scaler_settings s;
+        /* (an older firmware's settings are shorter: they are taken as far as they go) */
+        struct scaler_settings s = set;
         size_t n = sizeof s;
-        if (nvs_get_blob(h, "video", &s, &n) == ESP_OK && n == sizeof s)
+        if (nvs_get_blob(h, "video", &s, &n) == ESP_OK && n <= sizeof s)
             set = s;
         nvs_close(h);
     }

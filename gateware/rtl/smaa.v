@@ -21,6 +21,9 @@
 //            its four neighbours whose weight is greatest; chroma with the one above or below only
 //
 // en 0: no edges, the picture through as it is (as late).  thr: the luma step that is an edge.
+// dbg: what it finds, in the picture's place: the picture dimmed to a quarter and grey; a pixel
+// with an edge and nothing mixed green; a pixel mixed with the one above or below blue, with the
+// one beside it red, the brighter the more.
 
 `ifndef SMAA_HEX
 `define SMAA_HEX "smaa.hex"
@@ -48,6 +51,7 @@ module smaa #(
     input             clk,
     input             en,
     input      [7:0]  thr,
+    input             dbg,
     input             i_v,
     input      [9:0]  i_x,
     input      [9:0]  i_j,
@@ -271,6 +275,7 @@ module smaa #(
     reg [10:0] k_x;
     reg [9:0]  k_r;
     reg [7:0]  k_wt, k_wu, k_wl, k_wo;
+    reg [1:0]  k_e;                     // the pixel's own edges {left, top}
     always @(posedge clk) begin
         q_v <= s_v;
         q_x <= s_x;
@@ -289,6 +294,7 @@ module smaa #(
         k_v <= q3_v;
         k_x <= q3_x;
         k_r <= q3_r;
+        k_e <= {q3_el, q3_et};
         k_wt <= q3_et ? ah[7:0] : 8'd0;         // the pixel takes this much of the one above
         k_wu <= q3_et ? ah[15:8] : 8'd0;        // the one above this much of it
         k_wl <= q3_el ? av[7:0] : 8'd0;         // the pixel of the one to its left
@@ -298,17 +304,18 @@ module smaa #(
     // ---- mixing ----
     // each column's weights {top, left, of its left} of the line above; its pixels of the two lines
     // above the one the weights are of ({the nearer, the further})
-    reg [23:0] cm [0:1023];
+    reg [25:0] cm [0:1023];
     reg [31:0] fm [0:1023];
-    reg [23:0] c_r1;
+    reg [25:0] c_r1;
     reg [31:0] f_r1;
-    reg [23:0] c_q /* synthesis syn_preserve = 1 */;
+    reg [25:0] c_q /* synthesis syn_preserve = 1 */;
     reg [31:0] f_q /* synthesis syn_preserve = 1 */;
     reg [15:0] p_d /* synthesis syn_preserve = 1 */;
     reg        b0_v = 1'b0, b1_v = 1'b0, b1_in;
     reg [10:0] b0_x, b1_x;
     reg [9:0]  b0_r, b1_r;
     reg [7:0]  b0_wt, b0_wu, b0_wl, b0_wo, b1_wt, b1_wu, b1_wl, b1_wo;
+    reg [1:0]  b0_e, b1_e;
     always @* p_ra = {k_r[4:0], k_x[9:0]};
     always @(posedge clk) begin
         c_r1 <= cm[k_x[9:0]];
@@ -324,8 +331,9 @@ module smaa #(
         {b1_wu, b0_wu} <= {b0_wu, k_wu};
         {b1_wl, b0_wl} <= {b0_wl, k_wl};
         {b1_wo, b0_wo} <= {b0_wo, k_wo};
+        {b1_e, b0_e} <= {b0_e, k_e};
         if (b1_v && b1_in) begin
-            cm[b1_x[9:0]] <= {b1_wt, b1_wl, b1_wo};
+            cm[b1_x[9:0]] <= {b1_e, b1_wt, b1_wl, b1_wo};
             fm[b1_x[9:0]] <= {p_d, f_q[31:16]};
         end
     end
@@ -333,6 +341,9 @@ module smaa #(
     // weights; the luma to its left
     reg [15:0] v_ctr, v_top, v_bot;
     reg [7:0]  v_at, v_al, v_ab, v_ly;
+    reg [1:0]  v_e, n_e, m_e, m2_e, m3_e;
+    reg [7:0]  m2_w, m3_w;
+    reg        m_vert, m2_vert, m3_vert;
     reg        m_v = 1'b0, n_v = 1'b0;
     reg [10:0] n_x;
     reg [9:0]  n_b;
@@ -360,6 +371,7 @@ module smaa #(
             v_bot <= p_d;
             v_at <= c_q[23:16];
             v_al <= c_q[15:8];
+            v_e <= c_q[25:24];
             v_ab <= b1_wu;
             v_ly <= v_ctr[15:8];
             // the pixel before this column's: which neighbour, how much
@@ -367,6 +379,7 @@ module smaa #(
             n_x <= b1_x - 11'd1;
             n_b <= b1_r - 10'd1;
             n_w <= best;
+            n_e <= v_e;
             n_sel <= best == v_at ? 2'd0 : best == v_ab ? 2'd1 : best == v_al ? 2'd2 : 2'd3;
             n_ctr <= v_ctr;
             n_top <= v_top;
@@ -379,6 +392,8 @@ module smaa #(
         m_x <= n_x;
         m_b <= n_b;
         m_w <= n_w;
+        m_e <= n_e;
+        m_vert <= !n_sel[1];
         m_y <= n_ctr[15:8];
         m_c <= n_ctr[7:0];
         m_ny <= n_sel == 2'd0 ? n_top[15:8] : n_sel == 2'd1 ? n_bot[15:8] : n_sel == 2'd2 ? n_ly : n_ry;
@@ -387,6 +402,9 @@ module smaa #(
         m2_x <= m_x;
         m2_b <= m_b;
         m2_y <= m_y;
+        {m3_e, m2_e} <= {m2_e, m_e};
+        {m3_w, m2_w} <= {m2_w, m_w};
+        {m3_vert, m2_vert} <= {m2_vert, m_vert};
         m2_c <= m_c;
         m3_v <= m2_v;
         m3_x <= m2_x;
@@ -399,5 +417,17 @@ module smaa #(
         o_last <= m3_x == W - 1;
         o_y <= m3_y + ry[15:8];
         o_c <= m3_c + rc_[15:8];
+        if (dbg) begin
+            if (m3_w != 8'd0) begin
+                o_y <= 8'd128 + m3_w[7:1];
+                o_c <= m3_vert == !m3_x[0] ? 8'd224 : 8'd96;        // (Cb the even pixels': blue up and down, red sideways)
+            end else if (m3_e != 2'd0) begin
+                o_y <= 8'd110;
+                o_c <= 8'd64;
+            end else begin
+                o_y <= m3_y < 8'd16 ? 8'd16 : 8'd16 + {2'b00, m3_y[7:2]} - 8'd4;
+                o_c <= 8'd128;
+            end
+        end
     end
 endmodule
