@@ -4,9 +4,12 @@ capture dongle's picture on a web page, two ways:
 
   Motion-JPEG   the dongle's own frames passed on as they are (no decoding, no encoding here): the
                 least delay, 30-40 Mbit/s
-  H.265         the frames decoded and encoded again by the GPU (VA-API, hevc_vaapi, quantiser --qp), sent
-                as fragmented MP4, a frame a fragment, and played through Media Source Extensions:
-                a fraction of the bit rate, a few frames more delay; for browsers that play HEVC
+  H.264, H.265  the frames decoded and encoded again by the GPU (VA-API: h264_vaapi, hevc_vaapi;
+                quantiser --qp), sent as fragmented MP4, a frame a fragment, and played through Media
+                Source Extensions: a fraction of the bit rate, a few frames more delay.  This AMD
+                GPU's H.265 plays in ffmpeg but not in Apple's decoder (VideoToolbox: -12909,
+                whatever the level, range, size, quantiser or slices): H.264 for a Mac
+  H.265 (x265)  the same in software: plays everywhere, six processor cores for 1080p60
 
 One ffmpeg has the dongle while somebody watches (and for 10 s after); the encoder runs only while
 somebody watches H.265.
@@ -14,7 +17,8 @@ somebody watches H.265.
     /                 the page
     /frame?after=N    the next JPEG frame newer than number N (its number in X-Frame)
     /stream           the JPEG frames as multipart/x-mixed-replace
-    /h265             the H.265 stream: the MP4's header, then fragments from the next key frame on
+    /h264 /h265 /x265 the encoded stream: the MP4's header, then fragments from the next key frame on
+                      (one encoder at a time: whoever watches has it)
     /snapshot.jpg     the newest JPEG frame
     /status           JSON: frames a second, bit rates, viewers
 """
@@ -37,13 +41,16 @@ select{font:inherit;background:#222;color:#ccc;border:1px solid #555}</style></h
 <canvas id="v" width="1920" height="1080" title="click: full screen"></canvas>
 <video id="h" muted autoplay playsinline style="display:none" title="click: full screen"></video>
 <div id="bar"><select id="mode"><option value="mjpeg">Motion-JPEG (as the dongle sends it)</option>
-<option value="h265">H.265 (encoded by the GPU)</option></select> <span id="s">connecting...</span></div>
+<option value="h264">H.264 (encoded by the GPU)</option>
+<option value="h265">H.265 (encoded by the GPU: not for Apple's decoder)</option>
+<option value="x265">H.265 (encoded in software: six processor cores)</option></select> <span id="s">connecting...</span></div>
 <script>
 const $=i=>document.getElementById(i),v=$('v'),h=$('h'),s=$('s'),c=v.getContext('2d');
-const CODEC='video/mp4; codecs="hvc1.1.6.L123.B0"';
+const CODECS={h264:'video/mp4; codecs="avc1.64002A"',h265:'video/mp4; codecs="hvc1.1.6.L153.B0"',x265:'video/mp4; codecs="hvc1.1.6.L123.B0"'};
 for(const e of [v,h])e.onclick=()=>document.fullscreenElement?document.exitFullscreen():e.requestFullscreen();
-let gen=0,shown=0,bytes=0,t0=performance.now(),err='',note='';
+let gen=0,shown=0,bytes=0,t0=performance.now(),err='',note='',told='';
 const wait=ms=>new Promise(f=>setTimeout(f,ms));
+const say=t=>fetch('/log?'+encodeURIComponent(t+' | '+navigator.userAgent)).catch(()=>{});
 
 // Motion-JPEG: each frame asked for by itself (the answer waits for one newer than the last shown)
 async function mjpeg(g){
@@ -62,16 +69,16 @@ async function mjpeg(g){
 }
 
 // H.265: the MP4 fragments into a MediaSource as they come; the player kept at the newest frame
-async function h265(g){
-  const MS=window.ManagedMediaSource||window.MediaSource;
-  if(!MS||!MS.isTypeSupported(CODEC)){err='this browser does not play H.265 here';$('mode').value='mjpeg';start();return}
+async function coded(g,kind){
+  const MS=window.ManagedMediaSource||window.MediaSource,CODEC=CODECS[kind];
+  if(!MS||!MS.isTypeSupported(CODEC)){err='this browser does not play that here';$('mode').value='mjpeg';start();return}
   while(g==gen){
     const ms=new MS(),ac=new AbortController();
     h.disableRemotePlayback=true;h.src=URL.createObjectURL(ms);
     try{
       await new Promise(f=>ms.addEventListener('sourceopen',f,{once:true}));
       const sb=ms.addSourceBuffer(CODEC);sb.mode='segments';
-      const r=await fetch('/h265',{cache:'no-store',signal:ac.signal});
+      const r=await fetch('/'+kind,{cache:'no-store',signal:ac.signal});
       if(r.status!=200)throw new Error((await r.text()).trim()||('HTTP '+r.status));
       const rd=r.body.getReader();let last=performance.now(),f0=0;
       const tick=setInterval(()=>{
@@ -83,6 +90,7 @@ async function h265(g){
         if(h.paused)h.play().catch(()=>{});
         const q=h.getVideoPlaybackQuality?h.getVideoPlaybackQuality().totalVideoFrames:0;shown+=q-f0;f0=q;
         note=(lag*1000).toFixed(0)+' ms buffered';
+        if(q>120&&told!=kind){told=kind;say(kind+': playing, '+h.videoWidth+'x'+h.videoHeight)}
         if(!sb.updating&&b.start(0)<end-10)try{sb.remove(0,end-5)}catch(e){}
       },250);
       try{
@@ -93,19 +101,20 @@ async function h265(g){
           sb.appendBuffer(value);
         }
       }finally{clearInterval(tick);ac.abort()}
-    }catch(e){if(g==gen){err=String(e.message||e);await wait(1000)}}
+    }catch(e){if(g==gen){
+      const me=h.error?' [media error '+h.error.code+': '+(h.error.message||'')+']':'';
+      err=String(e.message||e)+me;say(kind+': '+err);await wait(2000)}}
   }
 }
 function start(){
   gen++;err='';note='';
   const m=$('mode').value;localStorage.capmode=m;
-  v.style.display=m=='mjpeg'?'block':'none';h.style.display=m=='h265'?'block':'none';
-  if(m!='h265'){h.removeAttribute('src');h.load()}
-  (m=='h265'?h265:mjpeg)(gen);
+  v.style.display=m=='mjpeg'?'block':'none';h.style.display=m!='mjpeg'?'block':'none';
+  if(m=='mjpeg'){h.removeAttribute('src');h.load();mjpeg(gen)}else coded(gen,m);
 }
 $('mode').onchange=start;
 if(localStorage.capmode)$('mode').value=localStorage.capmode;
-setInterval(()=>{const t=performance.now(),d=(t-t0)/1000,e=$('mode').value=='h265'?h:v;
+setInterval(()=>{const t=performance.now(),d=(t-t0)/1000,e=$('mode').value!='mjpeg'?h:v;
   s.innerHTML=err?err:(shown/d).toFixed(0)+' frames/s &middot; '+(bytes*8/d/1e6).toFixed(1)+' Mbit/s &middot; '+
     (e.videoWidth||e.width)+' x '+(e.videoHeight||e.height)+(note?' &middot; '+note:'')+' &middot; <a href="/snapshot.jpg" target="_blank">snapshot</a>';
   shown=0;bytes=0;t0=t},2000);
@@ -154,7 +163,8 @@ class Source:
         self.viewers, self.wanted_until = 0, 0.0
         self.fps = self.kbps = self.hkbps = 0.0
         self.error = ""
-        self.hq = []                    # the H.265 viewers' queues
+        self.hq = []                    # the encoded stream's viewers' queues
+        self.kind = ""                  # which encoder they watch: h264, h265, x265 (the last asked for)
         self.init = None                # the MP4's ftyp and moov
         self.hbytes = 0
         threading.Thread(target=self.run, daemon=True).start()
@@ -168,18 +178,29 @@ class Source:
         return self.viewers > 0 or bool(self.hq) or time.time() < self.wanted_until
 
     def command(self, enc, fd):
+        """ffmpeg: the dongle's Motion-JPEG out as it is and, with enc (h264, h265, x265), encoded too"""
         a = self.a
         cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
-        if enc:
+        if enc in ("h264", "h265"):
             cmd += ["-vaapi_device", a.render]
         cmd += ["-f", "v4l2", "-input_format", "mjpeg", "-video_size", a.size, "-framerate", str(a.fps), "-i", a.dev,
                 "-map", "0:v", "-c", "copy", "-f", "mjpeg", "pipe:1"]
-        if enc:
-            # (constant quantiser: this GPU's bit-rate modes make streams ffmpeg's own decoder finds
-            # faults in, cu_qp_delta out of range; this one decodes clean)
-            cmd += ["-map", "0:v", "-vf", "format=nv12,hwupload", "-c:v", "hevc_vaapi", "-rc_mode", "CQP", "-qp", str(a.qp),
-                    "-g", str(a.fps // 2), "-bf", "0", "-async_depth", "1", "-tag:v", "hvc1",
-                    "-f", "mp4", "-movflags", "frag_every_frame+empty_moov+default_base_moof", "pipe:%d" % fd]
+        mp4 = ["-tag:v", "avc1" if enc == "h264" else "hvc1", "-f", "mp4", "-movflags",
+               "frag_every_frame+empty_moov+default_base_moof", "pipe:%d" % fd]
+        gop = ["-g", str(a.fps // 2), "-bf", "0"]
+        # (the GPU's encoders at a constant quantiser: its bit-rate modes make H.265 streams ffmpeg's
+        # own decoder finds faults in, cu_qp_delta out of range)
+        if enc == "h264":
+            cmd += ["-map", "0:v", "-vf", a.vf, "-c:v", "h264_vaapi", "-rc_mode", "CQP", "-qp", str(a.qp - 3),
+                    "-profile:v", "high", "-level", "4.2"] + gop + ["-async_depth", "1"] + mp4
+        elif enc == "h265":
+            # (level 5.1 said outright: left alone the encoder says 4.0 for 1080p60)
+            cmd += ["-map", "0:v", "-vf", a.vf, "-c:v", "hevc_vaapi", "-rc_mode", "CQP", "-qp", str(a.qp)] + \
+                   a.hevc.split() + gop + ["-async_depth", "1"] + mp4
+        elif enc == "x265":
+            cmd += ["-map", "0:v", "-vf", "format=yuv420p", "-c:v", "libx265", "-preset", "ultrafast", "-tune", "zerolatency",
+                    "-crf", str(a.qp), "-x265-params",
+                    "keyint=%d:min-keyint=%d:log-level=error" % (a.fps // 2, a.fps // 2)] + mp4
         return cmd
 
     def read_mp4(self, f):
@@ -225,7 +246,7 @@ class Source:
             with self.cond:
                 while not self.wanted():
                     self.cond.wait(1)
-                enc = bool(self.hq)
+                enc = self.kind if self.hq else ""
             rfd, wfd = os.pipe()
             p = subprocess.Popen(self.command(enc, wfd), stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0,
                                  pass_fds=(wfd,))
@@ -235,7 +256,7 @@ class Source:
             threading.Thread(target=self.read_mp4, args=(mp4,), daemon=True).start()
             buf, t0, n0, bytes0, self.hbytes = bytearray(), time.time(), self.n, 0, 0
             try:
-                while self.wanted() and bool(self.hq) == enc:       # (a first or last H.265 viewer: again)
+                while self.wanted() and (self.kind if self.hq else "") == enc:     # (another encoder, or none: again)
                     chunk = p.stdout.read(65536)
                     if not chunk:
                         self.error = p.stderr.read().decode(errors="replace").strip()[-300:]
@@ -299,10 +320,14 @@ def handler(src):
             path = self.path.split("?")[0]
             if path == "/":
                 self.send(200, "text/html; charset=utf-8", PAGE)
+            elif path == "/log":                    # what a page could not do, for the journal
+                from urllib.parse import unquote
+                print("page:", unquote(self.path[5:])[:600], flush=True)
+                self.send(200, "text/plain", b"")
             elif path == "/status":
                 self.send(200, "application/json", json.dumps(
-                    {"fps": src.fps, "kbps": src.kbps, "h265_kbps": src.hkbps, "viewers": src.viewers,
-                     "h265_viewers": len(src.hq), "watched": src.wanted(), "error": src.error}).encode())
+                    {"fps": src.fps, "kbps": src.kbps, "enc_kbps": src.hkbps, "viewers": src.viewers,
+                     "enc": src.kind, "enc_viewers": len(src.hq), "watched": src.wanted(), "error": src.error}).encode())
             elif path == "/snapshot.jpg":
                 src.want()
                 n, frame = src.next(src.n if src.fps == 0 else -1, 6)
@@ -321,18 +346,31 @@ def handler(src):
                     self.send(200, "image/jpeg", frame, [("X-Frame", str(n))])
                 else:
                     self.send(503, "text/plain", ("no frame from the dongle. " + src.error + "\n").encode())
-            elif path == "/h265":
+            elif path in ("/h264", "/h265", "/x265"):
                 self.close_connection = True
                 q = queue.Queue(maxsize=240)
                 with src.cond:
-                    src.hq.append(q)
-                    src.cond.notify_all()
+                    if src.kind != path[1:]:
+                        if src.hq:                  # one encoder at a time: whoever watches has it
+                            busy = src.kind
+                        else:                       # the encoder changes: its header is not this one's
+                            busy = ""
+                            src.kind = path[1:]
+                            src.init = None
+                    else:
+                        busy = ""
+                    if not busy:
+                        src.hq.append(q)
+                        src.cond.notify_all()
+                if busy:
+                    self.send(503, "text/plain", ("somebody is watching %s: one encoder at a time\n" % busy).encode())
+                    return
                 try:
                     # the header (the encoder may be starting), then from a key frame on
                     t = time.time()
                     while src.init is None:
                         if time.time() - t > 8:
-                            self.send(503, "text/plain", ("no H.265 from the encoder. " + src.error + "\n").encode())
+                            self.send(503, "text/plain", ("nothing from the encoder. " + src.error + "\n").encode())
                             return
                         time.sleep(0.05)
                     while not q.empty():
@@ -355,7 +393,8 @@ def handler(src):
                     pass
                 finally:
                     with src.cond:
-                        src.hq.remove(q)
+                        if q in src.hq:
+                            src.hq.remove(q)
                         src.wanted_until = max(src.wanted_until, time.time() + 3)
             elif path == "/stream":
                 self.close_connection = True
@@ -391,6 +430,8 @@ def main():
     ap.add_argument("--size", default="1920x1080")
     ap.add_argument("--fps", type=int, default=60)
     ap.add_argument("--qp", type=int, default=27, help="H.265's quantiser: lower is better and bigger (22-32)")
+    ap.add_argument("--vf", default="format=nv12,hwupload", help="the filter before the GPU's encoder")
+    ap.add_argument("--hevc", default="-profile:v main -tier main -level 5.1 -aud 1", help="more of hevc_vaapi's options")
     ap.add_argument("--render", default="/dev/dri/renderD128", help="the GPU's VA-API device")
     a = ap.parse_args()
     srv = ThreadingHTTPServer(("0.0.0.0", a.port), handler(Source(a)))

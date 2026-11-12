@@ -5,11 +5,13 @@ frames passed on untouched (about a tenth of a second behind HDMI on the local n
 30 frames a second on a USB 2 port, 60 on USB 3). The device is opened only while somebody watches.
 `/snapshot.jpg` is the newest frame, `/status` the rate.
 
-The page's second way: **H.265**, encoded by the GPU (VA-API `hevc_vaapi`, constant quantiser
-`--qp`, 27: about 5 Mbit/s for a game's picture where the Motion-JPEG is 34), sent as fragmented
-MP4 a frame a fragment and played through Media Source Extensions: for browsers that play HEVC
-(the page says so if not and stays with Motion-JPEG). The encoder runs only while somebody
-watches that way.
+The page's other ways, encoded by the GPU (VA-API, constant quantiser `--qp`) and sent as
+fragmented MP4, a frame a fragment, played through Media Source Extensions: **H.264** and
+**H.265** (about 5 Mbit/s for a game's picture where the Motion-JPEG is 34). This AMD GPU's H.265
+decodes in ffmpeg but Apple's decoder refuses it (Chrome on a Mac: VideoToolbox -12909, whatever
+the level, colour range, size, quantiser or slices tried): H.264 there; or **H.265 in software**
+(x265: plays on the Mac, six processor cores). One encoder at a time: whoever watches has it. The
+page tells the service what its player made of the stream (`journalctl --user -u capview`).
 
 As a service of the user's (it starts at boot if lingering is on):
 
