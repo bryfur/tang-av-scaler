@@ -2,7 +2,7 @@
 """Placement report: for every small part, how far each of its signal pins is from the nearest
 other pad on the same net (a long one is a part placed by the wrong anchor).
 
-    python3 kit/placecheck.py rev-b [board.kicad_pcb] [--min 8]
+    python3 kit/placecheck.py rev-cb [board.kicad_pcb] [--min 8]
 """
 import math
 import os

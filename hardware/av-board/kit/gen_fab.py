@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """JLCPCB files from a revision's board: Gerbers + drill (zipped), BOM and CPL (placement).
 
-    python3 kit/gen_fab.py rev-b     # rev-b/fab/<name>-gerbers.zip, <name>-bom.csv, <name>-cpl.csv
+    python3 kit/gen_fab.py rev-cb     # rev-cb/fab/<name>-gerbers.zip, <name>-bom.csv, <name>-cpl.csv
 
 BOM: one line per LCSC part (Comment, Designator, Footprint, LCSC Part #); DNP parts left out, and
 those the footprint marks as not assembled (KiCad's exclude from BOM / position files: mounting

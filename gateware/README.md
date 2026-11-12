@@ -1,8 +1,9 @@
-# Gateware: rev C-B's bring-up image
+# Gateware: the scaler
 
-For the AV board rev C-B (Tang Mega 138K SOM, GW5AST-LV138PG484AC1/I0 version C): a monitor on the
-XIAO's UART that reaches every chip on the board, HDMI out of the FPGA's transceivers, and the
-component input shown on the HDMI output. `rtl/top.v` lists the registers.
+The FPGA design for the AV board rev C-B (Tang Mega 138K SOM, GW5AST-LV138PG484AC1/I0 version C):
+the picture's path from the component input to HDMI out of the FPGA's transceivers, the SOM's hard
+CPU that runs it, and a register monitor on the XIAO's UART for development. `rtl/top.v` lists the
+registers. What it all adds up to: [../README.md](../README.md).
 
 State on the board (2026-11-12):
 
@@ -21,11 +22,11 @@ State on the board (2026-11-12):
 
     tools/flash.sh <GW_OUT>/avb/impl/pnr/avb.fs     # into the SOM's flash: the board starts by itself
 
-With the bitstream in the flash and the Wi-Fi link's firmware in the XIAO (`firmware/xiao-wifi`:
-it brings the clock chip, the HDMI redriver, the decoder and the picture's settings up through
-the monitor), the board needs power, a source and a display, and nothing else: the FPGA loads from the flash,
-the link brings the rest up: a picture some 20 s after power-on. The scripts below are for development; the link stands
-back while one of them is on its console port.
+With the bitstream in the flash and the Wi-Fi link's firmware in the XIAO (`firmware/xiao-wifi`),
+the board needs power, a source and a display, and nothing else: the FPGA loads from the flash
+(some 20 s), its CPU brings the clock chip, the HDMI redriver, the decoder and the lanes up (under
+a second) and the link gives it the settings. The scripts below are for development; the CPU
+leaves the scaler alone while one of them is on the link's console port.
 
 `GW_MODE` is `1080p60`, `2160p30` or `2160p60` (the transceivers' rate; the component input is in
 the 1080p60 image only). The bitstream is `<GW_OUT>/avb/impl/pnr/avb.fs`, not compressed:

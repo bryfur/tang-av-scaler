@@ -13,7 +13,7 @@ layers its escape needs: four did not route). Rev B replaces the ADV7842 with th
 
 - [design.md](design.md): the electrical design, connection by connection, with its sources
 - [reference-notes.md](reference-notes.md): what ADI's and TI's reference designs say
-- `board.py`, `gen_pcb.py`: the sources; made as in [../README.md](../README.md)
+- `board.py`, `gen_pcb.py`: the sources; made as in [../README.md](../../README.md)
 
 ## Ordering at JLCPCB
 

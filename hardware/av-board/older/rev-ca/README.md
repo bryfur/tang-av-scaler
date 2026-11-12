@@ -1,19 +1,19 @@
 # AV board rev C-A
 
 The Tang Mega 138K SOM on its own carrier, HDMI from an ADV7511 at up to 1080p60 (rev B's, fed
-24-bit RGB 4:4:4). Everything else is shared with rev C-B: [../rev-c/design.md](../rev-c/design.md)
+24-bit RGB 4:4:4). Everything else is shared with rev C-B: [../../rev-c/design.md](../../rev-c/design.md)
 describes both.
 
 ![Rev C-A, 3D](img/av-board-ca-3d.png)
 
 ![Rev C-A, top](img/av-board-ca-top.png)
 
-Status: designed, reviewed against the data sheets ([../rev-c/review.md](../rev-c/review.md) for
+Status: designed, reviewed against the data sheets ([../../rev-c/review.md](../../rev-c/review.md) for
 the parts rev C adds; rev B's circuits, shared, in [../rev-b/review.md](../rev-b/review.md)), placed
 and routed: DRC clean, no unconnected items, fab files made; not ordered.
 
-- `board.py`: the parts and nets (the shared circuit in ../rev-c/carrier.py and ../kit/circuits.py)
-- `gen_pcb.py`: the PCB (../rev-c/layout.py, kit/)
+- `board.py`: the parts and nets (the shared circuit in ../../rev-c/carrier.py and ../../kit/circuits.py)
+- `gen_pcb.py`: the PCB (../../rev-c/layout.py, kit/)
 - `fpga/av-board-ca.cst`: the FPGA pin assignment, Gowin constraints, generated from the board
 
 ## Ordering at JLCPCB
@@ -24,7 +24,7 @@ As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers an
 - 4 layers, 1.6 mm, stack-up **JLC04161H-7628** (F.Cu / In1 GND / In2 GND / B.Cu), impedance
   control on: the TMDS pairs 0.25 mm lines 0.25 mm apart on F.Cu over In1, 103 R differential by
   IPC-2141, as rev B; confirm in JLCPCB's impedance calculator. The HDMI lines follow TI's
-  layout rules (SPRAAR7: ../rev-c/review.md's HDMI rows, checked by `kit/hdmi_audit.py rev-ca`);
+  layout rules (SPRAAR7: ../../rev-c/review.md's HDMI rows, checked by `kit/hdmi_audit.py rev-ca`);
   the voids in In1 and In2 under the ESD arrays' TMDS pads are meant.
 - Minimum clearance 0.1 mm (the USB-C receptacle's own GND/VBUS pads; JLCPCB's four-layer minimum
   is 0.09 mm); 0.4/0.2 mm vias at the SOM receptacles' ground pads and the ESD arrays.

@@ -3,7 +3,7 @@
 the front left) and rev-x/img/<name>-top.png (straight down). KiCad's raytracer (kicad-cli pcb
 render), the LCSC parts' models (kit/fetch_lib.sh) and KiCad's own (kit/fetch_3d.py).
 
-    python3 kit/render.py rev-b
+    python3 kit/render.py rev-cb
 """
 import os
 import subprocess

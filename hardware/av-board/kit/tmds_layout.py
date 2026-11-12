@@ -1,4 +1,4 @@
-"""TMDS pairs laid by the generator, before routing (rev B's, rev-b/design.md): from a transmitter's
+"""TMDS pairs laid by the generator, before routing (rev B's, older/rev-b/design.md): from a transmitter's
 pins (the ADV7511's, or an SN65DP159's outputs), straight out, one 45-degree corner, straight to a
 flow-through ESD array, across it, on to the HDMI receptacle; nested so each pair stays coupled
 through the bend. A mixin for pcbkit.Layout.

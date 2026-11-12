@@ -7,7 +7,7 @@ no-connect flag. A PWR_FLAG sits on every net that has a power-input pin and no 
 the regulators' outputs here are plain pins. Open it in KiCad to read it, run ERC with
 kicad-cli; change the board in board.py, not here.
 
-    python3 kit/gen_sch.py rev-b     # rev-b/<name>.kicad_sch (+ .kicad_pro, sym-lib-table, fp-lib-table)
+    python3 kit/gen_sch.py rev-cb     # rev-cb/<name>.kicad_sch (+ .kicad_pro, sym-lib-table, fp-lib-table)
 """
 
 import os
@@ -225,15 +225,16 @@ def main():
         f.write(dump(sch) + "\n")
     # (KiCad's own libraries the board uses, after Device and power)
     more = sorted({i.split(":")[0] for i in lib_ids} - {"lcsc", "Device", "power"})
+    rel = os.path.relpath(LIB, HERE)    # (the libraries from the revision's own directory: ../lib, or ../../lib from older/)
     with open(os.path.join(HERE, "sym-lib-table"), "w") as f:
         f.write('(sym_lib_table\n  (version 7)\n'
-                '  (lib (name "lcsc")(type "KiCad")(uri "${KIPRJMOD}/../lib/lcsc.kicad_sym")(options "")(descr "LCSC parts (easyeda2kicad)"))\n'
+                '  (lib (name "lcsc")(type "KiCad")(uri "${KIPRJMOD}/%s/lcsc.kicad_sym")(options "")(descr "LCSC parts (easyeda2kicad)"))\n' % rel +
                 '  (lib (name "Device")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/Device.kicad_sym")(options "")(descr ""))\n'
                 '  (lib (name "power")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/power.kicad_sym")(options "")(descr ""))\n' +
                 "".join('  (lib (name "%s")(type "KiCad")(uri "${KICAD9_SYMBOL_DIR}/%s.kicad_sym")(options "")(descr ""))\n' % (m, m)
                         for m in more) + ')\n')
     with open(os.path.join(HERE, "fp-lib-table"), "w") as f:
-        f.write('(fp_lib_table\n  (version 7)\n  (lib (name "lcsc")(type "KiCad")(uri "${KIPRJMOD}/../lib/lcsc.pretty")(options "")(descr "LCSC parts (easyeda2kicad)"))\n)\n')
+        f.write('(fp_lib_table\n  (version 7)\n  (lib (name "lcsc")(type "KiCad")(uri "${KIPRJMOD}/%s/lcsc.pretty")(options "")(descr "LCSC parts (easyeda2kicad)"))\n)\n' % rel)
     pro = os.path.join(HERE, NAME + ".kicad_pro")
     if not os.path.exists(pro):
         with open(pro, "w") as f:

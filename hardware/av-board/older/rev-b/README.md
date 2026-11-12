@@ -12,7 +12,7 @@ not ordered.
 
 - [design.md](design.md): what changed from rev A, and the ADV7181D's circuit with its sources
 - [review.md](review.md): every part checked against its data sheet, with the fixes
-- `board.py`, `gen_pcb.py`: the sources; made as in [../README.md](../README.md)
+- `board.py`, `gen_pcb.py`: the sources; made as in [../README.md](../../README.md)
 
 ## Ordering at JLCPCB
 

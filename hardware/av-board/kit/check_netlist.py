@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare the netlist KiCad makes from a revision's schematic with its board.py, pin by pin.
 
-    kicad-cli sch export netlist -o /tmp/av.net rev-b/av-board-b.kicad_sch && python3 kit/check_netlist.py rev-b /tmp/av.net
+    kicad-cli sch export netlist -o /tmp/av.net rev-cb/av-board-cb.kicad_sch && python3 kit/check_netlist.py rev-cb /tmp/av.net
 """
 import os
 import sys

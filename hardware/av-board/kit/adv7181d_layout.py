@@ -3,7 +3,7 @@ a mixin for pcbkit.Layout. Everything is relative to U1: its rotation (analog si
 jacks), the escape vias of its supply and tied-off pins, its 33 R series rows and arrays, the
 crystal block, the band above its analog pins (the ADC references' ladder, the inputs' fans), the
 PLL block (the loop filter, PVDD's decoupling), its rails' decoupling, its exposed pad. The design
-behind each is in rev-b/design.md and rev-b/review.md.
+behind each is in older/rev-b/design.md and older/rev-b/review.md.
 
 A revision's Layout calls, from its hooks:
 

@@ -12,7 +12,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(os.path.dirname(HERE), "kit"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "kit"))
 import board  # noqa: E402
 import pcbkit  # noqa: E402
 from adv7181d_layout import ADV7181D, AV_RAILS, U1_BIAS_NETS, U1_CLASSES, U1_PRE_ROUTE, fit_u1  # noqa: E402

@@ -6,7 +6,7 @@
     ... its transmitter ...
     som(groups)                    # the SOM's receptacles, the FPGA pins assigned last
 
-Rev B's circuits (reviewed against their data sheets, rev-b/review.md) are taken as they are, from
+Rev B's circuits (reviewed against their data sheets, older/rev-b/review.md) are taken as they are, from
 kit/circuits.py: the supply tree, the ADV7181D front end, the PCM1808, the S/PDIF input, the XIAO's
 sockets and translators, the buttons and LED, the HDMI receptacle's ESD and DDC/HPD/CEC parts. New
 here (rev-c/design.md): the SOM and its standoffs, USB-C power, the MS5351M clock generator, the
@@ -236,8 +236,12 @@ def som(groups, transceiver_lanes=None, rev=None):
     for _ in range(4):
         C("22u", "+5V", size="C0805")
     if rev:
-        pinmap.write_cst(os.path.join(os.path.dirname(HERE), "rev-" + rev.lower().replace("-", ""), "fpga",
-                                      "av-board-%s.cst" % rev.lower().replace("-", "")), assigned)
+        # (beside the revision's own files: rev-cb/, or older/rev-ca/)
+        name = "rev-" + rev.lower().replace("-", "")
+        root = os.path.dirname(HERE)
+        where = next((d for d in (os.path.join(root, name), os.path.join(root, "older", name)) if os.path.isdir(d)),
+                     os.path.join(root, name))
+        pinmap.write_cst(os.path.join(where, "fpga", "av-board-%s.cst" % rev.lower().replace("-", "")), assigned)
     return pin_nets
 
 

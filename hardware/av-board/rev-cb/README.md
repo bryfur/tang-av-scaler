@@ -1,18 +1,20 @@
 # AV board rev C-B
 
-The Tang Mega 138K SOM on its own carrier, HDMI 2.0 from the FPGA's transceivers through a TI
-SN65DP159 retimer, up to 4K60; S/PDIF (coax and optical) on rev B's 5-pin header instead of a
-jack, so the HDMI receptacle sits by the audio jacks and the board is 100 x 100 mm, 30 mm
-narrower than C-A. Everything else is shared with rev C-A:
-[../rev-c/design.md](../rev-c/design.md) describes both.
+The scaler's board: the Tang Mega 138K SOM on its own carrier, HDMI 2.0 from the FPGA's
+transceivers through a TI SN65DP159, up to 4K60 by the link's rate; S/PDIF (coax and optical) on a
+5-pin header, the HDMI receptacle by the audio jacks; 100 x 100 mm. Its circuit and floor plan are
+in [../rev-c/](../rev-c/) (shared with a sibling, C-A, that was not built):
+[../rev-c/design.md](../rev-c/design.md) describes it.
 
 ![Rev C-B, 3D](img/av-board-cb-3d.png)
 
 ![Rev C-B, top](img/av-board-cb-top.png)
 
-Status: designed, reviewed against the data sheets ([../rev-c/review.md](../rev-c/review.md) for
-the parts rev C adds; rev B's circuits, shared, in [../rev-b/review.md](../rev-b/review.md)), placed
-and routed; not ordered.
+Status: built (JLCPCB) and running the scaler since 2026-11: 480i component in, 1080p60 HDMI
+out with sound ([../../../README.md](../../../README.md), [../../../gateware/README.md](../../../gateware/README.md)).
+On the board the SN65DP159 runs as a redriver (as a retimer it corrupted 2.97 Gb/s), set over I2C at
+bring-up. Reviewed against the data sheets before it was ordered: [../rev-c/review.md](../rev-c/review.md)
+for the parts rev C adds; the circuits taken from rev B in [../older/rev-b/review.md](../older/rev-b/review.md).
 
 - `board.py`: the parts and nets (the shared circuit in ../rev-c/carrier.py and ../kit/circuits.py)
 - `gen_pcb.py`: the PCB (../rev-c/layout.py, kit/)
@@ -54,7 +56,7 @@ Pads apart rather than a header: a probe slipping on a header could short 5 V on
 
 ## Ordering at JLCPCB
 
-As rev B ([../rev-b/README.md](../rev-b/README.md)): `fab/` holds the Gerbers and the BOM/CPL, and a
+As rev B ([../older/rev-b/README.md](../older/rev-b/README.md)): `fab/` holds the Gerbers and the BOM/CPL, and a
 `hand-jacks` BOM/CPL leaves the five RCA jacks for hand soldering. Settings the files do not carry:
 
 - 4 layers, 1.6 mm, stack-up **JLC04161H-7628** (F.Cu / In1 GND / In2 GND / B.Cu), impedance

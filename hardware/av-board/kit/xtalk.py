@@ -6,9 +6,9 @@ close). Analog: the revision's ANALOG, AREF and XTAL classes, the PLL filter, th
 (a switching node is digital) and the static ties (STATIC). Tracks on the other side of the two
 ground planes are not counted.
 
-    python3 kit/xtalk.py rev-b [BOARD.kicad_pcb]      (default: the revision's board)
+    python3 kit/xtalk.py rev-cb [BOARD.kicad_pcb]      (default: the revision's board)
 
-The review's rule (rev-b/review.md): nothing digital within 1 mm of an analog line but where a pin
+The review's rule (older/rev-b/review.md): nothing digital within 1 mm of an analog line but where a pin
 or an ESD array puts them side by side.
 """
 import math

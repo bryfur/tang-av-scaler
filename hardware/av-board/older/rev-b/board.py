@@ -10,7 +10,7 @@ design.md; the comments here only name the source of each value.
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "kit"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "kit"))
 from parts import *  # noqa: E402,F401,F403
 from parts import PARTS, block, part, two, nxt, R, C, lib_pins, header, common_errors, unconnected, summary  # noqa: E402
 from circuits import (AV, TX, ADV7181D_OPEN, supply_tree, adv7181d, pcm1808, spdif, adv7511,  # noqa: E402

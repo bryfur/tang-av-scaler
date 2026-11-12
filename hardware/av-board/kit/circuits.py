@@ -1,7 +1,7 @@
 """Circuit blocks the revisions share: rev B's circuits, reviewed against every data sheet
-(rev-b/review.md), used as they are by rev C-A and C-B too. A revision's board.py calls them in its
+(older/rev-b/review.md), used as they are by rev C-A and C-B too. A revision's board.py calls them in its
 own order (the reference designators R1, C1 ... follow the order of the calls). The design behind
-each block is in rev-b/design.md; sources in brackets:
+each block is in older/rev-b/design.md; sources in brackets:
 
     [DS] ADV7181D data sheet Rev C         [HWG] ADV7511 hardware user's guide Rev D
     [PSU] ADI's PCB layout and power supply recommendations for HDMI receivers
@@ -41,7 +41,7 @@ def txpin(name):
 
 
 # ---------------------------------------------------------------------------
-# Supplies (rev-b/design.md "Power")
+# Supplies (older/rev-b/design.md "Power")
 # ---------------------------------------------------------------------------
 
 def supply_tree(second_rail="1V8B"):
@@ -113,7 +113,7 @@ def supply_tree(second_rail="1V8B"):
 
 
 # ---------------------------------------------------------------------------
-# ADV7181D (rev-b/design.md "ADV7181DBCPZ", "VGA")
+# ADV7181D (older/rev-b/design.md "ADV7181DBCPZ", "VGA")
 # ---------------------------------------------------------------------------
 
 def adv7181d():
@@ -244,7 +244,7 @@ def adv7181d():
 
 
 def _vga(u1):
-    # VGA in (rev-b/design.md "VGA"): RGB with separate (or composite) sync on J8, a 2 x 8 header whose
+    # VGA in (older/rev-b/design.md "VGA"): RGB with separate (or composite) sync on J8, a 2 x 8 header whose
     # pin n is the DE-15's pin n (16 unused), for a bracket cable. R, G, B as the component inputs (75 R,
     # 100 nF) on the inputs Table 9 routes to the three ADCs besides the component ones: G on AIN2
     # (ADC0), B on AIN9 (ADC1), R on AIN7 (ADC2) [DS Table 9], R and B among the component inputs (pins
@@ -289,7 +289,7 @@ def _vga(u1):
 
 
 # ---------------------------------------------------------------------------
-# PCM1808 [TI-ADC Fig. 26, 8.2.2] and the S/PDIF input (rev-b/design.md "Audio", "Additions")
+# PCM1808 [TI-ADC Fig. 26, 8.2.2] and the S/PDIF input (older/rev-b/design.md "Audio", "Additions")
 # ---------------------------------------------------------------------------
 
 def pcm1808():
@@ -380,7 +380,7 @@ def spdif(connectors):
 
 
 # ---------------------------------------------------------------------------
-# The XIAO (rev-b/design.md "XIAO", rev-c/design.md)
+# The XIAO (older/rev-b/design.md "XIAO", rev-c/design.md)
 # ---------------------------------------------------------------------------
 
 # Pull resistors (10 k) on the lines between a XIAO and the FPGA, so that no translator input ever
@@ -475,7 +475,7 @@ def buttons_led():
 
 
 # ---------------------------------------------------------------------------
-# ADV7511 (rev-b/design.md "ADV7511KSTZ") and the HDMI receptacle
+# ADV7511 (older/rev-b/design.md "ADV7511KSTZ") and the HDMI receptacle
 # ---------------------------------------------------------------------------
 
 def adv7511(pixel):

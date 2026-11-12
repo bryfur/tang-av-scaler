@@ -3,7 +3,7 @@
 for a change that keeps every footprint and net: a part swapped for an equal one in another
 colour or price class needs no new placement or routing.
 
-    python3 kit/sync_values.py rev-b [board.kicad_pcb]
+    python3 kit/sync_values.py rev-cb [board.kicad_pcb]
 
 Stops if a footprint or a pad's net differs from board.py (that change needs gen_pcb.py).
 """

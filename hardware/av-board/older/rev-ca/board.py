@@ -9,7 +9,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(os.path.dirname(HERE), "rev-c"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "rev-c"))
 from carrier import *  # noqa: E402,F401,F403
 import floor  # noqa: E402
 from carrier import PARTS, unconnected, summary, common, clocks, som, common_groups, check, chip_pins  # noqa: E402

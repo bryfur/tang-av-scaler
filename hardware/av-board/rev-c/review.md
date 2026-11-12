@@ -2,7 +2,7 @@
 
 Rev C-A and C-B share rev B's circuits (kit/circuits.py: the supplies, the ADV7181D front end, the
 PCM1808, the S/PDIF input, the XIAO block, the ADV7511, the HDMI receptacle), reviewed in
-[../rev-b/review.md](../rev-b/review.md); this covers what rev C adds, checked against each part's
+[../older/rev-b/review.md](../older/rev-b/review.md); this covers what rev C adds, checked against each part's
 own document for being inside its limits with margin. Sources: [MS] MS5351M data sheet V1.4
 (Relmon), [DS1239] Gowin GW5AST data sheet, [TI-DP159] SN65DP159 (SLLSEJ2G), [TI-BUCK] TLV62569, [TI-LDO] TPS7A7001,
 [TI-XLAT] SN74LVC8T245 and SN74AVC4T245, [HWG] ADV7511 hardware user's guide Rev D, the Tang
@@ -82,7 +82,7 @@ for HDMI Adopters only). **Fixed** marks what this review changed.
 
 ## Layout (after routing)
 
-Routed as rev B (rev-b/design.md "Routing"): the analog lines and references kept 0.5 mm from
+Routed as rev B (older/rev-b/design.md "Routing"): the analog lines and references kept 0.5 mm from
 digital and clock lines by the router, the ESD parts at their connectors, rip-up for the last gaps.
 
 | Check | C-B | C-A |

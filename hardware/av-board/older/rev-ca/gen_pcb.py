@@ -12,7 +12,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-sys.path.insert(0, os.path.join(os.path.dirname(HERE), "rev-c"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "rev-c"))
 import board  # noqa: E402
 import floor  # noqa: E402
 from layout import RevC  # noqa: E402

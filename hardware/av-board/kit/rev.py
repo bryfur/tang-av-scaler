@@ -1,5 +1,5 @@
-"""Which revision a kit tool works on: its first argument, a revision directory (rev-a, rev-b, or a
-path to one)."""
+"""Which revision a kit tool works on: its first argument, a revision directory (rev-cb; one of the
+older ones kept in older/: rev-a, rev-b, rev-ca; or a path to one)."""
 
 import os
 import sys
@@ -9,14 +9,16 @@ ROOT = os.path.dirname(KIT)
 
 
 def rev_dir(arg):
-    for d in (arg, os.path.join(ROOT, arg), os.path.join(ROOT, "rev-" + arg.lower())):
+    for d in (arg, os.path.join(ROOT, arg), os.path.join(ROOT, "rev-" + arg.lower()), os.path.join(ROOT, "older", arg),
+              os.path.join(ROOT, "older", "rev-" + arg.lower())):
         if os.path.isfile(os.path.join(d, "board.py")):
             return os.path.abspath(d)
-    raise SystemExit("no revision %r (want rev-a, rev-b, ...)" % arg)
+    raise SystemExit("no revision %r (want rev-cb; or one of older/: rev-a, rev-b, rev-ca)" % arg)
 
 
 def revisions():
-    return sorted(d for d in os.listdir(ROOT) if d.startswith("rev-") and os.path.isfile(os.path.join(ROOT, d, "board.py")))
+    return sorted(d for top in (ROOT, os.path.join(ROOT, "older")) if os.path.isdir(top)
+                  for d in os.listdir(top) if d.startswith("rev-") and os.path.isfile(os.path.join(top, d, "board.py")))
 
 
 def board(arg):

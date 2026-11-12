@@ -4,7 +4,7 @@ Rev B is a hat on the Tang Console 138K, reaching the FPGA through two 2x20 head
 full) and leaving HDMI 1.4 to an ADV7511. Rev C drops the Console: the Tang Mega 138K SOM plugs
 straight into this board. Two carriers share everything but the HDMI transmitter:
 
-| | rev C-A ([../rev-ca](../rev-ca)) | rev C-B ([../rev-cb](../rev-cb)) |
+| | rev C-A ([../older/rev-ca](../older/rev-ca)) | rev C-B ([../rev-cb](../rev-cb)) |
 |---|---|---|
 | HDMI | ADV7511, as rev B, fed 24-bit RGB 4:4:4 | the FPGA's transceivers through a TI SN65DP159 retimer |
 | Output | up to 1080p60 (HDMI 1.4) | up to 4K60 (HDMI 2.0, 5.94 Gb/s a lane) |
@@ -13,7 +13,7 @@ straight into this board. Two carriers share everything but the HDMI transmitter
 | Board | 130 x 100 mm | 100 x 100 mm: the receptacle in the coax jack's place |
 | Parts | 280 | 290 |
 
-What both have that rev B has (rev B's circuits, reviewed in rev-b/review.md, from the same code:
+What both have that rev B has (rev B's circuits, reviewed in older/rev-b/review.md, from the same code:
 kit/circuits.py): the ADV7181D component/RGB front end with the SCART sync and VGA inputs, the
 PCM1808 stereo input on its own 4.5 V LDO, the S/PDIF input (coax slicer and optical module), the
 supply tree for the ADV7181D, the HDMI receptacle with its ESD arrays and DDC/HPD/CEC parts, the
@@ -183,7 +183,7 @@ The FPGA takes any signal on any I/O, so rev-c/pinmap.py assigns them from the g
 chip's signals take the free 3.3 V I/O pins nearest it, matched to the chip's pins for the least
 total length (a matching that short has no crossing lines), clock inputs on clock-capable pins (the
 ADV7181D's LLC, the clock generator's CLK2), clock-capable pins kept for clocks otherwise. Each
-board writes its assignment as Gowin constraints: rev-ca/fpga/av-board-ca.cst, rev-cb/fpga/av-board-cb.cst.
+board writes its assignment as Gowin constraints: older/rev-ca/fpga/av-board-ca.cst, rev-cb/fpga/av-board-cb.cst.
 
 ## Sources
 

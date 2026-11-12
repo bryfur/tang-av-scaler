@@ -1,51 +1,94 @@
 # tang-av-scaler
 
-A PS2-class console's component video, cleaned up on a Sipeed Tang Console 138K: deinterlaced,
-anti-aliased with SMAA, scaled, and sent out as 1080p60 HDMI with the console's sound.
+An FPGA video scaler for a PS2-class console: 480i component video and stereo sound in, 1080p60
+HDMI out, about 2 ms behind the console. A Sipeed Tang Mega 138K SOM (Gowin GW5AST-138) on a
+carrier board of its own, with a Seeed XIAO ESP32-C5 for Wi-Fi. The board, the FPGA design, the
+software for the FPGA's CPU and the ESP32's firmware are all here.
 
 ```
-PS2 component (YPbPr) + stereo audio
-  -> AV board: ADV7181D (video ADC/decoder; rev A: ADV7842)         on the Console's J10 header
-               PCM1808 (audio ADC)                                on the Console's J9 header
-  -> GW5AST-138 FPGA: capture -> deinterlace -> SMAA 1x -> scale
-  -> AV board: ADV7511 (HDMI transmitter)                           on the Console's J9 header
-  -> HDMI 1080p60 with audio
+console: component video (YPbPr, 480i) + stereo audio
+  -> ADV7181D decoder, PCM1808 audio converter
+  -> GW5AST-138 FPGA
+       fields into DDR3 -> motion adaptive deinterlace + noise reduction -> SMAA
+       -> FSR 1 upscale (EASU) -> FSR 1 sharpen (RCAS) -> on-screen text -> HDMI coding
+       its hard RISC-V CPU: bring-up, settings, frame lock, on-screen text
+  -> the FPGA's transceivers -> SN65DP159 -> HDMI 1080p60 with sound
+  XIAO ESP32-C5: Wi-Fi, web page, updates, JTAG; talks to the CPU over SPI
 ```
+
+Status (2026-11-12): the board (rev C-B) is built and runs a PS2's picture and sound to a display
+and a capture device. The table below is what it does now, on the board.
+
+![The board, rev C-B](hardware/av-board/rev-cb/img/av-board-cb-3d.png)
+
+## What it does
+
+| | |
+|---|---|
+| Input | 480i component (YPbPr) through an ADV7181D, sampled line-locked at 13.5 MHz; stereo analogue audio through a PCM1808. The decoder's sampling phase can be set, or tuned to the console's pixels (every phase tried on a still picture, the sharpest kept). |
+| Deinterlacing | Motion adaptive from the last four fields, kept in the SOM's DDR3: a field's lines as they are, the lines between from the field before where nothing moves and from their neighbours where something does. Bob and weave can be chosen instead. |
+| Noise | Where the picture is still, each sample is averaged with the same one a frame earlier (off, or three strengths). |
+| Anti-aliasing | SMAA 1x on the 480-line picture: luma edges, the orthogonal and the diagonal patterns, corners kept. A view that paints what it finds (edges, blends) in the picture's place, for tuning. |
+| Scaling | FSR 1's edge adaptive upsampling (EASU) to 1440 x 1080 (4:3) or 1920 x 1080 (16:9, for a game's widescreen mode). Any part of the source can be shown: the black border round a game's picture is measured and left out, so the picture fills the screen (or the part is set by hand). |
+| Sharpening | FSR 1's RCAS on luma, in 16 steps, with its noise term (less where a pixel is noise rather than detail). |
+| Timing | The output's frames are kept in step with the input's fields (the CPU trims the clock generator: within 10 us, no field shown twice or left out). A frame is made from the field that is still coming in: about 2 ms from a line captured to it sent (16.8 ms with whole fields). |
+| Output | 1080p60 (59.94 Hz) HDMI from the FPGA's own transceivers; the console's sound as HDMI audio (two channels of L-PCM); AVI and audio InfoFrames. |
+| On screen | An on-screen display: what comes in and goes out, what is done to the picture, the delay, the lock, the FPGA's temperature. |
+| Control | A web page on the XIAO: every setting (applied as it is changed, kept across power cycles), status, a screen capture of the output read back from the FPGA, firmware update over Wi-Fi. |
+
+## How it is put together
+
+- **The picture's path is logic** (`gateware/rtl/`): every pixel, at 148.5 MHz out. Each block has a
+  model in Python (`gateware/sim/`) and the whole path is simulated against them pixel for pixel:
+  the deinterlacer, SMAA, the scaler and the sharpening give exactly the models' pictures.
+- **Everything else runs on the FPGA's hard CPU** (an Andes A25 RISC-V in the GW5AST, `gateware/sw/`,
+  no operating system): it brings the board's chips up, holds the settings, finds the picture's
+  border, tunes the sampling phase, keeps the output in step with the input, writes the on-screen
+  text. A new program is loaded in a second, with no new bitstream.
+- **The XIAO ESP32-C5** (`firmware/xiao-wifi/`) is the way in: Wi-Fi, the web page, updates, and
+  JTAG to load bitstreams. It talks to the CPU over SPI in small messages, keeps the settings for
+  when the power is off, and carries the CPU's program.
+
+The design uses 16 % of the FPGA's logic, 75 % of its block RAM and 15 % of its multipliers.
+
+## Measured on the board
+
+| | |
+|---|---|
+| Delay | 2.0 ms at the top of the picture (some 2.5 ms at the bottom, by the two scan rates) with the picture made from the field coming in; 16.8 ms with whole fields. From the FPGA's own timing of a frame's start against the field; not yet measured from outside, and a display adds its own. |
+| Frame lock | within 10 us of its mark, the clock trimmed by some -57 ppm (this console against this board); in step some 20 s after starting 5 ms off |
+| Noise | the spread in a frozen frame's flat areas: 2.32 as it comes, 1.98 with the noise reduction; sharpened fully 3.94, with the sharpening's noise term 3.12, with both 2.61 |
+| Sampling phase | 4.5 % between the sharpest and the least sharp phase on Killzone (its picture is soft to begin with) |
+| Screen capture | 480 x 270 in 2 s, 960 x 540 in 6 s over the web page |
+
+## What is not done
+
+- Inputs other than 480i: 480p, 576i, 720p and 1080i need the decoder's settings and the capture's
+  timing for each.
+- 4K output: a 2160p30 test picture is clean on a display; at 2160p60 the link runs and the display
+  sees scrambling but shows nothing; the scaler's own path ends at 1080p.
+- The board's other inputs (S/PDIF, VGA, RGB with SCART sync) are wired but not used.
+- Without the XIAO the CPU starts with its built-in settings: it has no storage of its own.
+- The delay has not been measured through a display with a camera or a light sensor.
+
+## The repository
 
 | Directory | What |
 |---|---|
-| `hardware/av-board/` | The AV board: one board on the Console's two 2x20 headers (J9, J10), the Console's size, over the 138K SOM. Generated with KiCad's Python API; every circuit taken from the parts' reference designs. Revisions in `rev-a/`, `rev-b/` (hats on the Console), `rev-ca/`, `rev-cb/` (the SOM on its own carrier, shared parts in `rev-c/`), their shared generators in `kit/`. |
-| `gateware/` | The FPGA design for rev C-B: capture, DDR3 field store, motion adaptive deinterlacer, SMAA, FSR 1 scaler and sharpening, HDMI out of the transceivers; a register monitor on the XIAO's UART. [gateware/README.md](gateware/README.md) |
-| `firmware/` | The XIAO in rev C's sockets: `xiao/` a USB-JTAG and UART bridge (ESP32-S3); `xiao-wifi/` the same with Wi-Fi (ESP32-C5), and it runs the scaler: brings the board up, keeps the settings, serves the web page. |
+| [`hardware/av-board/`](hardware/av-board/README.md) | The board, rev C-B: generated with KiCad's Python API from `rev-cb/board.py`, every circuit from its part's reference design and reviewed against the data sheets; fab files for JLCPCB. Earlier designs that were not built are in `older/`. |
+| [`gateware/`](gateware/README.md) | The FPGA design: `rtl/` the logic, `sw/` the CPU's program, `sim/` the models and testbenches, `gowin/` the build, `tools/` the host's scripts (registers, loading, stills), `docs/` notes. |
+| [`firmware/xiao-wifi/`](firmware/xiao-wifi/README.md) | The XIAO ESP32-C5's firmware: Wi-Fi, the web page, updates, a JTAG server, the link to the FPGA's CPU. (`firmware/xiao/` is an earlier USB-only bridge for an ESP32-S3.) |
+| [`tools/capview/`](tools/capview/README.md) | A small service that shows a USB capture device's picture in a browser: used to watch the output during development. |
 
-Status: rev A (ADV7842, six layers) is routed and ready to order but costs about $400 at
-JLCPCB. Rev B (ADV7181D, four layers, a hat on the Console) and rev C-A / C-B (the SOM on a carrier
-of its own: 1080p60 through an ADV7511, or 4K60 from the FPGA's transceivers) are reviewed against
-every data sheet, routed, DRC clean, with fab files. Rev C-B is built and running
-(2026-11-12): a PS2's 480i component picture comes out of its HDMI port as 1080p60: deinterlaced
-motion adaptive from four fields kept in the SOM's DDR3, anti-aliased (SMAA), scaled and sharpened
-(FSR 1), with no host: the bitstream is in the SOM's flash and the XIAO brings the board up and
-serves its settings on a web page (`gateware/`, `firmware/xiao-wifi/`). Sound is taken and packed
-for HDMI but not yet tried on a display; 480p/720p/1080i in and 4K60 out are not done. The other revisions have not been built.
-
-## The boards
-
-Rendered from the generated KiCad boards (`hardware/av-board/kit/render.py`); none built yet.
-
-| Rev B: a hat on the Tang Console | Rev C-B: the SOM on its own carrier, 4K60 HDMI |
-|---|---|
-| ![rev B](hardware/av-board/rev-b/img/av-board-b-3d.png) | ![rev C-B](hardware/av-board/rev-cb/img/av-board-cb-3d.png) |
-
-Every revision, top and 3D views: [hardware/av-board/README.md](hardware/av-board/README.md#pictures).
-
-## The host board
-
-Sipeed Tang Console with the Tang Mega 138K SOM (GW5AST-LV138PG484AC1/I0, revision C), board
-revision 32001C. Its two 2x20 headers (J9 "SDRAM0", J10 "SDRAM1") carry 38 FPGA I/O each,
-+5 V on pin 11 and GND on pin 12, no 3.3 V. Sipeed's schematic, interactive BOM and 3D models:
-`https://dl.sipeed.com/shareURL/TANG/Console`.
+Building and loading: [gateware/README.md](gateware/README.md) (the bitstream and the CPU's
+program: Gowin's tools, a RISC-V GCC) and [firmware/xiao-wifi/README.md](firmware/xiao-wifi/README.md)
+(ESP-IDF). With the bitstream in the SOM's flash and the firmware in the XIAO, the board needs
+power, a console and a display.
 
 ## Reference documents
 
-`hardware/av-board/refs/` (not in git: the vendors' copyright) holds the datasheets and user
-guides the circuits follow; the board's README lists which and where each came from.
+`hardware/av-board/refs/` (not in git: the vendors' copyright) holds the data sheets and user
+guides the circuits follow; [hardware/av-board/README.md](hardware/av-board/README.md) lists which
+and where each came from. The scaler's algorithms: SMAA (Jimenez et al.) and AMD's FidelityFX Super
+Resolution 1 (EASU and RCAS, MIT licence), both written again for this hardware
+(`gateware/sim/smaa.py`, `gateware/sim/fsr.py` say how they differ).
