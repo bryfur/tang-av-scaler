@@ -34,7 +34,7 @@ create_project -name avb -dir $out -pn GW5AST-LV138PG484AC1/I0 -device_version [
 cd $out/avb
 add_file -type verilog $out/defines.v
 #   GW_SRCS   the sources, from gateware/ (default: the bring-up image's; a test's: test/loop.v)
-foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/vcap.v rtl/fbram.v rtl/fbview.v}] {
+foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/vcap.v rtl/fbram.v rtl/fbview.v rtl/grab.v}] {
     add_file -type verilog $gw/$f
 }
 #   GW_CST    the pins (gowin/avb.cst); a test's own: no clock constraints with it

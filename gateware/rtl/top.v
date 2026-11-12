@@ -37,6 +37,10 @@
 //   33 W   RAW       takes 1024 samples of the pixel port: 1:0 from when (vcap.v mode)
 //   34 RW  RAWD      written: the sample's number; read: that sample: 7:0 Y pins, 15:8 C pins, 16 HS,
 //                    17 VS, 18 DE
+//   38 RW  GRAB      written: eight rows of the next frame's picture are taken (grab.v): 10:0 the first
+//                    row, 15:12 the step between them; read: 31 they are in
+//   39 RW  GRABD     written: the place in the rows taken ({which, column}); read: the pixel there
+//                    (R, G, B from bit 23), and the place moves on by one
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
 //                    (20-bit words, 2.97 Gb/s), 4 = 3840x2160p60 (40 bits a clock, 5.94 Gb/s, the
 //                    TMDS clock a fortieth); `AVB_PPC, with the transceivers' register file
@@ -311,6 +315,28 @@ module top (
     always @(posedge tx_clk)
         tx_data <= {word(t_g), word(t_b), ck_word, word(t_r)};
 
+    // the picture as sent, for the host (grab.v)
+    reg         grab_arm = 1'b0;
+    reg  [15:0] grab_cfg = 16'd0;
+    reg  [13:0] grab_ra = 14'd0;
+    wire        grab_done;
+    wire [23:0] grab_rd;
+    reg         grab_done_s0, grab_done_s;
+    always @(posedge clk) begin
+        grab_done_s0 <= grab_done;
+        grab_done_s <= grab_done_s0;
+        if (we && addr == 8'h38) begin
+            grab_arm <= !grab_arm;
+            grab_cfg <= wdata[15:0];
+        end
+        if (we && addr == 8'h39)
+            grab_ra <= wdata[13:0];
+        else if (addr == 8'h39 && u_mon.state == 4'd6)      // read: on to the next
+            grab_ra <= grab_ra + 14'd1;
+    end
+    grab u_grab (.clk(tx_clk), .de(v_de[0]), .vs(v_vs[0]), .rgb({v_r[7:0], v_g[7:0], v_b[7:0]}), .row(grab_cfg[10:0]),
+                 .step(grab_cfg[15:12]), .arm(grab_arm), .done(grab_done), .rclk(clk), .ra(grab_ra), .rd(grab_rd));
+
     wire [31:0] f0, f1, f2, f3, f4;
     fmeter u_f0 (.clk(clk), .tick(tick), .f(pll_clk2), .count(f0));
     fmeter u_f1 (.clk(clk), .tick(tick), .f(in_llc), .count(f1));
@@ -356,6 +382,8 @@ module top (
             8'h31: rdata <= {cap_s[22], 9'd0, cap_s[21:0]};
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
+            8'h38: rdata <= {grab_done_s, 15'd0, grab_cfg};
+            8'h39: rdata <= {8'd0, grab_rd};
             default: rdata <= 32'd0;
         endcase
     end
