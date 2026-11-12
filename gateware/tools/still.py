@@ -12,7 +12,7 @@
 
 --again: only the comparisons, from the stills already in OUTDIR.
 
-The link (AV_HOST, default 192.168.1.112) freezes the picture and reads the output back; the fields
+The link (AV_HOST, default avscaler.local) freezes the picture and reads the output back; the fields
 come through the monitor (AVB_TTY, default the link's console port).  The on-screen text is off
 meanwhile.  Best on a still scene (a pause menu): the two fields are 1/60 s apart."""
 import io
@@ -25,7 +25,7 @@ import urllib.request
 
 from PIL import Image
 
-HOST = os.environ.get("AV_HOST", "192.168.1.112")
+HOST = os.environ.get("AV_HOST", "avscaler.local")
 os.environ.setdefault("AVB_TTY", "tcp:%s:2323" % HOST)
 import avb
 
