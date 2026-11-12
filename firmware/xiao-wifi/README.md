@@ -26,8 +26,8 @@ The settings are kept in flash. The same over HTTP: `GET /api/video`, `POST /api
 
 While a host is on the console port (`gateware/tools/*.py`), the link leaves the scaler to it.
 
-The FPGA itself still has to be loaded after power-on (`gateware/tools/load.sh`, over the USB
-cable) until the bitstream is written to the SOM's flash.
+With the bitstream in the SOM's flash (`gateware/tools/flash.sh`) the FPGA loads by itself at
+power-on (about 20 s) and the link takes it from there.
 
 ## State on the board (2026-11-12, an ESP32-C5 in rev C-B)
 

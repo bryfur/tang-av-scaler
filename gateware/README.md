@@ -18,9 +18,18 @@ State on the board (2026-11-12):
     tools/video.py --load                    # load it (USB JTAG), HDMI up, the decoder set, the input shown
     tools/hdmi.py --load gowin/build/hdmi/avb/impl/pnr/avb.fs     # the test picture alone
 
+    tools/flash.sh <GW_OUT>/avb/impl/pnr/avb.fs     # into the SOM's flash: the board starts by itself
+
+With the bitstream in the flash and the Wi-Fi link's firmware in the XIAO (`firmware/xiao-wifi`:
+it brings the clock chip, the HDMI redriver, the decoder and the picture's settings up through
+the monitor), the board needs power, a source and a display, and nothing else: the FPGA loads in
+about 20 s, the picture follows 2 s later. The scripts below are for development; the link stands
+back while one of them is on its console port.
+
 `GW_MODE` is `1080p60`, `2160p30` or `2160p60` (the transceivers' rate; the component input is in
 the 1080p60 image only). The bitstream is `<GW_OUT>/avb/impl/pnr/avb.fs`, not compressed:
-openFPGALoader 1.1.1 cannot parse a compressed one. It goes into the FPGA's SRAM only.
+openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in the FPGA's SRAM only
+(until the next power-on or reload).
 
 ## Parts
 
@@ -45,7 +54,7 @@ openFPGALoader 1.1.1 cannot parse a compressed one. It goes into the FPGA's SRAM
 | `tools/ddr.py` | the DDR3's calibration state, a write and read test through the monitor |
 | `tools/video.py`, `adv.py` | the component input: the ADV7181D's settings (and what was learnt about them), the capture's state, raw samples of the pixel port |
 | `tools/hdmi.py`, `clkgen.py`, `edid.py`, `scdc.py`, `linkq.py`, `ddcci.py` | HDMI up; the MS5351M; the sink's EDID, SCDC, error counters, and its own measure of the picture rate |
-| `tools/load.sh` | a bitstream into the SRAM through the XIAO's USB-JTAG bridge |
+| `tools/load.sh`, `flash.sh` | a bitstream into the SRAM, or into the SOM's flash, through the XIAO's USB-JTAG bridge |
 | `sim/` | testbenches (iverilog, each checks against a model in Python): `tmds_tb.py`, `scr_tb.py`, `pattern_tb.py`, `deint_tb.py [NFIELDS]` (Verilator: the whole picture path with a model of the DDR3, against `model.py`, `smaa.py` and `fsr.py`, pixel for pixel; `aa=T` with the anti-aliasing, `sharp=N` the sharpening) |
 | `test/loop.v` | a UART loop-back, to test the XIAO's wiring |
 
