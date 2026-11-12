@@ -11,7 +11,7 @@
  *   POST /api/load?sum=N   the body is a bitstream (the .fs file's bits as bytes); the link loads it into
  *                          the FPGA's SRAM by itself (gowin.c) and answers with what happened
  *   GET  /api/video        JSON: the scaler as the link runs it (scaler.c): the picture in, the settings
- *   POST /api/video        a form, any of: on, ntsc, mode, thr, aa, aa_thr, swap, top1, pattern, freeze
+ *   POST /api/video        a form, any of: on, ntsc, mode, thr, aa, aa_thr, sharp, swap, top1, pattern, freeze
  *                          (numbers; 0 or 1 for the switches), again=1 (everything brought up again)
  *   POST /api/restart
  *
@@ -363,11 +363,11 @@ static esp_err_t get_video(httpd_req_t *req)
     int n = snprintf(out, sizeof out,
                      "{\"host\":%s,\"fpga\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
-                     "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"swap\":%d,"
+                     "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
                      "\"top1\":%d,\"pattern\":%d,\"freeze\":%d}}",
                      B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
-                     v.aa_thr, v.swap, v.top1, v.pattern, v.freeze);
+                     v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze);
 #undef B
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, out, n);
@@ -396,6 +396,7 @@ static esp_err_t post_video(httpd_req_t *req)
     NUM("thr", v.thr, 255)
     NUM("aa", v.aa, 1)
     NUM("aa_thr", v.aa_thr, 255)
+    NUM("sharp", v.sharp, 16)
     NUM("swap", v.swap, 1)
     NUM("top1", v.top1, 1)
     NUM("pattern", v.pattern, 1)

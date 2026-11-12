@@ -218,3 +218,12 @@ IO_PORT "ddr_dqs[0]"    IO_TYPE=SSTL15D PULL_MODE=NONE DRIVE=8 BANK_VCCIO=1.5;
 INS_LOC "u_ddr_pll/u" PLL_L[0];
 INS_LOC "u_ddr3/u_dp/u_phy/u_dll" DDRDLLM_BL;
 INS_LOC "u_ddr3/u_dp/u_phy/u_div" LEFTSIDE[4];
+// the PCM1808
+IO_LOC "in_bck" E13;
+IO_PORT "in_bck" IO_TYPE=LVCMOS33;
+IO_LOC "in_dout" E14;
+IO_PORT "in_dout" IO_TYPE=LVCMOS33;
+IO_LOC "in_lrck" G13;
+IO_PORT "in_lrck" IO_TYPE=LVCMOS33;
+IO_LOC "in_scki" H13;
+IO_PORT "in_scki" IO_TYPE=LVCMOS33;

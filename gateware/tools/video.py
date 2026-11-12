@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """video.py: the component input on the HDMI output (rtl/vcap.v, fbview.v).
 
-    video.py [--load [FS]] [--swap] [--sd] [--mode M] [--thr T] [--top1]
+    video.py [--load [FS]] [--swap] [--sd] [--mode M] [--thr T] [--top1] [--noaa] [--aa T] [--sharp N]
                                         # decoder to 480i component (CP core; --sd: the SD core, luma
                                         # only), HDMI up at 1080p60 if --load, show the input;
                                         # deinterlacing --mode 0 motion adaptive (default), 1 bob,
                                         # 2 weave; --thr the motion threshold (6); F = 0 the top
-                                        # field (--top1: F = 1)
+                                        # field (--top1: F = 1); SMAA on (--noaa), its edge
+                                        # threshold --aa (20); sharpening --sharp 0-16 (8)
     video.py freeze | run               # the fields in memory kept as they are (a still picture) | not
     video.py stat                       # what the capture sees
     video.py raw [MODE]                 # 1024 raw samples of the pixel port (0 now, 1 from a sync code,
@@ -93,7 +94,7 @@ def main():
     opt = lambda name, d: int(a[a.index(name) + 1]) if name in a else d
     # anti-aliasing: on unless --noaa, its edge threshold --aa (20)
     m.w(DEINT, opt("--aa", 20) << 24 | (0 if "--noaa" in a else 1) << 16 | opt("--thr", 6) << 8 | (4 if "--top1" in a else 0) | opt("--mode", 0))
-    m.w(VID, (8 if "--swap" in a else 0) | (0 if sd else 4) | 1)
+    m.w(VID, opt("--sharp", 8) << 16 | (8 if "--swap" in a else 0) | (0 if sd else 4) | 1)
     m.flush()
     time.sleep(0.7)
     stat(m)

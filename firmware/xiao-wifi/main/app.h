@@ -40,6 +40,7 @@ struct scaler_settings {
     uint8_t thr;        /* its motion threshold */
     bool aa;            /* SMAA */
     uint8_t aa_thr;     /* its edge threshold */
+    uint8_t sharp;      /* RCAS sharpening, 0 (none) to 16 */
     bool swap, top1, pattern, freeze;
 };
 struct scaler_state {

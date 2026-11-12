@@ -130,10 +130,10 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None):
     return [upsample(line) for line in lines]
 
 
-def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None):
-    """deint.v, smaa.v, lstream.v, easu.v: 1080 rows of 1920 (r, g, b)"""
+def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0):
+    """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b)"""
     import fsr
     pix = frame_480(fields, pars, mode, thr, smaa_thr)
     w, h = len(pix[0]), len(pix)
-    out = fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table())
+    out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table()), sharp)
     return [[(0, 0, 0)] * 240 + [rgb(*p) for p in row] + [(0, 0, 0)] * 240 for row in out]

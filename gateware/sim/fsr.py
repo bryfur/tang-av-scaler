@@ -18,8 +18,9 @@ The hardware (rtl/easu.v, rtl/easu_ana.v):
 
     fsr.py table OUT                # the table for $readmemh: OUT0.hex to OUT3.hex, three weights
                                     # of 10 bits a line each
-    fsr.py picture IN.png OUT.png [float|nearest]     # a 720 x 480 picture scaled, as the hardware
-                                                      # (default), the shader, or by the nearest pixel
+    fsr.py picture IN.png OUT.png [float|nearest|sharpN]   # a 720 x 480 picture scaled, as the
+                                                      # hardware (default), the shader, by the nearest
+                                                      # pixel, or the hardware's with RCAS at N/16
 """
 import math
 import sys
@@ -195,6 +196,33 @@ def scale_float(pix, w, h):
     return out
 
 
+RCAS_P = 219                                        # luma's range above black (16-235)
+RCAS_RD = [(65536 + 128 - 2 * k) // (256 - 4 * k) for k in range(49)]
+
+
+def rcas(pix, sharp):
+    """rtl/rcas.v: FSR 1's robust contrast adaptive sharpening (RCAS), on luma: each pixel less a
+    part L of its four neighbours, L as great as leaves the result between black and white and not
+    past the neighbours' range (at most 3/16), times sharp/16.  pix: rows of (y, cb, cr)"""
+    h, w = len(pix), len(pix[0])
+    v = [[min(max(p[0] - 16, 0), RCAS_P) for p in row] for row in pix]
+    out = []
+    for r in range(h):
+        up, dn, row = v[max(r - 1, 0)], v[min(r + 1, h - 1)], v[r]
+        line = []
+        for x in range(w):
+            e, b, hh, d, f = row[x], up[x], dn[x], row[max(x - 1, 0)], row[min(x + 1, w - 1)]
+            mn4, mx4 = min(b, d, f, hh), max(b, d, f, hh)
+            t1 = (min(mn4, e) * RECIP[mx4]) >> 6
+            t2 = ((RCAS_P - max(mx4, e)) * RECIP[RCAS_P - mn4]) >> 6
+            ls = (min(t1, t2, 48) * sharp) >> 4
+            num = max(e * 256 - ls * (b + d + f + hh), 0)
+            y = min((num * RCAS_RD[ls] + 32768) >> 16, RCAS_P) + 16
+            line.append((y, pix[r][x][1], pix[r][x][2]))
+        out.append(line)
+    return out
+
+
 def scale_nearest(pix, w, h):
     return [[pix[(4 * oy + 2) // 9][ox >> 1] for ox in range(2 * w)] for oy in range(h * 9 // 4)]
 
@@ -244,6 +272,8 @@ def main():
             out = scale_nearest(pix, w, h)
         else:
             out = scale_hw(pix, analysis([[p[0] for p in row] for row in pix], w, h), w, h, table())
+            if how.startswith("sharp"):
+                out = rcas(out, int(how[5:] or 16))
         res = Image.new("RGB", (2 * w, h * 9 // 4))
         res.putdata([to_rgb(p) for row in out for p in row])
         res.save(a[2])

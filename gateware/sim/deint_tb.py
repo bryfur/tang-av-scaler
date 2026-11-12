@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [mode=M] [thr=T] [aa=T] [sharp=N]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T."""
@@ -12,7 +12,7 @@ sys.path.insert(0, HERE)
 import model
 
 WORK = os.path.join(HERE, "build")
-LAT, LINES = 29, 240
+LAT, LINES = 25 + 2200 + 23, 240
 
 
 def stream(fields):
@@ -42,9 +42,10 @@ def main():
     mode = int(next((a[5:] for a in args if a.startswith("mode=")), 0))
     thr = int(next((a[4:] for a in args if a.startswith("thr=")), 6))
     aa = next((int(a[3:]) for a in args if a.startswith("aa=")), None)
+    sharp = int(next((a[6:] for a in args if a.startswith("sharp=")), 0))
     fields = [(t & 1, model.field(t)) for t in range(nf)]
     data = stream(fields)
-    tag = "d%d_%d_%d%s" % (nf, mode, thr, "" if aa is None else "_aa%d" % aa)
+    tag = "d%d_%d_%d%s_s%d" % (nf, mode, thr, "" if aa is None else "_aa%d" % aa, sharp)
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     tb = '''`timescale 1ns/1ps
@@ -91,10 +92,14 @@ module tb;
     wire de, hs, vs, pre, gb, ucc; wire [7:0] pr, pg, pb, r, g, b; wire [12:0] ox; wire [11:0] oy;
     pattern u_pat (.clk(clk), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
                    .ox(ox), .oy(oy));
+    wire [7:0] e_y, e_cb, e_cr; wire [24:0] e_xy;
     easu u_easu (.clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
-                 .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .r(r), .g(g), .b(b));
-    reg [%(lat)d:0] dl = 0;
-    always @(posedge clk) dl <= {dl, de};
+                 .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
+    dline #(.W(25), .D(25)) u_dxy (.clk(clk), .d({ox, oy}), .q(e_xy));
+    rcas u_rcas (.clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d),
+                 .r(r), .g(g), .b(b));
+    wire de_d;
+    dline #(.W(1), .D(%(latv)d)) u_dde (.clk(clk), .d(de), .q(de_d));
     integer f, i, gf;
     reg dumping = 0;
     initial gf = $fopen("%(work)s/%(tag)s_ring.txt", "w");
@@ -112,16 +117,16 @@ module tb;
         f = $fopen("%(work)s/%(tag)s_out.bin", "wb");
         for (i = 0; i < %(n_out)d; i = i + 1) begin
             @(posedge clk); #0.1;
-            $fwrite(f, "%%c%%c%%c%%c", 8'd65 + {7'd0, dl[%(lat)d]}, r, g, b);
+            $fwrite(f, "%%c%%c%%c%%c", 8'd65 + {7'd0, de_d}, r, g, b);
         end
         $fclose(f);
         $display("deint: frames %%0d state %%h", frames, dstate);
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_thr=aa or 0, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_thr=aa or 0, sharp=sharp, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out)
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "pattern.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
     subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)
@@ -138,8 +143,10 @@ endmodule
     print(subprocess.check_output([os.path.join(mdir, tag)]).decode().strip())
     s = open(os.path.join(WORK, tag + "_out.bin"), "rb").read()
     de = [s[4 * k] - 65 for k in range(len(s) // 4)]
-    start = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])       # (the dump begins in blanking)
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa)
+    # (the dump begins at the end of the frame before: its last row is still coming out)
+    first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
+    start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
     pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa)

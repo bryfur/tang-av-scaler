@@ -301,7 +301,7 @@ module smaa #(
     reg [23:0] c_r1, c_q;
     reg [31:0] f_r1, f_q;
     reg [15:0] p_d;
-    reg        b0_v = 1'b0, b1_v = 1'b0;
+    reg        b0_v = 1'b0, b1_v = 1'b0, b1_in;
     reg [10:0] b0_x, b1_x;
     reg [9:0]  b0_r, b1_r;
     reg [7:0]  b0_wt, b0_wu, b0_wl, b0_wo, b1_wt, b1_wu, b1_wl, b1_wo;
@@ -313,13 +313,14 @@ module smaa #(
         f_q <= f_r1;
         p_d <= p_q;
         {b1_v, b0_v} <= {b0_v, k_v};
+        b1_in <= b0_x < W;
         {b1_x, b0_x} <= {b0_x, k_x};
         {b1_r, b0_r} <= {b0_r, k_r};
         {b1_wt, b0_wt} <= {b0_wt, k_wt};
         {b1_wu, b0_wu} <= {b0_wu, k_wu};
         {b1_wl, b0_wl} <= {b0_wl, k_wl};
         {b1_wo, b0_wo} <= {b0_wo, k_wo};
-        if (b1_v && b1_x < W) begin
+        if (b1_v && b1_in) begin
             cm[b1_x[9:0]] <= {b1_wt, b1_wl, b1_wo};
             fm[b1_x[9:0]] <= {p_d, f_q[31:16]};
         end
@@ -328,11 +329,16 @@ module smaa #(
     // weights; the luma to its left
     reg [15:0] v_ctr, v_top, v_bot;
     reg [7:0]  v_at, v_al, v_ab, v_ly;
-    reg        m_v = 1'b0, m_vert;
+    reg        m_v = 1'b0, n_v = 1'b0;
+    reg [10:0] n_x;
+    reg [9:0]  n_b;
+    reg [7:0]  n_w, n_ly, n_ry;
+    reg [1:0]  n_sel;
+    reg [15:0] n_ctr, n_top, n_bot;
     reg [10:0] m_x;
     reg [9:0]  m_b;
     reg [7:0]  m_w, m_y, m_c, m_ny, m_nc;
-    wire [7:0] a_r = b1_x < W ? c_q[7:0] : 8'd0;
+    wire [7:0] a_r = b1_in ? c_q[7:0] : 8'd0;
     wire [7:0] best = max2(max2(v_at, v_ab), max2(v_al, a_r));
     wire signed [17:0] py, pc;
     easu_mul #(.AW(9), .BW(9)) u_my (.clk(clk), .a($signed({1'b0, m_ny}) - $signed({1'b0, m_y})), .b({1'b0, m_w}), .p(py));
@@ -343,7 +349,7 @@ module smaa #(
     reg [7:0]  m2_y, m2_c, m3_y, m3_c;
     wire signed [17:0] ry = py + 18'sd128, rc_ = pc + 18'sd128;
     always @(posedge clk) begin
-        m_v <= 1'b0;
+        n_v <= 1'b0;
         if (b1_v) begin
             v_ctr <= f_q[31:16];
             v_top <= f_q[15:0];
@@ -352,25 +358,27 @@ module smaa #(
             v_al <= c_q[15:8];
             v_ab <= b1_wu;
             v_ly <= v_ctr[15:8];
-            // the pixel before this column's: with which neighbour, how much
-            m_v <= b1_x != 11'd0 && b1_x <= W && b1_r != 10'd0 && b1_r <= H + 1;
-            m_x <= b1_x - 11'd1;
-            m_b <= b1_r - 10'd1;
-            m_w <= best;
-            m_y <= v_ctr[15:8];
-            m_c <= v_ctr[7:0];
-            m_vert <= best == v_at || best == v_ab;
-            if (best == v_at) begin
-                m_ny <= v_top[15:8];
-                m_nc <= v_top[7:0];
-            end else if (best == v_ab) begin
-                m_ny <= v_bot[15:8];
-                m_nc <= v_bot[7:0];
-            end else begin
-                m_ny <= best == v_al ? v_ly : f_q[31:24];
-                m_nc <= v_ctr[7:0];
-            end
+            // the pixel before this column's: which neighbour, how much
+            n_v <= b1_x != 11'd0 && b1_x <= W && b1_r != 10'd0 && b1_r <= H + 1;
+            n_x <= b1_x - 11'd1;
+            n_b <= b1_r - 10'd1;
+            n_w <= best;
+            n_sel <= best == v_at ? 2'd0 : best == v_ab ? 2'd1 : best == v_al ? 2'd2 : 2'd3;
+            n_ctr <= v_ctr;
+            n_top <= v_top;
+            n_bot <= v_bot;
+            n_ly <= v_ly;
+            n_ry <= f_q[31:24];
         end
+        // (a clock later) the neighbour itself
+        m_v <= n_v;
+        m_x <= n_x;
+        m_b <= n_b;
+        m_w <= n_w;
+        m_y <= n_ctr[15:8];
+        m_c <= n_ctr[7:0];
+        m_ny <= n_sel == 2'd0 ? n_top[15:8] : n_sel == 2'd1 ? n_bot[15:8] : n_sel == 2'd2 ? n_ly : n_ry;
+        m_nc <= n_sel == 2'd0 ? n_top[7:0] : n_sel == 2'd1 ? n_bot[7:0] : n_ctr[7:0];
         m2_v <= m_v;
         m2_x <= m_x;
         m2_b <= m_b;

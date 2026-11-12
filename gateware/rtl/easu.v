@@ -2,7 +2,7 @@
 // 1920 x 1080, FSR 1's edge adaptive upsampling as sim/fsr.py has it (scale_hw()): for each output
 // pixel the twelve source pixels round it, weighed by a table's entry for the pixel's place between
 // them (2 x 9 places), the edge's direction there (32 bins) and its strength (8 levels); held
-// between the least and greatest of the nearest four; then Y'CbCr [BT.601, 16-235] to R'G'B'.
+// between the least and greatest of the nearest four.  Y'CbCr out (rcas.v goes on from there).
 //
 // The ring: eight lines, a line's place its number's low three bits, 1024 words of 54 bits
 // ({dx 9, dy 9, ls 8, 2'd0, y 8, cb 8, cr 8, 2'd0}), written on lstream.v's clock.  It is asked for
@@ -10,7 +10,8 @@
 // one's lines from 0; ev_goal: lines are to be made while fewer than this + 1 are (the line five
 // below the next row's upper one in the ring, and the one after it for the stream).
 //
-// de, x, y: the output's pixel (pattern.v's ox, oy); r, g, b are that pixel's LAT clocks later.
+// de, x, y: the output's pixel (pattern.v's ox, oy); o_y, o_cb, o_cr are that pixel's LAT clocks
+// later (whatever, outside the 1440 columns).
 
 `ifndef EASU_HEX0
 `define EASU_HEX0 "easu0.hex"
@@ -76,11 +77,11 @@ module easu (
     input      [9:0]  w_x,
     input      [53:0] w_d,
 
-    output reg [7:0]  r,
-    output reg [7:0]  g,
-    output reg [7:0]  b
+    output     [7:0]  o_y,
+    output     [7:0]  o_cb,
+    output     [7:0]  o_cr
 ) /* synthesis syn_dspstyle = "logic" */;       // (small multipliers: in DSP blocks they are far apart)
-    localparam LAT = 29;
+    localparam LAT = 25;
     localparam W = 720, H = 480;
 
     // the row: fy the source row above its place (-1 to H - 1), py its place below it (2 py + 1
@@ -153,9 +154,11 @@ module easu (
                     m0[wa] <= wd[17:0];
                 end
             end
+            reg [53:0] q1;
             always @(posedge clk) begin
                 ra <= ra_n;
-                q[k] <= {m2[ra], m1[ra], m0[ra]};       // 2
+                q1 <= {m2[ra], m1[ra], m0[ra]};         // 3 (the RAM's own register)
+                q[k] <= q1;                             // 4
             end
         end
     endgenerate
@@ -163,14 +166,14 @@ module easu (
     // 3: the four rows' words; 4: the window, four columns of four rows, a new column at each odd pixel
     reg [53:0] cd [0:3] /* synthesis syn_ramstyle = "registers" */;
     reg [53:0] win [0:15] /* synthesis syn_ramstyle = "registers" */;     // [row][col]: col 3 the newest
-    reg [27:0] odd, inw;                // ([k]: of the pixel k + 1 clocks on)
+    reg [28:0] odd, inw;                // ([k]: of the pixel k + 1 clocks on)
     integer    i, j;
     always @(posedge clk) begin
-        odd <= {odd[26:0], x[0]};
-        inw <= {inw[26:0], de && x >= 13'd240 && x < 13'd1680};
+        odd <= {odd[27:0], x[0]};
+        inw <= {inw[27:0], de && x >= 13'd240 && x < 13'd1680};
         for (i = 0; i < 4; i = i + 1) begin
             cd[i] <= q[slot[i]];
-            if (odd[3]) begin
+            if (odd[4]) begin
                 win[4 * i + 3] <= cd[i];
                 for (j = 0; j < 3; j = j + 1)
                     win[4 * i + j] <= win[4 * i + j + 1];
@@ -200,7 +203,7 @@ module easu (
     generate
         for (gi = 0; gi < 4; gi = gi + 1) begin : g_q       // gi: {row, col} of f g / j k
             localparam WI = (gi[1] ? 8 : 4) + (gi[0] ? 2 : 1);
-            wire [5:0] wgt = odd[4] != gi[0] ? wy3r[gi[1]] : wy1r[gi[1]];
+            wire [5:0] wgt = odd[5] != gi[0] ? wy3r[gi[1]] : wy1r[gi[1]];
             easu_mul #(.AW(9), .BW(7)) u_dx (.clk(clk), .a(win[WI][53:45]), .b({1'b0, wgt}), .p(qdx[gi]));
             easu_mul #(.AW(9), .BW(7)) u_dy (.clk(clk), .a(win[WI][44:36]), .b({1'b0, wgt}), .p(qdy[gi]));
             easu_mul #(.AW(9), .BW(7)) u_ls (.clk(clk), .a({1'b0, win[WI][35:28]}), .b({1'b0, wgt}), .p(qls[gi]));
@@ -274,7 +277,7 @@ module easu (
         if (swp13)
             t = 5'd16 - t;
         bin = opp13 ? 5'd0 - t : t;
-        ta <= {py, odd[13], bin, li13};
+        ta <= {py, odd[14], bin, li13};
     end
 
     // 15 to 17: the table; the twelve pixels wait for it
@@ -347,32 +350,7 @@ module easu (
         ocr <= hold3(sm[2], mn[22][2], mx[22][2]);
     end
 
-    // 24 to 28: R'G'B'
-    reg signed [9:0]  yv;
-    reg signed [8:0]  cbv, crv;
-    reg signed [19:0] my, mrv, mgu, mgv, mbu;
-    reg signed [19:0] sr, sg, sb;
-    reg [7:0]  r20, g20, b20;
-    function [7:0] clamp(input signed [19:0] v);
-        clamp = v[19] ? 8'd0 : |v[18:16] ? 8'hFF : v[15:8];
-    endfunction
-    always @(posedge clk) begin
-        yv <= oy_ < 8'd16 ? 10'sd0 : $signed({2'b00, oy_}) - 10'sd16;
-        cbv <= $signed({1'b0, ocb}) - 9'sd128;
-        crv <= $signed({1'b0, ocr}) - 9'sd128;
-        my <= yv * 11'sd298;
-        mrv <= crv * 11'sd409;
-        mgu <= cbv * 11'sd100;
-        mgv <= crv * 11'sd208;
-        mbu <= cbv * 11'sd516;
-        sr <= my + mrv + 20'sd128;
-        sg <= my - mgu - mgv + 20'sd128;
-        sb <= my + mbu + 20'sd128;
-        r20 <= clamp(sr);
-        g20 <= clamp(sg);
-        b20 <= clamp(sb);
-        r <= inw[27] ? r20 : 8'd0;
-        g <= inw[27] ? g20 : 8'd0;
-        b <= inw[27] ? b20 : 8'd0;
-    end
+    assign o_y = oy_;
+    assign o_cb = ocb;
+    assign o_cr = ocr;
 endmodule

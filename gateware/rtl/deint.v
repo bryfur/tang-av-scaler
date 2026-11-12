@@ -81,7 +81,7 @@ module deint #(
     end
 
     localparam S_IDLE = 0, S_RQ = 1, S_WAIT = 2, S_C1 = 3, S_C2 = 4, S_W = 5, S_NEXT = 6, S_C1B = 7, S_C2B = 8,
-               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12;
+               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13;
     reg [3:0]  st = S_IDLE;
     reg        active = 1'b0, pc, hist;
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
@@ -98,7 +98,9 @@ module deint #(
     wire [9:0] kmax = pc ? nl - 10'd1 : nl;
     reg        new_ok, old_ok, emit;
     reg [9:0]  row_new, row_w, line_i, line_d;
+    reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
     always @(posedge clk) begin
+        can <= active && !hold && k <= kmax && emitted <= goal;
         new_ok <= k < nl;
         old_ok <= k != 10'd0;
         emit <= pc ? 1'b1 : k != 10'd0;
@@ -140,7 +142,7 @@ module deint #(
     endfunction
 
     // C1: new and old as used, the three differences' greatest
-    reg [127:0] dn, m, dnr, dwr, md, dor;
+    reg [127:0] dn, m, dnr, dwr, md, dor, mab, dw2;
     reg         rdv = 1'b0;
     reg [255:0] rdq;
     reg [7:0]   carry;                  // m of the pixel before these sixteen
@@ -217,7 +219,7 @@ module deint #(
                     k <= 10'd0;
                     emitted <= 10'd0;
                     active <= nfields != 3'd0;
-                end else if (active && !start_clr && !fstart && !hold && k <= kmax && emitted <= goal) begin
+                end else if (can && !start_clr && !fstart) begin
                     c <= 7'd0;
                     i <= 3'd0;
                     rx <= 3'd0;
@@ -250,6 +252,8 @@ module deint #(
             S_C1B:
                 st <= S_C1C;
             S_C1C:
+                st <= S_C1D;
+            S_C1D:
                 st <= S_C2;
             S_C2: begin
                 carry <= m[8 * 15 +: 8];
@@ -308,7 +312,9 @@ module deint #(
             t_dn = new_ok ? dnr[8 * n +: 8] : old_m[8 * n +: 8];
             dn[8 * n +: 8] <= t_dn;
             dor[8 * n +: 8] <= old_ok ? old_m[8 * n +: 8] : t_dn;
-            m[8 * n +: 8] <= max2(max2(dn[8 * n +: 8], dor[8 * n +: 8]), dwr[8 * n +: 8]);
+            mab[8 * n +: 8] <= max2(dn[8 * n +: 8], dor[8 * n +: 8]);
+            dw2[8 * n +: 8] <= dwr[8 * n +: 8];
+            m[8 * n +: 8] <= max2(mab[8 * n +: 8], dw2[8 * n +: 8]);
             t_l = n == 0 ? carry : m[8 * (n - 1) +: 8];
             t_r = n == 15 ? m[8 * 15 +: 8] : m[8 * (n + 1) +: 8];
             md[8 * n +: 8] <= max2(max2(t_l, m[8 * n +: 8]), t_r);

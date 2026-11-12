@@ -40,7 +40,7 @@ create_project -name avb -dir $out -pn GW5AST-LV138PG484AC1/I0 -device_version [
 cd $out/avb
 add_file -type verilog $out/defines.v
 #   GW_SRCS   the sources, from gateware/ (default: the bring-up image's; a test's: test/loop.v)
-foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/vcap.v rtl/grab.v rtl/cap_ddr.v rtl/deint.v rtl/lstream.v rtl/smaa.v rtl/easu.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
+foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/vcap.v rtl/grab.v rtl/cap_ddr.v rtl/deint.v rtl/lstream.v rtl/smaa.v rtl/easu.v rtl/rcas.v rtl/dline.v rtl/audio_in.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
     add_file -type verilog $gw/$f
 }
 #   GW_CST    the pins (gowin/avb.cst); a test's own: no clock constraints with it
@@ -65,8 +65,8 @@ set_option -use_cpu_as_gpio 1
 # (not compressed: openFPGALoader 1.1.1 cannot parse a compressed GW5AST .fs)
 set_option -bit_compress 0
 set_option -timing_driven 1
-#   GW_PLACE, GW_ROUTE  the place and route algorithms
-set_option -place_option [env GW_PLACE 0]
+#   GW_PLACE, GW_ROUTE  the place and route algorithms (place 2 closes the timing with everything in; 0 and 1 did not)
+set_option -place_option [env GW_PLACE 2]
 set_option -route_option [env GW_ROUTE 0]
 set_option -output_base_name avb
 # (the register file is a result file of the project, not a source: gw_sh has no command for it)

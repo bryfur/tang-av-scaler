@@ -1,0 +1,54 @@
+# What the SOM's hard CPU could do instead of FPGA logic
+
+The GW5AST-138 has a hard RISC-V core beside the fabric (Andes A25 "AE350", run at 800 MHz in the
+fpc console's design). The scaler does not use it yet: everything is logic, and what is slow and
+rare is done by the ESP32 through a UART (`firmware/xiao-wifi/main/scaler.c`). This note sorts the
+design's parts by whether the CPU would do them better.
+
+## The measure
+
+The output is 148.5 million pixels a second. At 800 MHz that is 5.4 CPU clocks a pixel: nothing
+that touches every output pixel can be software. The input is 13.5 million pixels a second
+(480i/480p): 59 clocks a pixel, still far too few for the deinterlacer (4 fields read, 6
+differences, a blend) or SMAA (4 searches). So the picture's path stays logic. What the CPU is good
+for is whatever happens once a line, once a field, or once in a while.
+
+## Better on the CPU
+
+| What | Now | On the CPU |
+|---|---|---|
+| Bring-up and control: MS5351M, SN65DP159, SCDC, ADV7181D, lanes | the ESP32, bit by bit through the monitor's UART (2 s; the board needs the ESP to make a picture) | a few I2C masters in logic or bit-banged GPIO: up in milliseconds, and the board runs without the XIAO. The ESP becomes what it is good at: Wi-Fi and the web page, talking to the CPU. |
+| The scaler's kernel table (`rtl/easu.v`: 4608 entries, 55 block RAMs of ROM, fixed for 720x480 to 1440x1080) | made by `sim/fsr.py` at build time | computed by the CPU when the input or output format changes (floating point, a few milliseconds) into a RAM: any ratio (480p, 576i, 720p, 1080i in; 720p, 1440p, 4K out) from one bitstream. The same for SMAA's area table and its reach. |
+| Input format detection | none: 480i assumed | read the decoder's STDI measurement and the capture's counters each field, pick the decoder's register set, the capture geometry and the scaler's table; follow a console that switches 480i/480p in a game |
+| Film and cadence detection (3:2, 2:2) for the deinterlacer | none: motion adaptive always | the logic gives one number a field (the sum of the field's motion); the CPU looks at the last ten, finds the cadence and tells the deinterlacer to weave the right pair: film material at full resolution without motion artefacts |
+| Adaptive settings: motion threshold from the measured noise, sharpening from the picture | fixed numbers from the web page | per-field statistics from the logic (a histogram of the still parts' differences), thresholds set by the CPU |
+| HDMI packets: AVI and audio InfoFrames, audio clock regeneration values, later HDR or VRR data | not sent (DVI framing) | the CPU writes each packet's bytes into a small RAM; logic adds the error correction and sends it in the blanking. Packets change with every format: tedious in logic, trivial in C. |
+| On-screen display: a menu, the input's format, a setup picture | none (the web page) | the CPU draws into a small overlay (e.g. 480x270, 4 bits a pixel, 65 kbit) that the output stage mixes over the picture; buttons or a controller read by the CPU |
+| DDR3 calibration (`rtl/ddr3/ddr3_cal.v`, 600 lines of state machine) | logic, once at start | software stepping the same delays and reading the same compare results: easier to extend (per-lane write levelling, a retry, a report) |
+| The debug monitor (`rtl/mon.v`, `rtl/grab.v`) | a register bus on the UART | the same registers on the CPU's bus; the picture read back, statistics, a self test, all in C |
+
+## Not on the CPU
+
+- The deinterlacer, SMAA, the scaler, colour conversion, TMDS coding: every pixel, fixed work, and
+  they fit (a tenth of the logic, a tenth of the DSP blocks, 60 % of the block RAM).
+- The capture and the DDR3 traffic: every pixel.
+- Audio samples: 48,000 a second would be easy for the CPU, but they must go into packets on a
+  line's timing; a small state machine does that with no jitter. The CPU sets it up.
+
+## What it costs
+
+- The core needs Gowin's AE350 SoC wrapper, a boot path (the SOM's SPI flash, or the DDR3 loaded
+  by a ROM loader) and the Andes/RISC-V toolchain: the fpc console design already has all three
+  (`fpc/console`: `riscv_ae350_config.v`, its boot ROM and software build), so this is a port, not
+  new ground.
+- The CPU and the picture's path would share the DDR3: one more user on `rtl/ddr_arb.v`.
+- A second thing to build and version (firmware in the bitstream or the flash).
+
+## Suggested order
+
+1. Control on the CPU (bring-up, format detection, settings): the board stands alone, and every
+   later feature has somewhere to live.
+2. The scaler's table in RAM, written by the CPU: all the input formats and other output sizes.
+3. HDMI packets: InfoFrames, then audio.
+4. Cadence detection and adaptive thresholds.
+5. The on-screen display.

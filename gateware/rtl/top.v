@@ -29,7 +29,8 @@
 //                    before the lanes are started
 //   30 RW  VID       0 the picture is the component input's (else pattern.v's), 1 the fields in the
 //                    DDR3 are left as they are, 2 the pixel port is 16 bits wide (the CP core's:
-//                    vcap.v), 3 Cb and Cr the other way round
+//                    vcap.v), 3 Cb and Cr the other way round, 20:16 the sharpening (rcas.v: 0 none
+//                    to 16)
 //   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
 //                    15:8 the motion threshold
 //                    16 the anti-aliasing on (smaa.v), 31:24 its edge threshold (a luma step)
@@ -49,6 +50,10 @@
 //                    command is done, 15:8 the calibration's code, 23:16 the DLL's step; written: the
 //                    host's command: 24:0 the line (256 bits), 31 a write (of DDRD), else a read
 //   48-4F RW DDRD    the line: written, a write's; read, the last read's
+//   50-51 R AUD      the PCM1808's last left and right words as they came (audio_in.v: 32 bits; the
+//                    24-bit sample at 30:7)
+//   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
+//                    sample's upper 16 bits)
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
 //                    (20-bit words, 2.97 Gb/s), 4 = 3840x2160p60 (40 bits a clock, 5.94 Gb/s, the
 //                    TMDS clock a fortieth); `AVB_PPC, with the transceivers' register file
@@ -94,6 +99,11 @@ module top (
     input  in_hs,
     input  in_vs,
     input  in_de,
+    // the PCM1808 (audio in)
+    output in_scki,
+    output in_bck,
+    output in_lrck,
+    input  in_dout,
     // the SOM's DDR3
     output [14:0] ddr_addr,
     output [2:0]  ddr_bank,
@@ -227,9 +237,9 @@ module top (
     endgenerate
 
     // the component input: the ADV7181D's fields decoded on its clock (vcap.v), kept in the DDR3
-    // (cap_ddr.v), made a progressive picture (deint.v, lstream.v) and scaled (easu.v: 1080p60 only), LAT
+    // (cap_ddr.v), made a progressive picture (deint.v, lstream.v), scaled (easu.v) and sharpened (rcas.v: 1080p60 only), LAT
     // clocks behind pattern.v's pixel: its timing and its picture wait that long
-    localparam LAT = 29;
+    localparam LAT_E = 25, LAT = LAT_E + 2200 + 23;      // (easu.v; rcas.v: a row and 23)
     reg [31:0] vid = 32'd0;
     reg        raw_arm = 1'b0;
     reg [1:0]  raw_mode = 2'd0;
@@ -257,26 +267,24 @@ module top (
                 .we(fb_we), .wa(), .wd(fb_wd), .w_ln(cap_ln), .w_col(cap_col), .eof(cap_eof), .f_we(), .f_wa(), .f_wd(), .pix(cap_pix), .lines(cap_lines), .field(cap_field),
                 .fields(cap_fields), .arm(raw_arm), .mode(raw_mode), .done(raw_done), .rclk(clk),
                 .ra(raw_ra), .rd(raw_rd));
-    reg [6 * PPC - 1:0]  dl_t [1:LAT];
-    reg [24 * PPC - 1:0] dl_p [1:LAT];
     reg                  vid_s0, vid_on, swap_s0, swap;
-    integer dk;
+    reg [4:0]            sharp_s0, sharp;
     always @(posedge tx_clk) begin
         vid_s0 <= vid[0];
         vid_on <= vid_s0;
         swap_s0 <= vid[3];
         swap <= swap_s0;
-        dl_t[1] <= {p_de, p_hs, p_vs, p_pre, p_gb, p_ucc};
-        dl_p[1] <= {p_r, p_g, p_b};
-        for (dk = 2; dk <= LAT; dk = dk + 1) begin
-            dl_t[dk] <= dl_t[dk - 1];
-            dl_p[dk] <= dl_p[dk - 1];
-        end
+        sharp_s0 <= vid[20:16] > 5'd16 ? 5'd16 : vid[20:16];
+        sharp <= sharp_s0;
     end
+    wire [6 * PPC - 1:0]  dl_t;
+    wire [24 * PPC - 1:0] dl_p;
+    dline #(.W(6 * PPC), .D(LAT)) u_dlt (.clk(tx_clk), .d({p_de, p_hs, p_vs, p_pre, p_gb, p_ucc}), .q(dl_t));
+    dline #(.W(24 * PPC), .D(LAT)) u_dlp (.clk(tx_clk), .d({p_r, p_g, p_b}), .q(dl_p));
     wire [PPC - 1:0]      v_de, v_hs, v_vs, v_pre, v_gb, v_ucc;
     wire [8 * PPC - 1:0]  v_r, v_g, v_b;
-    assign {v_de, v_hs, v_vs, v_pre, v_gb, v_ucc} = dl_t[LAT];
-    assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {l_r, l_g, l_b} : dl_p[LAT];
+    assign {v_de, v_hs, v_vs, v_pre, v_gb, v_ucc} = dl_t;
+    assign {v_r, v_g, v_b} = vid_on && PPC == 1 ? {l_r, l_g, l_b} : dl_p;
     // the channels' control bits: 0 {VSYNC, HSYNC}; 1 {CTL1, CTL0}, 2 {CTL3, CTL2}: the video preamble
     // is CTL0 alone [HDMI 1.4 5.2.1.1], sent with the guard band
     wire [2 * PPC - 1:0]  c0, c1;
@@ -458,8 +466,14 @@ module top (
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     generate
         if (PPC == 1) begin : g_lv
+            wire [7:0]  e_y, e_cb, e_cr;
+            wire [24:0] e_xy;
             easu u_easu (.clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
-                         .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .r(l_r), .g(l_g), .b(l_b));
+                         .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
+                         .o_cr(e_cr));
+            dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .d({p_x, p_y}), .q(e_xy));
+            rcas u_rcas (.clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
+                         .cri(swap ? e_cb : e_cr), .sharp(sharp), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
             assign l_r = 8'd0;
             assign l_g = 8'd0;
@@ -478,6 +492,36 @@ module top (
     always @(posedge clk) begin
         ddr_s0 <= {dll_step, cal_info, dm_done, cal_fail, ddr_ok};
         ddr_s <= ddr_s0;
+    end
+
+    // the sound in (audio_in.v, on the MS5351M's CLK2); for the host: the last words and the peaks
+    wire [31:0] au_l, au_r;
+    wire        au_tick;
+    audio_in u_au (.clk(pll_clk2), .scki(in_scki), .bck(in_bck), .lrck(in_lrck), .dout(in_dout), .l(au_l), .r(au_r),
+                   .tick(au_tick));
+    reg         au_t0, au_t1, au_t2;
+    reg  [31:0] au_ls, au_rs;
+    reg  [15:0] au_pl = 16'd0, au_pr = 16'd0;
+    wire [15:0] au_al = au_ls[30] ? ~au_ls[30:15] : au_ls[30:15], au_ar = au_rs[30] ? ~au_rs[30:15] : au_rs[30:15];
+    reg         au_new;
+    always @(posedge clk) begin
+        au_t0 <= au_tick;
+        au_t1 <= au_t0;
+        au_t2 <= au_t1;
+        au_new <= au_t1 != au_t2;
+        if (au_t1 != au_t2) begin               // (the words have been still for a sample's time)
+            au_ls <= au_l;
+            au_rs <= au_r;
+        end
+        if (addr == 8'h52 && u_mon.state == 4'd6) begin
+            au_pl <= 16'd0;
+            au_pr <= 16'd0;
+        end else if (au_new) begin
+            if (au_al > au_pl)
+                au_pl <= au_al;
+            if (au_ar > au_pr)
+                au_pr <= au_ar;
+        end
     end
 
     wire [31:0] f0, f1, f2, f3, f4;
@@ -528,6 +572,9 @@ module top (
             8'h35: rdata <= dcfg;
             8'h36: rdata <= {dst_s[29:14], dst_s[13:6], 2'd0, dst_s[5:0]};
             8'h38: rdata <= {grab_done_s, 15'd0, grab_cfg};
+            8'h50: rdata <= au_ls;
+            8'h51: rdata <= au_rs;
+            8'h52: rdata <= {au_pr, au_pl};
             8'h40: rdata <= {8'd0, ddr_s[18:3], 5'd0, ddr_s[2:0]};
             8'h48, 8'h49, 8'h4A, 8'h4B, 8'h4C, 8'h4D, 8'h4E, 8'h4F: rdata <= dm_rdata[32 * addr[2:0] +: 32];
             8'h39: rdata <= {8'd0, grab_rd};
