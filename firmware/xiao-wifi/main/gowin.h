@@ -22,3 +22,6 @@ struct gowin_opt {
  * happened, a few lines, the last "loaded" or "NOT loaded".  The caller holds the JTAG port
  * (jtag_take). */
 bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowin_opt *o, char *msg, size_t max);
+
+/* The FPGA configures itself afresh from its flash (as at power-on).  The caller holds the JTAG port. */
+void gowin_reload(void);

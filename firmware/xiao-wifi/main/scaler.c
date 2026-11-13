@@ -35,6 +35,8 @@
 
 #include "app.h"
 #include "esp_log.h"
+#include "gowin.h"
+#include "jtag.h"
 #include "link.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -471,6 +473,43 @@ static bool set_all(const struct scaler_settings *v)
 }
 
 /* a second of it; false: this FPGA image has no SPI port (no CPU): the old way */
+/* After a power-on the transmit clock (lane 0's word clock: the whole picture runs on it) can come
+ * up at some 61 MHz for 148.5: the FPGA configured itself before the clock generator ran (it has no
+ * clock until the CPU sets it), and the lanes' resets do not clear it; an FPGA that configures with
+ * the reference running is right (seen 2026-11-12: a receiver found no signal, 25 frames a second).
+ * So: the output up, the reference there and the transmit clock not at it for four seconds running:
+ * the FPGA loads its flash's image again, by JTAG.  Three times at most. */
+static void transmit_check(const struct link_status *ls, bool host)
+{
+    static int bad, reloads;
+    uint32_t mode, tx, ref;
+    if (host || !ls->up_ok || !link_reg_read(R_MODE, &mode) || mode != 1 || !link_reg_read(R_FREQ + 2, &tx) ||
+        !link_reg_read(R_FREQ + 3, &ref)) {
+        bad = 0;
+        return;
+    }
+    /* (fmeter.v's counts: 23.84 Hz a step; 4200000 is 100 MHz) */
+    if (ref < 4200000 || (tx > ref ? tx - ref : ref - tx) < ref / 64) {
+        bad = 0;
+        return;
+    }
+    if (++bad < 4)
+        return;
+    bad = 0;
+    if (reloads >= 3) {
+        if (reloads++ == 3)
+            ESP_LOGE(TAG, "the transmit clock is still wrong (%u for %u): no more reloads", (unsigned)tx, (unsigned)ref);
+        return;
+    }
+    if (!jtag_take(false))
+        return;                         /* (a PC has the JTAG port: its business) */
+    gowin_reload();
+    jtag_give();
+    reloads++;
+    ESP_LOGW(TAG, "the transmit clock at %u kHz for %u: the FPGA loads its image again (%d)",
+             (unsigned)((uint64_t)tx * 800000 >> 25), (unsigned)((uint64_t)ref * 800000 >> 25), reloads);
+}
+
 static bool cpu_second(struct scaler_state *s)
 {
     static uint32_t up_was;
@@ -526,6 +565,7 @@ static bool cpu_second(struct scaler_state *s)
         }
     }
     up_was = ls.up_s;
+    transmit_check(&ls, host);
     if (redo)
         cmd(LINK_CMD_AGAIN);
     if (meas)

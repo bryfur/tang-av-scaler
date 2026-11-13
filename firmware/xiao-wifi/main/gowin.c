@@ -113,6 +113,13 @@ static int say(char *msg, size_t max, int at, const char *fmt, ...)
     return at;
 }
 
+void gowin_reload(void)
+{
+    tms_seq(0x1F, 6);               /* Test-Logic-Reset, Run-Test/Idle */
+    command(RELOAD);
+    command(NOOP);
+}
+
 bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowin_opt *o, char *msg, size_t max)
 {
     uint32_t gap_ms = o->gap_ms, pre_ms = o->pre_ms;
