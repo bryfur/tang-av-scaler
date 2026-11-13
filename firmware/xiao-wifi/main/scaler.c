@@ -598,6 +598,7 @@ static bool cpu_second(struct scaler_state *s)
     s->ll = ls.ll;
     s->ll_lines = ls.ll_lines;
     s->in_std = ls.in_std, s->in_ok = ls.in_ok, s->in_lines = ls.in_lines, s->in_hz100 = ls.in_hz100;
+    s->pan = ls.pan, s->pan_dx = ls.pan_dx, s->pan_dy = ls.pan_dy, s->pan_ms10 = ls.pan_ms10;
     return true;
 }
 

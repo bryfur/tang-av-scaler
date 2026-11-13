@@ -37,7 +37,9 @@ struct link_settings {
     uint8_t on;             /* the scaler is run (else left alone) */
     uint8_t ntsc;           /* the picture rate 60/1.001 Hz */
     uint8_t mode;           /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave; + 4: the lines made where the
-                             * picture moves go along its edges (rtl/deint.v edi) */
+                             * picture moves go along its edges (rtl/deint.v edi); + 8 (motion adaptive):
+                             * where the picture pans, the lines made are the field before's, moved
+                             * (rtl/deint.v mv, sw/pan.c) */
     uint8_t thr;            /* its motion threshold */
     uint8_t aa;             /* SMAA */
     uint8_t aa_thr;         /* its edge threshold */
@@ -88,6 +90,9 @@ struct link_status {
     uint8_t in_ok;          /* the scaler shows it (else: its test picture and the on-screen text) */
     uint16_t in_lines;      /* its lines, blanking and all: a field's (interlaced) or a frame's */
     uint16_t in_hz100;      /* its fields or frames a second x 100 */
+    uint8_t pan;            /* the picture's pan (sw/pan.c): the deinterlacer is given one */
+    int8_t pan_dx, pan_dy;  /* what was found (pixels, the field's lines, in two fields) */
+    uint8_t pan_ms10;       /* the time finding it took, in 0.1 ms */
     struct link_settings set;
 };
 

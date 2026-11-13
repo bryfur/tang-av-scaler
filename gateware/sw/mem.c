@@ -44,7 +44,8 @@ void mem_test(void)
         bad += b[i] != want;
     }
     bad += ((volatile uint32_t *)b)[3] != 0x6A635C55u;      /* (bytes 12 to 15 as a word) */
-    __asm__ volatile ("csrsi 0x7ca, 2");
+    /* (and it stays off: the capture writes the memory behind the cache, and what the program reads of
+     * the picture (pan.c) must be what is there now) */
     mem_state = REG(R_CPUMR) >> 31 ? MEM_DEAD : REG(R_CPUMW) == wrote ? MEM_NONE : bad ? MEM_BAD : MEM_GOOD;
     REG(R_CPUM + 2) = 0x4D450000u | (uint32_t)mem_state << 12 | (bad > 0xFFF ? 0xFFF : bad);   /* "ME", for a host */
 }

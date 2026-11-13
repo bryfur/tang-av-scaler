@@ -150,6 +150,7 @@ int main(void)
     for (;;) {
         service();
         audio_service();
+        board_field();
         if (ms() - t_lock >= 100) {
             t_lock = ms();
             board_lock();

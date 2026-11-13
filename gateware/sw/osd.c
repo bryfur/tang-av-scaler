@@ -144,6 +144,18 @@ void osd_update(void)
         st.hist ? "motion adaptive" : "bob (no history)");
     if (!board_ed() && (s->mode & 4) && (s->mode & 3) != 2)
         str(" + edges");
+    if (!board_ed() && (s->mode & 8) && (s->mode & 3) == 0) {
+        str(pan_ok ? " + pan " : " + pan -");
+        if (pan_ok) {
+            if (pan_dx < 0)
+                put('-');
+            num(pan_dx < 0 ? -pan_dx : pan_dx, 1);
+            put(',');
+            if (pan_dy < 0)
+                put('-');
+            num(pan_dy < 0 ? -pan_dy : pan_dy, 1);
+        }
+    }
     str("   NOISE ");
     str(noise[s->nr & 3]);
 

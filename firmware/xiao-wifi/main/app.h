@@ -85,6 +85,9 @@ struct scaler_state {
     uint8_t in_std;     /* what comes in, by the decoder's measurement (gateware/sw/link.h LINK_IN_*; 0: not known) */
     bool in_ok;         /* the scaler shows it */
     uint16_t in_lines, in_hz100;
+    bool pan;           /* the picture's pan is found and given to the deinterlacer */
+    int8_t pan_dx, pan_dy;
+    uint8_t pan_ms10;   /* the time finding it took, in 0.1 ms */
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
 void link_start(void);

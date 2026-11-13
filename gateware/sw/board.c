@@ -530,6 +530,19 @@ bool board_grabbing(void)
     return grabbing;
 }
 
+/* a field has come in (the fields' count has moved on): the picture's pan from it, where the
+ * deinterlacer is to use one (480i, the motion adaptive method + 8) */
+void board_field(void)
+{
+    static uint32_t was;
+    uint32_t n = REG(R_FIELDS);
+    if (n == was)
+        return;
+    was = n;
+    pan_service(REG(R_DSTAT) >> 3 & 7, st.lines, set.on && !st.host && !hd && !ed && (set.mode & 3) == 0 && (set.mode & 8) &&
+                st.hist && !(REG(R_VID) >> 1 & 1));
+}
+
 void board_second(void)
 {
     static uint32_t fields_was, frames_was;
