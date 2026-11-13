@@ -80,8 +80,9 @@
 //   33 W   RAW       takes 1024 samples of the pixel port: 1:0 from when (vcap.v mode)
 //   34 RW  RAWD      written: the sample's number; read: that sample: 7:0 Y pins, 15:8 C pins, 16 HS,
 //                    17 VS, 18 DE
-//   38 RW  GRAB      written: eight rows of the next frame's picture are taken (grab.v): 10:0 the first
-//                    row, 15:12 the step between them; read: 31 they are in
+//   38 RW  GRAB      written: rows of the next frame's picture are taken (grab.v: two a frame): 10:0 the
+//                    first row, 15:12 the step between them; read: 31 they are in, 19:16 how many a
+//                    frame (0: a design from before: eight)
 //   39 RW  GRABD     written: the place in the rows taken ({which, column}); read: the pixel there
 //                    (R, G, B from bit 23), and the place moves on by one
 //   40 RW  DDR       the DDR3 (rtl/ddr3): read: 0 calibrated, 1 its calibration failed, 2 the host's
@@ -896,7 +897,7 @@ module top (
             8'h3C: rdata <= {{5{g_ys[26]}}, g_ys};
             8'h3D: rdata <= {15'd0, g_dy};
             8'h36: rdata <= {dst_s[29:14], dst_s[13:6], 2'd0, dst_s[5:0]};
-            8'h38: rdata <= {grab_done_s, 15'd0, grab_cfg};
+            8'h38: rdata <= {grab_done_s, 11'd0, 4'd2, grab_cfg};
             8'h50: rdata <= au_ls;
             8'h51: rdata <= au_rs;
             8'h52: rdata <= {au_pr, au_pl};

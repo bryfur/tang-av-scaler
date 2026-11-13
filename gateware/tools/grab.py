@@ -14,7 +14,8 @@ GRAB, GRABD = 0x38, 0x39
 
 
 def rows8(m, row, step, width):
-    """rows row, row + step, ... (eight) of one frame: a list of lists of (r, g, b)"""
+    """rows row, row + step, ... of one frame (as many as the design takes a frame: GRAB's bits
+    19:16; 0, a design from before: eight): a list of lists of (r, g, b)"""
     m.w(GRAB, step << 12 | row)
     m.flush()
     t = time.time()
@@ -22,7 +23,7 @@ def rows8(m, row, step, width):
         if time.time() - t > 2:
             sys.exit("grab: no frame in 2 s (the lanes' clock is not running?)")
     out = []
-    for k in range(8):
+    for k in range(m.r(GRAB) >> 16 & 15 or 8):
         m.w(GRABD, k << 11)
         buf = b""
         cols = (width + step - 1) // step       # (a read moves on by the step)
@@ -43,7 +44,8 @@ def rows8(m, row, step, width):
 def frame(m, step=2, first=0, last=1080, width=1920):
     img = Image.new("RGB", (width // step, (last - first + step - 1) // step))
     y = 0
-    for row in range(first, last, 8 * step):
+    n = m.r(GRAB) >> 16 & 15 or 8           # (the rows the design takes a frame)
+    for row in range(first, last, n * step):
         for line in rows8(m, row, step, width):
             if y < img.height:
                 for x, p in enumerate(line):

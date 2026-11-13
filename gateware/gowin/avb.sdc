@@ -7,3 +7,14 @@ create_clock -name tx -period 6.5 -waveform {0 3.25} [get_pins {u_gtx/u_quad/LAN
 create_clock -name mem -period 2.5 -waveform {0 1.25} [get_nets {memory_clk}]
 create_clock -name ddr -period 10 -waveform {0 5} [get_pins {u_ddr3/u_dp/u_phy/u_div/CLKOUT}]
 set_clock_groups -asynchronous -group [get_clocks {sys}] -group [get_clocks {core}] -group [get_clocks {pll_clk2}] -group [get_clocks {in_llc}] -group [get_clocks {osc}] -group [get_clocks {tx}] -group [get_clocks {mem}] -group [get_clocks {ddr}]
+// The DDR3's pins' side (rtl/ddr3/ddr3_dp.v): the registers that take the deserializers' words and
+// the DQS blocks' RVALID are a register after a register with a whole cycle allowed, and the
+// placer used it: on the board one placement lost a lane's RVALID now and then (its bursts went
+// to the wrong reads: the memory right, that lane's bytes another line's) and its twin failed the
+// calibration, with nothing in the timing report: what the pins' blocks give comes later in the
+// clock than the tool's model says.  Half a cycle for those (3.3 ns of net then: met with 1.2 to
+// spare).  The registers before the serializers and the DQS blocks: 8 ns (the ones for a whole
+// lane or for all of them reach along the chip's edge: 5 ns they cannot make).
+set_max_delay -to [get_regs {u_ddr3/u_dp/rdat_q_*}] 5
+set_max_delay -to [get_regs {u_ddr3/u_dp/rv_q_*}] 5
+set_max_delay -from [get_regs {u_ddr3/u_dp/p_*}] 8

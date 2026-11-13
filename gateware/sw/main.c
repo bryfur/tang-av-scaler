@@ -46,12 +46,14 @@ static void tx_end(void)
     REG(R_SPIS) = 3u | (uint32_t)txn << 16;
 }
 
-/* pixels of the picture as it goes out (rtl/grab.v takes eight rows of a frame: row, row + step,
- * ...): the eight with this row in them asked for if they are not the ones there */
+/* pixels of the picture as it goes out (rtl/grab.v takes some rows of a frame: row, row + step,
+ * ...: two; a design from before eight: GRAB says): the ones with this row in them asked for if
+ * they are not the ones there */
 static void grab(int step, int y, int x, int n)
 {
     static int have_y = -1, have_step;
-    int first = y - y % 8;
+    int rows = REG(R_GRAB) >> 16 & 15;
+    int first = y - y % (rows ? rows : 8);
     board_grab_seen();
     if (have_step != step || have_y != first) {
         uint32_t t = ms();

@@ -370,6 +370,7 @@ static int32_t ll_at(void)
 static int32_t lock_i;                  /* the errors' sum */
 static int32_t lock_u;                  /* the trim now, ppm x 256 */
 static int lock_good;                   /* steps in a row near enough */
+static bool lock_seed;                  /* (brought up anew: the trim to begin from what the clocks' meters say) */
 
 void board_lock(void)
 {
@@ -392,6 +393,24 @@ void board_lock(void)
             st.lock = 1;                /* (the clock as it was: the input may come back) */
         return;
     }
+    /* Begun anew: the trim from where the two clocks are, not from none.  A frame out is 2200 x
+     * 1125 word clocks; a field in is 858 x 262.5 of the decoder's clock (a frame of 480p 858 x 525,
+     * of 720p 1650 x 750 at half the word clock): the word clock should be 1000/91 of the decoder's
+     * (500/91; 2).  fmeter.v counts both against the same oscillator (a count of the decoder's is
+     * 1.8 ppm).  (From none, the sum took a minute to find a console's 55 ppm, the delay half a
+     * millisecond out meanwhile.) */
+    if (lock_seed) {
+        uint32_t tx = REG(R_FREQ + 2), in = REG(R_FREQ + 1);
+        int64_t want = (int64_t)in * (hd ? 182 : ed ? 500 : 1000), have = (int64_t)tx * 91;
+        lock_seed = false;
+        if (tx > 1000000 && in > 100000) {
+            int64_t ppm256 = (want - have) * 256000000 / have;
+            if (ppm256 > -200 * 256 && ppm256 < 200 * 256) {
+                lock_u = (int32_t)ppm256;
+                lock_i = lock_u / 10;
+            }
+        }
+    }
     /* how far the frame's start is from where it should be: the nearer way round a field's time */
     e = (int32_t)(lat & 0xFFF) - (set.lowlat && (st.hist || hd || ed) ? ll_at() : LOCK_AT);
     while (e > 834)
@@ -405,7 +424,8 @@ void board_lock(void)
         u = LOCK_MAX * 256;
     else if (u < -LOCK_MAX * 256)
         u = -LOCK_MAX * 256;
-    else
+    else if (e > -50 && e < 50)         /* (and not while the frame's start is still far off: the
+                                         * sum would carry it past) */
         lock_i += e;
     if (u > lock_u + 25 * 256)
         u = lock_u + 25 * 256;
@@ -455,6 +475,7 @@ static void bringup(void)
     }
     picture();
     lock_u = lock_i = lock_good = 0;
+    lock_seed = true;
     st.up_ok = ok;
     st.ups++;
     want_measure = true;                /* (the part shown stays until it is found again) */

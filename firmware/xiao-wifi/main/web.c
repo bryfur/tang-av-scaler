@@ -463,7 +463,9 @@ static esp_err_t get_grab(httpd_req_t *req)
             mon_rd(GRAB, &x);
         }
         ok &= x >> 31;
-        for (int k = 0; k < 8 && y < h && e == ESP_OK; k++, y++) {
+        /* (the rows the design takes a frame: GRAB's bits 19:16; a design from before: eight) */
+        int rows = x >> 16 & 15 ? x >> 16 & 15 : 8;
+        for (int k = 0; k < rows && y < h && e == ESP_OK; k++, y++) {
             mon_wr(GRABD, (uint32_t)k << 11);
             for (int i = 0; i < w; i += N) {
                 int n = w - i < N ? w - i : N;
