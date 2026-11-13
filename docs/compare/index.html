@@ -46,8 +46,8 @@
 <header>
   <h1><a href="https://github.com/bryfur/tang-av-scaler">tang-av-scaler</a>: 480i in, 1080p out</h1>
   <div class="group" id="scenes"><span>Frame</span>
-    <button data-scene="game">In the game</button>
-    <button data-scene="scores">Results screen</button>
+    <button data-scene="game">Killzone</button>
+    <button data-scene="abyss">Tales of the Abyss</button>
   </div>
   <div class="group" id="zooms"><span>Size</span>
     <button data-zoom="0">Fit</button>
@@ -179,11 +179,11 @@
     b.addEventListener("click", function () { setZoom(+b.getAttribute("data-zoom")); });
   });
 
-  // index.html?frame=scores&size=2&at=30: the frame, the size and the line's place (per cent) to begin with
+  // index.html?frame=abyss&size=2&at=30: the frame, the size and the line's place (per cent) to begin with
   var q = new URLSearchParams(location.search);
   var at = parseFloat(q.get("at"));
   if (at >= 0 && at <= 100) split = at / 100;
-  scene(q.get("frame") === "scores" ? "scores" : "game");
+  scene(q.get("frame") === "abyss" ? "abyss" : "game");
   setZoom([1, 2, 4].indexOf(+q.get("size")) >= 0 ? +q.get("size") : 0);
   // (the picture's size is known only once it is here: the middle again)
   plain.addEventListener("load", layout);

@@ -55,7 +55,8 @@ no capture device).
 
 ## What it looks like
 
-Two frozen frames of Killzone (PS2, its widescreen mode), each in and out. "The plain way" is the
+Two frozen frames, each in and out: Killzone (PS2, its widescreen mode) and Tales of the Abyss
+(PS2, 4:3). "The plain way" is the
 two 480i fields as the console sent them, woven into a frame and stretched to 1080p (bilinear),
 which is about what a simple scaler or a display does. "The scaler" is its 1080p output (motion
 adaptive deinterlacing, noise reduction medium, SMAA with diagonals and corners at edge threshold
@@ -71,16 +72,15 @@ pixel (`docs/compare/index.html`).
 
 The pictures themselves, in [`docs/compare/`](docs/compare/):
 
-- Whole frames, 1920 x 1080. In the game: [the plain way](docs/compare/game-plain.png),
-  [the scaler](docs/compare/game-scaler.png), [a half of each](docs/compare/game-split.png). A
-  results screen: [the plain way](docs/compare/scores-plain.png),
-  [the scaler](docs/compare/scores-scaler.png).
+- Whole frames, 1920 x 1080. Killzone: [the plain way](docs/compare/game-plain.png),
+  [the scaler](docs/compare/game-scaler.png), [a half of each](docs/compare/game-split.png).
+  Tales of the Abyss: [the plain way](docs/compare/abyss-plain.png),
+  [the scaler](docs/compare/abyss-scaler.png), [a half of each](docs/compare/abyss-split.png).
 - The frames as they came, the fields woven and nothing else (720 x 480):
-  [the game](docs/compare/game-480i.png), [the results screen](docs/compare/scores-480i.png).
-- Parts of both side by side, three times the size: [the tower and its guy wires](docs/compare/tower.png),
+  [Killzone](docs/compare/game-480i.png), [Tales of the Abyss](docs/compare/abyss-480i.png).
+- Parts of Killzone side by side, three times the size: [the tower and its guy wires](docs/compare/tower.png),
   [palms](docs/compare/palms.png), [hanging foliage](docs/compare/foliage.png),
-  [HUD text](docs/compare/hud-text.png), [the ammunition counter](docs/compare/ammo.png),
-  the results screen's [text](docs/compare/scores-text.png) and [buttons](docs/compare/scores-buttons.png).
+  [HUD text](docs/compare/hud-text.png), [the ammunition counter](docs/compare/ammo.png).
 
 ## How it is put together
 
