@@ -618,7 +618,12 @@ static void task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(1000));
         struct scaler_state s = {0};
         bool on_now, redo;
+        crumb[0] = 1;
+        if (web_loading())              /* (the FPGA is being loaded: nothing asked of it) */
+            continue;
+        crumb[0] = 2;
         cpu_mode = cpu_second(&s);
+        crumb[0] = 3;
         if (cpu_mode) {
             xSemaphoreTake(lock, portMAX_DELAY);
             state = s;

@@ -114,3 +114,7 @@ void wifi_get(struct wifi_state *s);
 /* web.c: the status page, settings, updates */
 void web_start(void);
 bool web_reached(void);                 /* a status request has been answered since the start */
+bool web_loading(void);                 /* a bitstream is going into the FPGA (POST /api/load): leave it alone */
+/* where each of four tasks was when the link last went down by a crash or a watchdog (kept across
+ * the restart; GET /api/status: "crumbs"): 0 the scaler's task, 1 the load, 2 a web request, 3 free */
+extern uint32_t crumb[4], crumb_was[4];

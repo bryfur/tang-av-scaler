@@ -274,12 +274,19 @@ static struct {
     char msg[700];
 } load = {.msg = "0 no load yet\n"};
 
+bool web_loading(void)
+{
+    return load.running;
+}
+
 static void load_task(void *arg)
 {
     char *m = load.msg + snprintf(load.msg, sizeof load.msg, "%u running\n", load.id);
     int64_t t0 = esp_timer_get_time();
     char msg[600];
+    crumb[1] = 1;
     bool ok = gowin_load(load.data, load.len, load.sum, &load.opt, msg, sizeof msg);
+    crumb[1] = 2;
     jtag_give();
     free(load.data);
     (void)m;
@@ -287,13 +294,18 @@ static void load_task(void *arg)
              (unsigned)((esp_timer_get_time() - t0) / 1000));
     ESP_LOGI(TAG, "load %u: %u bytes: %s", load.id, (unsigned)load.len, ok ? "loaded" : "not loaded");
     load.running = false;
+    crumb[1] = 0;
     vTaskDelete(NULL);
 }
 
 static esp_err_t get_load(httpd_req_t *req)
 {
+    char out[sizeof load.msg + 80];
+    /* (and where the tasks were at the last restart that was not a power-on: app.h crumb) */
+    snprintf(out, sizeof out, "%s(restart %d: tasks at %u %u %u %u)\n", load.msg, (int)esp_reset_reason(),
+             (unsigned)crumb_was[0], (unsigned)crumb_was[1], (unsigned)crumb_was[2], (unsigned)crumb_was[3]);
     httpd_resp_set_type(req, "text/plain");
-    return httpd_resp_sendstr(req, load.msg);
+    return httpd_resp_sendstr(req, out);
 }
 
 static esp_err_t post_load(httpd_req_t *req)

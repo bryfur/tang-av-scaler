@@ -192,10 +192,12 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
      * idle task's watchdog off for the while.  Wi-Fi gets no time and may lose its network for the
      * minute; it joins again by itself afterwards. */
     UBaseType_t prio = uxTaskPriorityGet(NULL);
-    if (o->hold) {
-        esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(0));
+    /* (without hold too the idle task's watchdog is off: the tick given up each 64 KB goes to
+     * whatever else waits, the web server's requests first, and the idle task went ten seconds
+     * without one: a restart half way through the bitstream, 2026-11-12) */
+    esp_task_wdt_delete(xTaskGetIdleTaskHandleForCore(0));
+    if (o->hold)
         vTaskPrioritySet(NULL, configMAX_PRIORITIES - 1);
-    }
     command(CONFIG_ENABLE);
     command(INIT_ADDR);
     command(XFER_WRITE);
@@ -218,7 +220,7 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
             tms[n - 1] = 0x80;              /* the last bit leaves Shift-DR */
         jtag_shift(tms, tdi, tdi, n * 8);
         if (!o->hold && (done & 0xFFFF) < sizeof tdi)
-            vTaskDelay(1);                  /* the idle task its turn (the watchdog), each 64 KB */
+            vTaskDelay(2);                  /* the other tasks their turn, each 64 KB */
     }
     tms_seq(0x1, 2);                /* Update-DR, Run-Test/Idle */
     command(0x0A);
@@ -229,10 +231,9 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
     command(CONFIG_DISABLE);
     command(NOOP);
     st = status();
-    if (o->hold) {
+    if (o->hold)
         vTaskPrioritySet(NULL, prio);
-        esp_task_wdt_add(xTaskGetIdleTaskHandleForCore(0));
-    }
+    esp_task_wdt_add(xTaskGetIdleTaskHandleForCore(0));
     at = say(msg, max, at, "after the bitstream %08x, user code %08x\n", (unsigned)st, (unsigned)read32(GOWIN_USERCODE));
     bool ok = (st & ST_DONE_FINAL) && !(st & (ST_TIMEOUT | ST_BAD_COMMAND | 1u));
     say(msg, max, at, ok ? "loaded\n" : "NOT loaded\n");

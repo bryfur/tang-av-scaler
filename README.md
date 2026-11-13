@@ -49,7 +49,7 @@ no capture device).
 | Scaling | FSR 1's edge adaptive upsampling (EASU) to 1440 x 1080 (4:3) or 1920 x 1080 (16:9, for a game's widescreen mode). Any part of the source can be shown: the black border round a game's picture is measured and left out, so the picture fills the screen (or the part is set by hand). |
 | Sharpening | FSR 1's RCAS on luma, in 16 steps, with its noise term (less where a pixel is noise rather than detail). |
 | Timing | The output's frames are kept in step with the input's fields (the CPU trims the clock generator: within 10 us, no field shown twice or left out). A frame is made from the field that is still coming in: about 2 ms from a line captured to it sent (16.8 ms with whole fields). |
-| Output | 1080p60 (59.94 Hz) HDMI from the FPGA's own transceivers; the console's sound as HDMI audio (two channels of L-PCM); AVI and audio InfoFrames. |
+| Output | 1080p60 (59.94 Hz) HDMI from the FPGA's own transceivers; the console's sound as HDMI audio (two channels of L-PCM at 48 kHz, its clock from the PLL the pixel clock comes from); AVI and audio InfoFrames. Runs a display, a capture device and an AV receiver (picture and sound). |
 | On screen | An on-screen display: what comes in and goes out, what is done to the picture, the delay, the lock, the FPGA's temperature. |
 | Control | A web page on the XIAO: every setting (applied as it is changed, kept across power cycles), status, a screen capture of the output read back from the FPGA, firmware update over Wi-Fi. |
 
@@ -118,6 +118,12 @@ The design uses 16 % of the FPGA's logic, 75 % of its block RAM and 15 % of its 
   sees scrambling but shows nothing; the scaler's own path ends at 1080p.
 - The board's other inputs (S/PDIF, VGA, RGB with SCART sync) are wired but not used.
 - Without the XIAO the CPU starts with its built-in settings: it has no storage of its own.
+- At power-on the FPGA loads its image twice, some 20 s more before there is a picture: configured
+  before the clock generator runs, one transceiver lane's clock comes up wrong and the lanes'
+  resets do not clear it; the XIAO sees that and has the FPGA load again. The right reset is not
+  found yet.
+- A bitstream into the FPGA's SRAM over Wi-Fi (`avx.py load`) goes in, and the XIAO then restarts
+  with the FPGA left unloaded; over USB it works (`gateware/tools/load.sh`).
 - The delay has not been measured through a display with a camera or a light sensor.
 
 ## The repository

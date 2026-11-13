@@ -1,3 +1,4 @@
+#include <string.h>
 /* A XIAO ESP32-C5 (or S3) on the AV board (rev C-A/C-B, hardware/av-board/rev-c/design.md "The
  * XIAO as programmer and console"): the FPGA loaded and debugged over Wi-Fi, no cable to a PC.
  *
@@ -16,7 +17,9 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_attr.h"
 #include "esp_ota_ops.h"
+#include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "jtag.h"
@@ -24,9 +27,17 @@
 
 static const char *TAG = "main";
 
+RTC_NOINIT_ATTR uint32_t crumb[4];
+uint32_t crumb_was[4];
+
 void app_main(void)
 {
     logbuf_init();
+    if (esp_reset_reason() != ESP_RST_POWERON)
+        ESP_LOGW("main", "restarted (reason %d): the tasks were at %u %u %u %u", (int)esp_reset_reason(),
+                 (unsigned)crumb[0], (unsigned)crumb[1], (unsigned)crumb[2], (unsigned)crumb[3]);
+    memcpy(crumb_was, crumb, sizeof crumb_was);
+    crumb[0] = crumb[1] = crumb[2] = crumb[3] = 0;
     esp_err_t e = nvs_flash_init();
     if (e == ESP_ERR_NVS_NO_FREE_PAGES || e == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
