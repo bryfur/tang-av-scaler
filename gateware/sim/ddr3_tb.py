@@ -208,7 +208,7 @@ def main():
     subprocess.check_call([os.path.join(IV, "iverilog"), "-g2012", "-o", os.path.join(WORK, "tb"), "-s", "tb"] + src)
     args = ["+" + a.lstrip("+") for a in sys.argv[1:]]
     out = subprocess.run([os.path.join(IV, "vvp"), "-n", os.path.join(WORK, "tb")] + args, stdout=subprocess.PIPE, text=True).stdout
-    lines = out.splitlines()
+    lines = [ln for ln in out.splitlines() if "$finish" not in ln]
     for ln in lines[:40] + (["..."] if len(lines) > 80 else []) + lines[-40:] if len(lines) > 80 else lines:
         print(ln)
     sys.exit(0 if lines and lines[-1] == "PASS" else 1)

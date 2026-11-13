@@ -3,7 +3,7 @@
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
-pic=FILE: a still picture's fields in the moving test picture's place; pg: what comes in is progressive (480p: each field a whole frame)."""
+pic=FILE: a still picture's fields in the moving test picture's place; ll=N: the frame made from the field still coming in, N of its lines in (with 6 fields: the one coming in must be a bottom one); pg: what comes in is progressive (480p: each field a whole frame)."""
 import os
 import subprocess
 import sys
