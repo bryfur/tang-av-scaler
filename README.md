@@ -46,6 +46,10 @@ adaptive deinterlacing, noise reduction medium, SMAA with diagonals and corners 
 read out of the FPGA's memory and the output is read back from its last stage, pixel for pixel
 (`gateware/tools/still.py`).
 
+**[Drag to compare](https://bryfur.github.io/tang-av-scaler/compare/)**: both frames on a page with a
+line to drag between the plain picture and the scaler's, at any size up to four screen pixels a
+pixel (`docs/compare/index.html`).
+
 ### Whole frames
 
 All are 1920 x 1080 and the page shows them smaller: click one for every pixel.

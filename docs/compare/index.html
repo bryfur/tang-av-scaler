@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tang-av-scaler: 480i in, 1080p out</title>
+<style>
+  :root { color-scheme: dark; --bg: #101214; --panel: #1a1d21; --line: #2c3138; --text: #e6e8eb; --dim: #9aa3ad; --accent: #5ac8a8; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 10px 16px;
+           background: var(--panel); border-bottom: 1px solid var(--line); }
+  h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  h1 a { color: inherit; text-decoration: none; }
+  h1 a:hover { color: var(--accent); }
+  .group { display: flex; align-items: center; gap: 6px; }
+  .group > span { color: var(--dim); font-size: 13px; margin-right: 2px; }
+  button { font: inherit; font-size: 13px; color: var(--text); background: transparent; border: 1px solid var(--line);
+           border-radius: 6px; padding: 4px 11px; cursor: pointer; }
+  button:hover { border-color: var(--dim); }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #06231b; font-weight: 600; }
+  button:focus-visible, #grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+  #view { position: absolute; inset: 0; overflow: auto; cursor: ew-resize; display: grid; scrollbar-color: #5b636d var(--panel); }
+  #canvas { position: relative; margin: auto; }
+  #canvas img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+  #canvas img.top { position: absolute; left: 0; top: 0; }
+  #canvas.px img { image-rendering: pixelated; }
+  #bar { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff;
+         box-shadow: 0 0 0 1px rgba(0, 0, 0, .55); pointer-events: none; }
+  #grip { position: absolute; top: 50%; left: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%;
+          background: #fff; color: #111; border: 0; box-shadow: 0 1px 6px rgba(0, 0, 0, .6); cursor: ew-resize;
+          pointer-events: auto; touch-action: none; display: grid; place-items: center; padding: 0; }
+  #grip svg { width: 24px; height: 24px; }
+  .tag { position: absolute; top: 12px; padding: 4px 10px; border-radius: 6px; background: rgba(0, 0, 0, .72);
+         font-size: 13px; font-weight: 600; pointer-events: none; white-space: nowrap; }
+  #tagl { left: 12px; }
+  #tagr { right: 12px; }
+  footer { padding: 8px 16px; background: var(--panel); border-top: 1px solid var(--line); color: var(--dim); font-size: 13px; }
+  footer a { color: var(--text); }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="https://github.com/bryfur/tang-av-scaler">tang-av-scaler</a>: 480i in, 1080p out</h1>
+  <div class="group" id="scenes"><span>Frame</span>
+    <button data-scene="game">In the game</button>
+    <button data-scene="scores">Results screen</button>
+  </div>
+  <div class="group" id="zooms"><span>Size</span>
+    <button data-zoom="0">Fit</button>
+    <button data-zoom="1">1:1</button>
+    <button data-zoom="2">2x</button>
+    <button data-zoom="4">4x</button>
+  </div>
+</header>
+<div id="stage">
+  <div id="view">
+    <div id="canvas">
+      <img id="plain" alt="The frame the plain way: the 480i fields woven and stretched to 1080p" draggable="false">
+      <img id="ours" class="top" alt="The same frame as the scaler puts it out" draggable="false">
+    </div>
+  </div>
+  <div id="bar">
+    <button id="grip" role="slider" aria-label="Where the plain picture ends and the scaler's begins" aria-valuemin="0" aria-valuemax="100">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg>
+    </button>
+  </div>
+  <div class="tag" id="tagl">480i, the plain way</div>
+  <div class="tag" id="tagr">1080p, the scaler</div>
+</div>
+<footer>
+  Drag the line (or the arrow keys; Home and End show one picture whole). Left: the console's two 480i fields woven into a frame
+  and stretched to 1080p, bilinear. Right: the scaler's output. Both read out of the FPGA, no camera or capture device.
+  At 1:1 a pixel of the picture is a pixel of this screen.
+  <a href="https://github.com/bryfur/tang-av-scaler#what-it-looks-like">More</a>
+</footer>
+<script>
+(function () {
+  var W = 1920, H = 1080;
+  var view = document.getElementById("view"), canvas = document.getElementById("canvas"), stage = document.getElementById("stage");
+  var plain = document.getElementById("plain"), ours = document.getElementById("ours");
+  var bar = document.getElementById("bar"), grip = document.getElementById("grip");
+  var split = 0.5;     // of the stage's width
+  var zoom = 0;        // 0: the frame fitted, else screen pixels a pixel of the picture
+
+  function layout() {
+    var w;
+    if (zoom) {
+      w = W * zoom / (window.devicePixelRatio || 1);
+    } else {
+      w = Math.min(stage.clientWidth, stage.clientHeight * W / H);
+    }
+    canvas.style.width = w + "px";
+    canvas.style.height = w * H / W + "px";
+    canvas.classList.toggle("px", zoom >= 2);
+    draw();
+  }
+
+  function draw() {
+    var x = split * stage.clientWidth;
+    bar.style.left = x + "px";
+    // the scaler's picture from the line to the right: the line's place in the picture
+    var c = canvas.getBoundingClientRect(), s = stage.getBoundingClientRect();
+    var cut = Math.max(0, Math.min(c.width, s.left + x - c.left));
+    ours.style.clipPath = "inset(0 0 0 " + cut + "px)";
+    grip.setAttribute("aria-valuenow", Math.round(split * 100));
+    document.getElementById("tagl").style.visibility = x > 190 ? "visible" : "hidden";
+    document.getElementById("tagr").style.visibility = stage.clientWidth - x > 180 ? "visible" : "hidden";
+  }
+
+  function to(clientX) {
+    var s = stage.getBoundingClientRect();
+    split = Math.max(0, Math.min(1, (clientX - s.left) / s.width));
+    draw();
+  }
+
+  var dragging = false;
+  function down(e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    // (a finger on the picture moves the picture; on the handle, the line)
+    if (e.currentTarget === view && e.pointerType !== "mouse") return;
+    // (not the scroll bars)
+    if (e.currentTarget === view && (e.offsetX > view.clientWidth || e.offsetY > view.clientHeight)) return;
+    dragging = true;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { }
+    to(e.clientX);
+    e.preventDefault();
+  }
+  function move(e) { if (dragging) to(e.clientX); }
+  function up() { dragging = false; }
+  [grip, view].forEach(function (el) {
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  });
+  grip.addEventListener("keydown", function (e) {
+    var step = e.shiftKey ? 0.1 : 0.01;
+    if (e.key === "ArrowLeft") split = Math.max(0, split - step);
+    else if (e.key === "ArrowRight") split = Math.min(1, split + step);
+    else if (e.key === "Home") split = 0;
+    else if (e.key === "End") split = 1;
+    else return;
+    e.preventDefault();
+    draw();
+  });
+  view.addEventListener("scroll", draw);
+  window.addEventListener("resize", layout);
+
+  function pressed(group, attr, value) {
+    document.querySelectorAll("#" + group + " button").forEach(function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute(attr) === String(value));
+    });
+  }
+  function scene(name) {
+    plain.src = name + "-plain.png";
+    ours.src = name + "-scaler.png";
+    pressed("scenes", "data-scene", name);
+  }
+  function setZoom(z) {
+    // (the middle of what is seen stays in the middle)
+    var c = canvas.getBoundingClientRect(), v = view.getBoundingClientRect();
+    var fx = c.width ? (v.left + v.width / 2 - c.left) / c.width : 0.5;
+    var fy = c.height ? (v.top + v.height / 2 - c.top) / c.height : 0.5;
+    zoom = z;
+    pressed("zooms", "data-zoom", z);
+    layout();
+    view.scrollLeft = fx * canvas.offsetWidth - view.clientWidth / 2;
+    view.scrollTop = fy * canvas.offsetHeight - view.clientHeight / 2;
+    draw();
+  }
+  document.querySelectorAll("#scenes button").forEach(function (b) {
+    b.addEventListener("click", function () { scene(b.getAttribute("data-scene")); });
+  });
+  document.querySelectorAll("#zooms button").forEach(function (b) {
+    b.addEventListener("click", function () { setZoom(+b.getAttribute("data-zoom")); });
+  });
+
+  // index.html?frame=scores&size=2&at=30: the frame, the size and the line's place (per cent) to begin with
+  var q = new URLSearchParams(location.search);
+  var at = parseFloat(q.get("at"));
+  if (at >= 0 && at <= 100) split = at / 100;
+  scene(q.get("frame") === "scores" ? "scores" : "game");
+  setZoom([1, 2, 4].indexOf(+q.get("size")) >= 0 ? +q.get("size") : 0);
+  // (the picture's size is known only once it is here: the middle again)
+  plain.addEventListener("load", layout);
+})();
+</script>
+</body>
+</html>
