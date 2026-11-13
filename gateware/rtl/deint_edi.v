@@ -27,7 +27,7 @@
 //           tests; the scores
 //   19..22  the least of sixteen, a comparison a stage
 //   24      the pixels beside agree
-//   25..27  the pixels along the direction; their mean; held
+//   25..28  the pixels along the direction: their places, the pixels; their mean; held
 // (all registers: the synthesis would make block RAMs of the ones that only move on)
 
 module deint_edi #(
@@ -45,7 +45,7 @@ module deint_edi #(
     input      [31:0] b2_i,
     output reg [31:0] bob
 ) /* synthesis syn_srlstyle = "registers" */;     // (no block RAM for what only moves on)
-    localparam LAT = 28;
+    localparam LAT = 30;
 
     function [7:0] absd(input [7:0] a, input [7:0] b);
         absd = a > b ? a - b : b - a;
@@ -57,32 +57,33 @@ module deint_edi #(
             mean = t[8:1];
         end
     endfunction
-    function [7:0] hold8(input [7:0] v, input [7:0] a, input [7:0] b);
-        hold8 = v < (a < b ? a : b) ? (a < b ? a : b) : v > (a < b ? b : a) ? (a < b ? b : a) : v;
+    // v held between lo and hi (lo <= hi)
+    function [7:0] held(input [7:0] v, input [7:0] lo, input [7:0] hi);
+        held = v < lo ? lo : v > hi ? hi : v;
     endfunction
 
     // ---- the lines' pixels as they come: luma, a pixel 8 bits, the oldest at 0 ----
-    // A2, B2: the words 0 to 25 clocks old (52 pixels); A, B: 0 to 29 (60 pixels); the chroma of A
-    // and B: {Cb, Cr} a word, 0 to 29 clocks old
+    // A2, B2: the words 0 to 25 clocks old (52 pixels); A, B: 0 to 31 (64 pixels); the chroma of A
+    // and B: {Cb, Cr} a word, 0 to 31 clocks old
     reg [415:0] la2 = 0 /* synthesis syn_srlstyle = "registers" */;
     reg [415:0] lb2 = 0 /* synthesis syn_srlstyle = "registers" */;
-    reg [479:0] la = 0 /* synthesis syn_srlstyle = "registers" */;
-    reg [479:0] lb = 0 /* synthesis syn_srlstyle = "registers" */;
-    reg [479:0] ka = 0 /* synthesis syn_srlstyle = "registers" */;
-    reg [479:0] kb = 0 /* synthesis syn_srlstyle = "registers" */;
-    // {valid, the pair's number} of the words 0 to 18 clocks old (the oldest at 0)
-    reg [208:0] tok = 0 /* synthesis syn_preserve = 1 */;       // (its own: not the same registers as deint.v's, far away)
+    reg [511:0] la = 0 /* synthesis syn_srlstyle = "registers" */;
+    reg [511:0] lb = 0 /* synthesis syn_srlstyle = "registers" */;
+    reg [511:0] ka = 0 /* synthesis syn_srlstyle = "registers" */;
+    reg [511:0] kb = 0 /* synthesis syn_srlstyle = "registers" */;
+    // {valid, the pair's number} of the words 0 to 19 clocks old (the oldest at 0)
+    reg [219:0] tok = 0 /* synthesis syn_preserve = 1 */;       // (its own: not the same registers as deint.v's, far away)
     always @(posedge clk) begin
         la2 <= {a2_i[7:0], a2_i[23:16], la2[415:16]};
         lb2 <= {b2_i[7:0], b2_i[23:16], lb2[415:16]};
-        la <= {a_i[7:0], a_i[23:16], la[479:16]};
-        lb <= {b_i[7:0], b_i[23:16], lb[479:16]};
-        ka <= {a_i[31:24], a_i[15:8], ka[479:16]};
-        kb <= {b_i[31:24], b_i[15:8], kb[479:16]};
-        tok <= {v_i, q_i, tok[208:11]};
+        la <= {a_i[7:0], a_i[23:16], la[511:16]};
+        lb <= {b_i[7:0], b_i[23:16], lb[511:16]};
+        ka <= {a_i[31:24], a_i[15:8], ka[511:16]};
+        kb <= {b_i[31:24], b_i[15:8], kb[511:16]};
+        tok <= {v_i, q_i, tok[219:11]};
     end
-    // (the word 13 clocks old: its pixels are 24, 25 of A2 and B2's 52, and 32, 33 of A and B's 60;
-    // the word 25 clocks old: pixels 8, 9 of A and B, word 4 of the chroma's 30)
+    // (the word 13 clocks old: its pixels are 24, 25 of A2 and B2's 52, and 36, 37 of A and B's 64;
+    // the word 27 clocks old: pixels 8, 9 of A and B, word 4 of the chroma's 32)
 
     // ---- stage 13 -> 14: the columns' differences: column h (0, 1) of the word 13 clocks old ----
     // c1: |A[x + d] - B[x - d]| for d of -8 to 8, at 8 (2 (d + 8) + h)
@@ -101,11 +102,11 @@ module deint_edi #(
     always @(posedge clk) begin
         for (d = -8; d <= 8; d = d + 1)
             for (h = 0; h < 2; h = h + 1) begin
-                c1[8 * (2 * (d + 8) + h) +: 8] <= absd(la[8 * (32 + h + d) +: 8], lb[8 * (32 + h - d) +: 8]);
+                c1[8 * (2 * (d + 8) + h) +: 8] <= absd(la[8 * (36 + h + d) +: 8], lb[8 * (36 + h - d) +: 8]);
                 if (d != 0) begin
                     i = d < 0 ? 2 * (-d - 1) : 2 * (d - 1) + 1;
-                    ea1[8 * (2 * i + h) +: 8] <= absd(la2[8 * (24 + h + 3 * d) +: 8], la[8 * (32 + h + d) +: 8]);
-                    eb1[8 * (2 * i + h) +: 8] <= absd(lb2[8 * (24 + h - 3 * d) +: 8], lb[8 * (32 + h - d) +: 8]);
+                    ea1[8 * (2 * i + h) +: 8] <= absd(la2[8 * (24 + h + 3 * d) +: 8], la[8 * (36 + h + d) +: 8]);
+                    eb1[8 * (2 * i + h) +: 8] <= absd(lb2[8 * (24 + h - 3 * d) +: 8], lb[8 * (36 + h - d) +: 8]);
                 end
             end
         c1p <= c1;
@@ -116,52 +117,64 @@ module deint_edi #(
         eb1pp <= eb1p;
     end
 
-    // ---- 15 -> 17: a pair's sums, in two clocks: its pixel t's five columns are in the words before it
+    // ---- 15 -> 18: a pair's sums, in three clocks: its pixel t's five columns are in the words before it
     // (c1pp), its own (c1p) and the one after (c1): for t 0 both of the first, both of its own, the
     // first of the third; for t 1 the second of the first, both of its own, both of the third.
-    // First (h: 10 bits): its own word's two columns and, for t 0, the first word's two; for t 1 the
-    // third word's two; the fifth column kept beside (r) ----
+    // First two sums of two columns (g), then the four's (h: 10 bits; for t 0 the first word's two and
+    // its own two; for t 1 its own two and the third word's two), then the fifth column with it (r) ----
     // sc: at 11 (17 t + d + 8); sea, seb: at 11 (16 t + i); pr: the pixel's own |A[x + d] -
     // B[x - d]|, at 8 (17 t + d + 8) (d = 0: the step)
     reg [373:0] sc;
     reg [351:0] sea, seb;
     reg [271:0] pr, pr0;
     reg [339:0] hc;                     // 10 (17 t + d + 8): four columns' sum
-    reg [271:0] rc;                     // 8 (17 t + d + 8): the fifth
+    reg [271:0] rc, rc0;                // 8 (17 t + d + 8): the fifth
     reg [319:0] hea, heb;               // 10 (16 t + i)
-    reg [255:0] rea, reb;
-    function [9:0] sum4(input [7:0] a, input [7:0] b, input [7:0] c, input [7:0] dd);
-        sum4 = {2'd0, a} + {2'd0, b} + {2'd0, c} + {2'd0, dd};
+    reg [255:0] rea, reb, rea0, reb0;
+    // (a clock before those: the four columns as two sums of two, 9 bits each, side by side)
+    reg [611:0] gc;                     // 18 (17 t + d + 8)
+    reg [575:0] gea, geb;               // 18 (16 t + i)
+    reg [271:0] pr1;
+    function [17:0] two(input [7:0] a, input [7:0] b, input [7:0] c, input [7:0] dd);
+        two = {{1'b0, c} + {1'b0, dd}, {1'b0, a} + {1'b0, b}};
     endfunction
     integer d2, i2;
     always @(posedge clk) begin
         for (d2 = -8; d2 <= 8; d2 = d2 + 1) begin
-            hc[10 * (d2 + 8) +: 10] <= sum4(c1pp[8 * (2 * (d2 + 8)) +: 8], c1pp[8 * (2 * (d2 + 8) + 1) +: 8], c1p[8 * (2 * (d2 + 8)) +: 8],
-                                            c1p[8 * (2 * (d2 + 8) + 1) +: 8]);
-            rc[8 * (d2 + 8) +: 8] <= c1[8 * (2 * (d2 + 8)) +: 8];
-            hc[10 * (17 + d2 + 8) +: 10] <= sum4(c1p[8 * (2 * (d2 + 8)) +: 8], c1p[8 * (2 * (d2 + 8) + 1) +: 8], c1[8 * (2 * (d2 + 8)) +: 8],
-                                                 c1[8 * (2 * (d2 + 8) + 1) +: 8]);
-            rc[8 * (17 + d2 + 8) +: 8] <= c1pp[8 * (2 * (d2 + 8) + 1) +: 8];
+            gc[18 * (d2 + 8) +: 18] <= two(c1pp[8 * (2 * (d2 + 8)) +: 8], c1pp[8 * (2 * (d2 + 8) + 1) +: 8], c1p[8 * (2 * (d2 + 8)) +: 8],
+                                           c1p[8 * (2 * (d2 + 8) + 1) +: 8]);
+            rc0[8 * (d2 + 8) +: 8] <= c1[8 * (2 * (d2 + 8)) +: 8];
+            gc[18 * (17 + d2 + 8) +: 18] <= two(c1p[8 * (2 * (d2 + 8)) +: 8], c1p[8 * (2 * (d2 + 8) + 1) +: 8], c1[8 * (2 * (d2 + 8)) +: 8],
+                                                c1[8 * (2 * (d2 + 8) + 1) +: 8]);
+            rc0[8 * (17 + d2 + 8) +: 8] <= c1pp[8 * (2 * (d2 + 8) + 1) +: 8];
             pr0[8 * (d2 + 8) +: 8] <= c1p[8 * (2 * (d2 + 8)) +: 8];
             pr0[8 * (17 + d2 + 8) +: 8] <= c1p[8 * (2 * (d2 + 8) + 1) +: 8];
-            sc[11 * (d2 + 8) +: 11] <= {1'b0, hc[10 * (d2 + 8) +: 10]} + {3'd0, rc[8 * (d2 + 8) +: 8]};
-            sc[11 * (17 + d2 + 8) +: 11] <= {1'b0, hc[10 * (17 + d2 + 8) +: 10]} + {3'd0, rc[8 * (17 + d2 + 8) +: 8]};
         end
-        pr <= pr0;
+        for (d2 = 0; d2 < 34; d2 = d2 + 1) begin
+            hc[10 * d2 +: 10] <= {1'b0, gc[18 * d2 +: 9]} + {1'b0, gc[18 * d2 + 9 +: 9]};
+            sc[11 * d2 +: 11] <= {1'b0, hc[10 * d2 +: 10]} + {3'd0, rc[8 * d2 +: 8]};
+        end
+        rc <= rc0;
+        pr1 <= pr0;
+        pr <= pr1;
         for (i2 = 0; i2 < 16; i2 = i2 + 1) begin
-            hea[10 * i2 +: 10] <= sum4(ea1pp[8 * (2 * i2) +: 8], ea1pp[8 * (2 * i2 + 1) +: 8], ea1p[8 * (2 * i2) +: 8], ea1p[8 * (2 * i2 + 1) +: 8]);
-            rea[8 * i2 +: 8] <= ea1[8 * (2 * i2) +: 8];
-            hea[10 * (16 + i2) +: 10] <= sum4(ea1p[8 * (2 * i2) +: 8], ea1p[8 * (2 * i2 + 1) +: 8], ea1[8 * (2 * i2) +: 8], ea1[8 * (2 * i2 + 1) +: 8]);
-            rea[8 * (16 + i2) +: 8] <= ea1pp[8 * (2 * i2 + 1) +: 8];
-            heb[10 * i2 +: 10] <= sum4(eb1pp[8 * (2 * i2) +: 8], eb1pp[8 * (2 * i2 + 1) +: 8], eb1p[8 * (2 * i2) +: 8], eb1p[8 * (2 * i2 + 1) +: 8]);
-            reb[8 * i2 +: 8] <= eb1[8 * (2 * i2) +: 8];
-            heb[10 * (16 + i2) +: 10] <= sum4(eb1p[8 * (2 * i2) +: 8], eb1p[8 * (2 * i2 + 1) +: 8], eb1[8 * (2 * i2) +: 8], eb1[8 * (2 * i2 + 1) +: 8]);
-            reb[8 * (16 + i2) +: 8] <= eb1pp[8 * (2 * i2 + 1) +: 8];
-            sea[11 * i2 +: 11] <= {1'b0, hea[10 * i2 +: 10]} + {3'd0, rea[8 * i2 +: 8]};
-            sea[11 * (16 + i2) +: 11] <= {1'b0, hea[10 * (16 + i2) +: 10]} + {3'd0, rea[8 * (16 + i2) +: 8]};
-            seb[11 * i2 +: 11] <= {1'b0, heb[10 * i2 +: 10]} + {3'd0, reb[8 * i2 +: 8]};
-            seb[11 * (16 + i2) +: 11] <= {1'b0, heb[10 * (16 + i2) +: 10]} + {3'd0, reb[8 * (16 + i2) +: 8]};
+            gea[18 * i2 +: 18] <= two(ea1pp[8 * (2 * i2) +: 8], ea1pp[8 * (2 * i2 + 1) +: 8], ea1p[8 * (2 * i2) +: 8], ea1p[8 * (2 * i2 + 1) +: 8]);
+            rea0[8 * i2 +: 8] <= ea1[8 * (2 * i2) +: 8];
+            gea[18 * (16 + i2) +: 18] <= two(ea1p[8 * (2 * i2) +: 8], ea1p[8 * (2 * i2 + 1) +: 8], ea1[8 * (2 * i2) +: 8], ea1[8 * (2 * i2 + 1) +: 8]);
+            rea0[8 * (16 + i2) +: 8] <= ea1pp[8 * (2 * i2 + 1) +: 8];
+            geb[18 * i2 +: 18] <= two(eb1pp[8 * (2 * i2) +: 8], eb1pp[8 * (2 * i2 + 1) +: 8], eb1p[8 * (2 * i2) +: 8], eb1p[8 * (2 * i2 + 1) +: 8]);
+            reb0[8 * i2 +: 8] <= eb1[8 * (2 * i2) +: 8];
+            geb[18 * (16 + i2) +: 18] <= two(eb1p[8 * (2 * i2) +: 8], eb1p[8 * (2 * i2 + 1) +: 8], eb1[8 * (2 * i2) +: 8], eb1[8 * (2 * i2 + 1) +: 8]);
+            reb0[8 * (16 + i2) +: 8] <= eb1pp[8 * (2 * i2 + 1) +: 8];
         end
+        for (i2 = 0; i2 < 32; i2 = i2 + 1) begin
+            hea[10 * i2 +: 10] <= {1'b0, gea[18 * i2 +: 9]} + {1'b0, gea[18 * i2 + 9 +: 9]};
+            heb[10 * i2 +: 10] <= {1'b0, geb[18 * i2 +: 9]} + {1'b0, geb[18 * i2 + 9 +: 9]};
+            sea[11 * i2 +: 11] <= {1'b0, hea[10 * i2 +: 10]} + {3'd0, rea[8 * i2 +: 8]};
+            seb[11 * i2 +: 11] <= {1'b0, heb[10 * i2 +: 10]} + {3'd0, reb[8 * i2 +: 8]};
+        end
+        rea <= rea0;
+        reb <= reb0;
     end
 
     // ---- 17 -> 18: e; the tests that are sums against sums: a third of straight down's, a quarter of
@@ -189,9 +202,15 @@ module deint_edi #(
             end
 
     // ---- 18 -> 19: the candidates: {it is one, its score 2 c + e + 2 |d|, its place in the order} ----
-    wire        tv17 = tok[11 * 0 + 10];                // (the token 18 clocks old: the oldest kept)
-    wire [9:0]  tq17 = tok[9:0];
+    // (the token 18 clocks old: whether the pair may have directions at all (it is a pair of the line,
+    // not at its sides, the search is on): a register for each of its pixels, a clock before the
+    // candidates)
+    wire        tv17 = tok[11 * 1 + 10];
+    wire [9:0]  tq17 = tok[11 * 1 +: 10];
     wire        side = tq17 < 10'd13 || tq17 + 10'd13 >= nw;
+    reg  [1:0]  may = 2'b00 /* synthesis syn_preserve = 1 */;
+    always @(posedge clk)
+        may <= {2{en && tv17 && !side}};
     reg [575:0] cnd;                    // 18 (16 t + i)
     reg [13:0]  t_s;
     integer i4, t4;
@@ -199,7 +218,7 @@ module deint_edi #(
         for (t4 = 0; t4 < 2; t4 = t4 + 1)
             for (i4 = 0; i4 < 16; i4 = i4 + 1) begin
                 t_s = {2'd0, c3[11 * (16 * t4 + i4) +: 11], 1'b0} + {2'd0, e3[12 * (16 * t4 + i4) +: 12]} + 2 * (i4 / 2 + 1);
-                cnd[18 * (16 * t4 + i4) +: 18] <= {ok3[16 * t4 + i4] && e3[12 * (16 * t4 + i4) +: 12] < E && en && tv17 && !side, t_s[12:0],
+                cnd[18 * (16 * t4 + i4) +: 18] <= {ok3[16 * t4 + i4] && e3[12 * (16 * t4 + i4) +: 12] < E && may[t4], t_s[12:0],
                                                    i4[3:0]};
             end
 
@@ -253,35 +272,40 @@ module deint_edi #(
         df1 <= agree(dc1, dp1, dc0, dn0, dn1) ? dc1 : 5'sd0;
     end
 
-    // ---- 25 -> 28: the pixels along the direction (the pair's word is 25 clocks old: pixels 8, 9 of A
-    // and B; its chroma word 4), and straight above and below; their mean; held ----
+    // ---- 25 -> 29: the pixels along the direction: their places (25 -> 26); the pixels (the pair's word
+    // is 26 clocks old then: pixels 8, 9 of A and B; its chroma word 4), and straight above and
+    // below; their mean; held ----
     reg [63:0]  fy;                     // pixel t: {A along, B along, A, B}
     reg [63:0]  fc;                     // Cb, then Cr: the same four
     reg [63:0]  my, mc;
     // (the places as plain numbers from 0: no signed number in an index)
-    reg [4:0]   t_d, t_ia, t_ib;
-    reg [4:0]   t_m;
-    reg [3:0]   t_q, t_ca, t_cb;
+    reg [9:0]   ia, ib;                 // pixel t's place in A, in B: 5 bits each
+    reg [3:0]   qa, qb;                 // the chroma's word in A, in B
+    reg [4:0]   t_d, t_m;
+    reg [3:0]   t_q;
     integer     t6;
     always @(posedge clk) begin
         for (t6 = 0; t6 < 2; t6 = t6 + 1) begin
             t_d = t6 ? df1 : df0;
-            t_ia = 5'd8 + t6 + t_d;
-            t_ib = 5'd8 + t6 - t_d;
-            fy[32 * t6 +: 32] <= {la[8 * t_ia +: 8], lb[8 * t_ib +: 8], la[8 * (8 + t6) +: 8], lb[8 * (8 + t6) +: 8]};
-            my[32 * t6 +: 32] <= {mean(fy[32 * t6 + 24 +: 8], fy[32 * t6 + 16 +: 8]), 8'd0, fy[32 * t6 +: 16]};
+            ia[5 * t6 +: 5] <= 5'd8 + t6 + t_d;
+            ib[5 * t6 +: 5] <= 5'd8 + t6 - t_d;
+            fy[32 * t6 +: 32] <= {la[8 * ia[5 * t6 +: 5] +: 8], lb[8 * ib[5 * t6 +: 5] +: 8], la[8 * (8 + t6) +: 8], lb[8 * (8 + t6) +: 8]};
+            // (the mean, and the lesser and the greater of the pixels straight above and below)
+            my[32 * t6 +: 32] <= {mean(fy[32 * t6 + 24 +: 8], fy[32 * t6 + 16 +: 8]), 8'd0,
+                                  fy[32 * t6 + 8 +: 8] < fy[32 * t6 +: 8] ? fy[32 * t6 +: 16] : {fy[32 * t6 +: 8], fy[32 * t6 + 8 +: 8]}};
         end
         // (half as far, towards straight down: t_q its 4 bits, two's complement)
         t_m = -df0;
         t_q = df0[4] ? -{1'b0, t_m[3:1]} : {1'b0, df0[3:1]};
-        t_ca = 4'd4 + t_q;
-        t_cb = 4'd4 - t_q;
+        qa <= 4'd4 + t_q;
+        qb <= 4'd4 - t_q;
         for (t6 = 0; t6 < 2; t6 = t6 + 1) begin     // (0: Cb, the words' upper byte; 1: Cr)
-            fc[32 * t6 +: 32] <= {ka[16 * t_ca + 8 * (1 - t6) +: 8], kb[16 * t_cb + 8 * (1 - t6) +: 8],
+            fc[32 * t6 +: 32] <= {ka[16 * qa + 8 * (1 - t6) +: 8], kb[16 * qb + 8 * (1 - t6) +: 8],
                                   ka[16 * 4 + 8 * (1 - t6) +: 8], kb[16 * 4 + 8 * (1 - t6) +: 8]};
-            mc[32 * t6 +: 32] <= {mean(fc[32 * t6 + 24 +: 8], fc[32 * t6 + 16 +: 8]), 8'd0, fc[32 * t6 +: 16]};
+            mc[32 * t6 +: 32] <= {mean(fc[32 * t6 + 24 +: 8], fc[32 * t6 + 16 +: 8]), 8'd0,
+                                  fc[32 * t6 + 8 +: 8] < fc[32 * t6 +: 8] ? fc[32 * t6 +: 16] : {fc[32 * t6 +: 8], fc[32 * t6 + 8 +: 8]}};
         end
-        bob <= {hold8(mc[31:24], mc[15:8], mc[7:0]), hold8(my[31:24], my[15:8], my[7:0]),
-                hold8(mc[63:56], mc[47:40], mc[39:32]), hold8(my[63:56], my[47:40], my[39:32])};
+        bob <= {held(mc[31:24], mc[15:8], mc[7:0]), held(my[31:24], my[15:8], my[7:0]),
+                held(mc[63:56], mc[47:40], mc[39:32]), held(my[63:56], my[47:40], my[39:32])};
     end
 endmodule

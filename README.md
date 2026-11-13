@@ -105,7 +105,7 @@ The pictures themselves, in [`docs/compare/`](docs/compare/):
   JTAG to load bitstreams. It talks to the CPU over SPI in small messages, keeps the settings for
   when the power is off, and carries the CPU's program.
 
-The design uses 24 % of the FPGA's logic, 81 % of its block RAM and 18 % of its multipliers.
+The design uses 31 % of the FPGA's logic, 79 % of its block RAM and 18 % of its multipliers.
 
 ## Measured on the board
 

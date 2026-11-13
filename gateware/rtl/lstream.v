@@ -73,8 +73,12 @@ module lstream #(
             skf <= skip;
     wire [9:0] hr = H - skf;
     wire [9:0] em = emitted - skf;
-    wire       gok = goal >= {1'b0, skf};
-    wire [10:0] gl = goal - {1'b0, skf};
+    reg        gok = 1'b0;              // (the goal counted from the first line made: registers)
+    reg  [10:0] gl = 11'd0;
+    always @(posedge clk) begin
+        gok <= goal >= {1'b0, skf};
+        gl <= goal - {1'b0, skf};
+    end
     wire [9:0] src = sj >= hr ? hr - 10'd1 : sj;
     wire [31:0] nxt = sq[src[1:0]];
     wire       have = (sj < em || (sj >= hr && em == hr)) && sj < hr + FL && gok && {1'b0, sj} <= gl;
@@ -245,10 +249,13 @@ module lstream #(
         for (n = 1; n < 256; n = n + 1)
             recip[n] = 4096 / n;
     end
-    reg        p1_v = 1'b0, p2_v = 1'b0, p3_v = 1'b0;
-    reg [9:0]  p1_x, p2_x, p3_x;
-    reg [2:0]  p1_s, p2_s, p3_s;
-    reg [23:0] p1_p, p2_p, p3_p;
+    reg        p0_v = 1'b0, p1_v = 1'b0, p2_v = 1'b0, p3_v = 1'b0;
+    reg [9:0]  p0_x, p1_x, p2_x, p3_x;
+    reg [2:0]  p0_s, p1_s, p2_s, p3_s;
+    reg [23:0] p0_p, p1_p, p2_p, p3_p;
+    // (step 0: the neighbours and the four differences from the pixel itself, registers: the greater
+    // of each two is a table's address the clock after)
+    reg [7:0]  p0_l, p0_r, p0_u, p0_d, p0_ar, p0_al, p0_ad, p0_au;
     reg signed [8:0] p1_dx, p1_dy, p2_dx, p2_dy, p3_dx, p3_dy;
     reg [7:0]  p1_ax, p1_ay, p1_mx, p1_my;
     reg [12:0] p2_rx, p2_ry;
@@ -257,16 +264,29 @@ module lstream #(
     reg [6:0]  p3_tx, p3_ty;
     wire [13:0] sx2 = p3_tx * p3_tx, sy2 = p3_ty * p3_ty;
     always @(posedge clk) begin
-        p1_v <= h1_v;
-        p1_x <= h1_x;
-        p1_s <= h_j[2:0];
-        p1_p <= h1_p;
-        p1_dx <= $signed({1'b0, n_r}) - $signed({1'b0, n_l});
-        p1_dy <= $signed({1'b0, h1_d}) - $signed({1'b0, h1_u});
-        p1_ax <= absd(n_r, n_l);
-        p1_ay <= absd(h1_d, h1_u);
-        p1_mx <= absd(n_r, h1_p[23:16]) > absd(h1_p[23:16], n_l) ? absd(n_r, h1_p[23:16]) : absd(h1_p[23:16], n_l);
-        p1_my <= absd(h1_d, h1_p[23:16]) > absd(h1_p[23:16], h1_u) ? absd(h1_d, h1_p[23:16]) : absd(h1_p[23:16], h1_u);
+        p0_v <= h1_v;
+        p0_x <= h1_x;
+        p0_s <= h_j[2:0];
+        p0_p <= h1_p;
+        p0_l <= n_l;
+        p0_r <= n_r;
+        p0_u <= h1_u;
+        p0_d <= h1_d;
+        p0_ar <= absd(n_r, h1_p[23:16]);
+        p0_al <= absd(h1_p[23:16], n_l);
+        p0_ad <= absd(h1_d, h1_p[23:16]);
+        p0_au <= absd(h1_p[23:16], h1_u);
+
+        p1_v <= p0_v;
+        p1_x <= p0_x;
+        p1_s <= p0_s;
+        p1_p <= p0_p;
+        p1_dx <= $signed({1'b0, p0_r}) - $signed({1'b0, p0_l});
+        p1_dy <= $signed({1'b0, p0_d}) - $signed({1'b0, p0_u});
+        p1_ax <= absd(p0_r, p0_l);
+        p1_ay <= absd(p0_d, p0_u);
+        p1_mx <= p0_ar > p0_al ? p0_ar : p0_al;
+        p1_my <= p0_ad > p0_au ? p0_ad : p0_au;
 
         p2_v <= p1_v;
         p2_x <= p1_x;

@@ -18,7 +18,7 @@ WORK = os.path.join(HERE, "build", "edi")
 IV = os.path.expanduser("~/tools/oss-cad-suite/bin")
 GW = os.path.expanduser("~/tools/gowin-standard-1.9.12.04/IDE")
 FPGARUN = os.environ.get("FPGARUN", os.path.expanduser("~/devel/git/fpc/tools/fpga-container/fpgarun"))
-NW, LAT, GAP = 360, 28, 40
+NW, LAT, GAP = 360, 30, 40
 
 TB = r'''`timescale 1ns/1ps
 module tb;

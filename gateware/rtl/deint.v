@@ -257,10 +257,11 @@ module deint #(
     wire       hist_n = nfields >= 3'd4 && par[latest - 3'd1] != par[latest] &&
                         par[latest - 3'd2] == par[latest] && par[latest - 3'd3] != par[latest];
     // (as registers: a frame is begun from what was so the clock before)
-    reg        ll_now_r = 1'b0, hist_n_r = 1'b0;
+    reg        ll_now_r = 1'b0, hist_n_r = 1'b0, par_l = 1'b0;
     always @(posedge clk) begin
         ll_now_r <= ll_now;
         hist_n_r <= hist_n;
+        par_l <= par[latest];
     end
     reg        line_ok = 1'b1;          // (C's lines of this step are in the memory)
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
@@ -317,6 +318,7 @@ module deint #(
     reg [9:0]  line_i, line_d;
     reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
     reg [9:0]  goal_r = 10'd0;          // (the goal, beside it)
+    reg [9:0]  em_c = 10'd0 /* synthesis syn_preserve = 1 */;   // (emitted, beside it)
     reg [10:0] hC, h1, hL, h3;          // the windows' last rows (hL: P2's luma's)
     reg [1:0]  sCA, sCB;                // the rows' buffers: C's old and new,
     reg [1:0]  sCm, sCp;                // the one before old and the one after new (the nearest in the field),
@@ -328,7 +330,7 @@ module deint #(
         // (from the head as registered: three clocks from ks to can: S_GAP to S_GAP3)
         line_ok <= !ll_used || latest == fc || (prog_slot == fc && (pgf ? {ks[8:0], 1'b1} : hC[9:0]) < prog);
         goal_r <= goal;
-        can <= active && !hold && ks <= kmax && emitted <= goal_r && line_ok;
+        can <= active && !hold && ks <= kmax && em_c <= goal_r && line_ok;
         new_ok <= new_w;
         old_ok <= old_w;
         mc_s <= mc_f && new_w && old_w && line_i_w >= firstf;
@@ -458,7 +460,9 @@ module deint #(
     endfunction
 
     // ---- the vectors: a block's {dyr, dx}; the line above's until the step's estimator writes its own ----
-    reg  [9:0]  vec [0:255];
+    // (in the logic's RAM, beside what uses it: read whenever, written a clock in eighteen, never in
+    // the clock a word read is taken)
+    reg  [9:0]  vec [0:255] /* synthesis syn_ramstyle = "distributed_ram" */;
     reg  [7:0]  vec_ra;
     wire [9:0]  vec_q = vec[vec_ra];
     reg         vec_we = 1'b0;
@@ -485,6 +489,7 @@ module deint #(
     reg signed [5:0] cdx;
     reg signed [3:0] cdy;
     reg         cok;
+    reg  [10:0] px0;                     // (the next one's block's first pixel)
     reg signed [7:0] pdx;                // (the next one, a clock or two before: what it is; then whether it may be)
     reg signed [5:0] pdy;
     reg         pso;
@@ -538,7 +543,7 @@ module deint #(
             end
             default: begin n_dx = n_ux; n_dy = n_uy; end
         endcase
-    wire signed [12:0] n_x = $signed({2'b00, n_b, 3'b000}) + pdx;       // the block's first pixel, moved
+    wire signed [12:0] n_x = $signed({2'b00, px0}) + pdx;               // the block's first pixel, moved
     wire        n_ok = pso && pdx >= -8'sd31 && pdx <= 8'sd31 && pdy >= -6'sd4 && pdy <= 6'sd4 &&
                        n_x >= 13'sd0 && n_x + 13'sd8 <= $signed({2'b00, wpx_m});
     // the token through the stages: {valid, word, candidate, block, dx, dyr, it is a candidate}; the
@@ -850,7 +855,7 @@ module deint #(
     // with the pair through the edges' search (deint_edi.v: its word made EDL clocks after stage k):
     // {the token, old's word, new's, P1's, the vector's word, the four a}: 159 bits, CDN clocks'
     // worth in a plain vector (the newest at the top); taken at its end
-    localparam EDL = 29, CDN = 27;
+    localparam EDL = 31, CDN = 29;
     reg  [31:0] nAk, nBk, nA2k, nB2k;
     reg  [159 * CDN - 1:0] cdl /* synthesis syn_srlstyle = "registers" */;
     wire [158:0] cd25 = cdl[159 +: 159], cd26 = cdl[0 +: 159];      // (CDN - 1 and CDN clocks after stage k)
@@ -1080,6 +1085,7 @@ module deint #(
         mca <= 3'd0;
         if ((st == S_M && mi == 3'd0) || (st == S_MP && wt == 6'd2)) begin
             pdx <= n_dx;
+            px0 <= {n_b, 3'b000};
             pdy <= n_dy;
             pso <= n_cd != 3'd1 || n_side_ok;
         end
@@ -1118,19 +1124,20 @@ module deint #(
                         f1 <= latest;
                         f2 <= latest - 3'd1;
                         f3 <= latest - 3'd2;
-                        pc <= par[latest] == top_f;         // (the field coming in: the other parity)
+                        pc <= par_l == top_f;         // (the field coming in: the other parity)
                         hist <= 1'b1;
                     end else begin
                         fc <= latest;
                         f1 <= latest - 3'd1;
                         f2 <= latest - 3'd2;
                         f3 <= latest - 3'd3;
-                        pc <= par[latest] != top_f;
+                        pc <= par_l != top_f;
                         hist <= hist_n_r;
                     end
                     nl <= flines;
                     nlast <= nch - 7'd1;
                     emitted <= 10'd0;
+                    em_c <= 10'd0;
                     active <= 1'b0;                 // (until the first step is worked out: below)
                     st <= S_F1;
                     // (the vectors: with the fields' history, in the motion adaptive mode; the pan a
@@ -1291,6 +1298,7 @@ module deint #(
                 ks <= {1'b0, sk[9:1]} + (pc ? 10'd0 : 10'd1);
                 kv <= {1'b0, sk[9:1]} + (pc ? 10'd0 : 10'd1);
                 emitted <= sk;
+                em_c <= sk;
                 st <= S_F2;
             end
             S_F2: begin
@@ -1336,6 +1344,7 @@ module deint #(
                 hk <= hk + 9'd37;
                 uk <= uk + 4'd3;
                 emitted <= emitted + 10'd2;
+                em_c <= em_c + 10'd2;
                 st <= S_GAP;                        // (two clocks: lstream.v's hold follows emitted)
             end
             S_GAP:
