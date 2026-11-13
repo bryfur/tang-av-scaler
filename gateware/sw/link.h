@@ -83,7 +83,16 @@ struct link_status {
     int16_t lock_err;       /* how far the frame's start is from where it should be, in 10 us */
     int16_t lock_ppm10;     /* the clock's trim, in tenths of a ppm */
     uint16_t ll_lines;      /* lines of that field in the memory when the frame was begun */
+    uint8_t in_std;         /* what comes in, by the decoder's own measurement: LINK_IN_* */
+    uint8_t in_ok;          /* the scaler shows it (else: its test picture and the on-screen text) */
+    uint16_t in_lines;      /* its lines, blanking and all: a field's (interlaced) or a frame's */
+    uint16_t in_hz100;      /* its fields or frames a second x 100 */
     struct link_settings set;
 };
+
+/* what comes in */
+enum { LINK_IN_NONE, LINK_IN_240P, LINK_IN_480I, LINK_IN_288P, LINK_IN_576I, LINK_IN_480P, LINK_IN_576P,
+       LINK_IN_720P, LINK_IN_1080I, LINK_IN_OTHER };
+#define LINK_IN_NAMES {"none", "240p", "480i", "288p", "576i", "480p", "576p", "720p", "1080i", "unknown"}
 
 #endif

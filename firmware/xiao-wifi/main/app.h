@@ -81,6 +81,9 @@ struct scaler_state {
     int16_t lock_ppm10; /* the clock's trim, in tenths of a ppm */
     bool ll;            /* the frame shown is made from the field coming in */
     uint16_t ll_lines;  /* ... with this many of its lines in when it was begun */
+    uint8_t in_std;     /* what comes in, by the decoder's measurement (gateware/sw/link.h LINK_IN_*; 0: not known) */
+    bool in_ok;         /* the scaler shows it */
+    uint16_t in_lines, in_hz100;
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
 void link_start(void);

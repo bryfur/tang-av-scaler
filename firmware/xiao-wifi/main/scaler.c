@@ -597,6 +597,7 @@ static bool cpu_second(struct scaler_state *s)
     s->lock_ppm10 = ls.lock_ppm10;
     s->ll = ls.ll;
     s->ll_lines = ls.ll_lines;
+    s->in_std = ls.in_std, s->in_ok = ls.in_ok, s->in_lines = ls.in_lines, s->in_hz100 = ls.in_hz100;
     return true;
 }
 

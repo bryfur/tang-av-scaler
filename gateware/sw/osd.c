@@ -74,9 +74,16 @@ void osd_update(void)
 
     line(0);
     str("IN   ");
-    if (in) {
-        num(2 * st.lines, 1);
-        str("i ");
+    if (st.in_std != LINK_IN_NONE && !st.in_ok) {
+        static const char *const names[] = LINK_IN_NAMES;
+        str(names[st.in_std]);
+        put(' ');
+        fix(st.in_hz100, 2);
+        str(" Hz  ");
+        num(st.in_lines, 1);
+        str(" lines  NOT HANDLED");
+    } else if (in) {
+        str(st.in_std == LINK_IN_240P ? "240p " : "480i ");
         fix(st.llc_hz * 100 / 225225, 2);       /* (a field is 858 x 262.5 samples of the decoder's clock) */
         str(" Hz  YPbPr  ");
         num(st.pix, 1);

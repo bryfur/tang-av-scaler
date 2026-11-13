@@ -152,7 +152,7 @@ async function vstat(){
       yes(v.fpga,'FPGA answers (build '+new Date(v.build*1000).toISOString().slice(0,16).replace('T',' ')+')','no FPGA image answers')+
       ' &middot; '+yes(v.ok,'brought up','NOT brought up')+' ('+v.ups+'x)')+
     row('Output','1080p &middot; transceiver PLL '+yes(v.pll,'locked','not locked')+' &middot; display '+yes(v.hpd,'present','not seen'))+
-    row('Input',v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
+    row('Input',(v.in&&v.in!='none'?'<b>'+v.in+'</b> '+v.in_hz.toFixed(2)+' Hz'+(v.in_ok?'':' <b style="color:#e0a030">not handled yet: the test picture is shown</b>')+' &middot; ':'')+v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
       yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out')+
     row('Delay',sig?v.delay_ms.toFixed(1)+' ms from a line captured to it shown ('+(v.delay_ms/16.68).toFixed(2)+' frames)':'-')+
     row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+new Date(v.cpu_build*1000).toISOString().slice(0,16).replace('T',' ')+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+

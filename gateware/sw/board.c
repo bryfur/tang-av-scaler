@@ -143,11 +143,52 @@ static void picture(void)
     REG(R_DEINT) = (uint32_t)s->aa_thr << 24 | (s->aa_corner ? 1u : 0) << 19 | (s->aa_diag ? 1u : 0) << 18 |
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
                    (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
-    REG(R_OSD) = s->osd ? 1 : 0;
+    REG(R_OSD) = s->osd || !st.in_ok ? 1 : 0;
     /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */
     REG(R_HDMI) = s->audio ? (audio48 && !s->ntsc ? 14 : 6) : 0;
     REG(R_VID) = (uint32_t)(s->sharp > 16 ? 16 : s->sharp) << 16 | (s->dn ? 16 : 0) | (s->swap ? 8 : 0) | 4 |
-                 (s->pattern ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
+                 (s->pattern || !st.in_ok ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
+}
+
+/* What comes in, once a second: the decoder measures the signal's lines and their time whatever
+ * it is set for (STDI, registers B1 to B4: valid, interlaced, the 28.63636 MHz crystal's periods
+ * in eight lines, the lines in a field).  Seen the same twice, it counts.  The picture's path
+ * takes 480i (and 240p: fields all of one kind); anything else: the test picture, the on-screen
+ * text on, saying what it is. */
+static void input_detect(void)
+{
+    static uint8_t seen;
+    uint8_t b[4], std = LINK_IN_NONE;
+    uint32_t bl, n, twice = 0, line = 0;
+    bool ok;
+    for (int k = 0; k < 4; k++)
+        if (!i2c_get(BUS_IN, ADV, 0xB1 + k, &b[k]))
+            return;
+    bl = (uint32_t)(b[0] & 0x3F) << 8 | b[1];
+    n = ((uint32_t)(b[2] & 7) << 8 | b[3]) + 1;
+    if ((b[0] & 0x80) && bl > 256) {
+        bool il = b[0] >> 6 & 1;
+        line = 229090880u / bl;         /* Hz */
+        std = n >= 255 && n <= 270 ? (il ? LINK_IN_480I : LINK_IN_240P) :
+              n >= 305 && n <= 320 ? (il ? LINK_IN_576I : LINK_IN_288P) :
+              n >= 515 && n <= 535 ? LINK_IN_480P : n >= 615 && n <= 635 ? LINK_IN_576P :
+              n >= 740 && n <= 760 ? LINK_IN_720P : n >= 555 && n <= 570 ? LINK_IN_1080I : LINK_IN_OTHER;
+        /* (twice the lines from one vertical sync to the next: an interlaced field has a half line) */
+        twice = std == LINK_IN_480I ? 525 : std == LINK_IN_576I ? 625 : std == LINK_IN_1080I ? 1125 : 2 * n;
+    }
+    if (std != seen) {
+        seen = std;
+        return;
+    }
+    /* (what is not known is left to the picture's path as it was: only what is known not to fit is kept from it) */
+    ok = std <= LINK_IN_480I || std == LINK_IN_OTHER;
+    st.in_lines = std == LINK_IN_NONE ? 0 : n;
+    st.in_hz100 = twice ? (uint16_t)(line * 200 / twice) : 0;
+    if (std != st.in_std || ok != (st.in_ok != 0)) {
+        st.in_std = std;
+        st.in_ok = ok;
+        picture();
+    }
 }
 
 /* the scaler's part of the source (gateware/sim/fsr.py geom()) */
@@ -344,6 +385,7 @@ static void bringup(void)
 void board_init(void)
 {
     st.magic = LINK_MAGIC;
+    st.in_ok = 1;
     st.fpga_build = REG(R_BUILD);
     st.temp4 = -32768;
     if (set.on)
@@ -425,6 +467,8 @@ void board_second(void)
         want_again = false;
         bringup();
     }
+
+    input_detect();
 
     /* the sampling phase: as set; or tuned, and that kept */
     if (want_tune) {
