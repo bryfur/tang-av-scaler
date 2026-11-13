@@ -26,7 +26,7 @@ module tb;
     reg wclk = 0; always #3.1 wclk = ~wclk;
     reg [5:0] t = 0; reg [23:0] rgb = 0; reg on = 0, we = 0; reg [8:0] wa; reg [7:0] wd;
     wire [5:0] o_t; wire [23:0] o_rgb;
-    osd #(.X0(%d), .Y0(%d), .COLS(%d), .ROWS(%d), .PAD(%d)) dut (.clk(clk), .on(on), .i_t(t), .i_rgb(rgb), .o_t(o_t),
+    osd #(.X0(%d), .Y0(%d), .COLS(%d), .ROWS(%d), .PAD(%d)) dut (.clk(clk), .ce(1'b1), .on(on), .i_t(t), .i_rgb(rgb), .o_t(o_t),
         .o_rgb(o_rgb), .wclk(wclk), .we(we), .wa(wa), .wd(wd));
     integer f, x, y, k, fr;
     reg [16:0] wr [0:%d];

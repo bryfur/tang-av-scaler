@@ -5,6 +5,7 @@
 
 module grab (
     input             clk,
+    input             ce,            // a pixel's clock (0: everything here stays as it is)
     input             de,
     input             vs,
     input      [23:0] rgb,
@@ -23,7 +24,7 @@ module grab (
     reg [23:0] d_q;
     reg        yeq;
     wire       hit = de && yeq && live && !k[3];
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         de_q <= de;
         vs_q <= vs;
         d_q <= rgb;

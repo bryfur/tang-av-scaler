@@ -26,10 +26,12 @@
 
 module hdmi_audio (
     input             clk,
+    input             ce,            // a pixel's clock (0: everything here stays as it is)
     input             en,
     input             hs,
     input             vs,
     input             cts_alt,
+    input             hd,               // 1280 x 720 [VIC 4], the pixel clock a half (CTS a half)
     input             s_tick,
     input      [23:0] s_l,
     input      [23:0] s_r,
@@ -40,12 +42,14 @@ module hdmi_audio (
     output reg [9:0]  k2
 );
     localparam [19:0] N = 20'd6144;
-    wire [19:0] CTS = cts_alt ? 20'd148500 : 20'd148352;
+    wire [19:0] CTS0 = cts_alt ? 20'd148500 : 20'd148352;
+    wire [19:0] CTS = hd ? {1'b0, CTS0[19:1]} : CTS0;
     // the channel status [IEC 60958-3]: consumer, PCM, copying allowed; 48 kHz; 24 bits
     localparam [39:0] CS = 40'h0B_02_00_00_04;
     // the InfoFrames' bytes [CEA-861-D]: PB0 the checksum (the header's and the bytes' sum zero)
-    localparam [7:0] AVI1 = 8'h10, AVI2 = 8'h28, AVI3 = 8'h08, AVI4 = 8'h10;
-    localparam [7:0] AVI0 = 8'h00 - (8'h82 + 8'h02 + 8'h0D + AVI1 + AVI2 + AVI3 + AVI4);
+    localparam [7:0] AVI1 = 8'h10, AVI2 = 8'h28, AVI3 = 8'h08;
+    wire [7:0] AVI4 = hd ? 8'h04 : 8'h10;
+    wire [7:0] AVI0 = 8'h00 - (8'h82 + 8'h02 + 8'h0D + AVI1 + AVI2 + AVI3 + AVI4);
     localparam [7:0] AIF0 = 8'h00 - (8'h84 + 8'h01 + 8'h0A + 8'h01);
 
     function [9:0] terc4(input [3:0] v);
@@ -117,7 +121,7 @@ module hdmi_audio (
         end
     endfunction
     integer    i;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         t0 <= s_tick;
         t1 <= t0;
         t2 <= t1;

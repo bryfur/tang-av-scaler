@@ -36,7 +36,7 @@ module tb;
     reg clk = 0; always #3.37 clk = ~clk;
     reg aclk = 0; always #3.371 aclk = ~aclk;
     wire de, hs, vs, pre, gb, ucc; wire [7:0] r, g, b; wire [12:0] ox; wire [11:0] oy;
-    pattern u_pat (.clk(clk), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(r), .g(g), .b(b), .ox(ox), .oy(oy));
+    pattern u_pat (.clk(clk), .ce(1'b1), .hd(1'b0), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(r), .g(g), .b(b), .ox(ox), .oy(oy));
     // samples: a count in each, one every 3072 clocks of the sound's clock
     reg [23:0] sl = 24'h100000, sr = 24'hE00000; reg tick = 0; integer c = 0;
     always @(posedge aclk) begin
@@ -44,7 +44,7 @@ module tb;
         if (c == 3071) begin sl <= sl + 24'd1; sr <= sr - 24'd3; tick <= !tick; end
     end
     wire a_pre, a_act; wire [9:0] k0, k1, k2;
-    hdmi_audio u (.clk(clk), .en(1'b1), .hs(hs), .vs(vs), .cts_alt(1'b0), .s_tick(tick), .s_l(sl), .s_r(sr), .pre(a_pre), .act(a_act),
+    hdmi_audio u (.clk(clk), .ce(1'b1), .en(1'b1), .hs(hs), .vs(vs), .cts_alt(1'b0), .hd(1'b0), .s_tick(tick), .s_l(sl), .s_r(sr), .pre(a_pre), .act(a_act),
                   .k0(k0), .k1(k1), .k2(k2));
     integer f, i;
     initial begin

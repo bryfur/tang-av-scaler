@@ -61,6 +61,10 @@
 //                    luma a pixel of picture is above); read: 8:0 the first pair of pixels, 24:16 the
 //                    last, 31 there was picture
 //   3F R   BORDERL  9:0 the first line of a field with picture, 25:16 the last
+//   2C RW  SRC      what comes in: 0 it is progressive (a field is a frame: deint.v pg), 1 it goes out
+//                    as it is, 1280 x 720 (pthru.v; the word clock's every other edge a pixel, each
+//                    bit sent twice), 8:2 the DDR3 lines (16 pixels) a line of it (45: 720), 18:9 a
+//                    line's words (vcap.v ncol), 28:19 a field's lines at most (nlin)
 //   2B RW  LLMIN    7:0 the lines of a field that must be in for a frame to be made from it (deint.v
 //                    ll_min)
 //   36 R   DSTAT     2:0 fields seen (to 7), 5:3 the newest field's slot, 15:8 deint.v's state (12:
@@ -310,8 +314,16 @@ module top (
         hd <= hd_s0;
     end
 
-    // the picture, on the word clock: PPC pixels, so PPC characters a lane, a clock
+    // the picture, on the word clock: PPC pixels, so PPC characters a lane, a clock; or (hd_t:
+    // 1280 x 720 out) a pixel every other clock: pce, all that follows a pixel behind it
     localparam PPC = `AVB_PPC;
+    reg                   hd_t0 = 1'b0, hd_t = 1'b0, pce = 1'b1;
+    always @(posedge tx_clk) begin
+        hd_t0 <= PPC == 1 && src[1];
+        hd_t <= hd_t0;
+        pce <= hd_t ? !pce : 1'b1;
+    end
+    wire [23:0]           pt_rgb;
     wire [PPC - 1:0]      p_de, p_hs, p_vs, p_pre, p_gb, p_ucc;
     wire [8 * PPC - 1:0]  p_r, p_g, p_b;
     wire [12:0]           p_x;
@@ -319,10 +331,10 @@ module top (
     generate
         if (PPC > 1) begin : g_2160p          // 30 Hz two pixels a clock, 60 Hz four
             pattern #(.PPC(PPC), .HA(3840), .HF(176), .HS(88), .HT(4400), .VA(2160), .VF(8), .VS(10), .VT(2250))
-                u_pat (.clk(tx_clk), .de(p_de), .hs(p_hs), .vs(p_vs), .pre(p_pre), .gb(p_gb), .ucc(p_ucc),
+                u_pat (.clk(tx_clk), .ce(1'b1), .hd(1'b0), .de(p_de), .hs(p_hs), .vs(p_vs), .pre(p_pre), .gb(p_gb), .ucc(p_ucc),
                        .r(p_r), .g(p_g), .b(p_b), .ox(p_x), .oy(p_y));
         end else begin : g_1080p60
-            pattern u_pat (.clk(tx_clk), .de(p_de), .hs(p_hs), .vs(p_vs), .pre(p_pre), .gb(p_gb), .ucc(p_ucc),
+            pattern u_pat (.clk(tx_clk), .ce(pce), .hd(hd_t), .de(p_de), .hs(p_hs), .vs(p_vs), .pre(p_pre), .gb(p_gb), .ucc(p_ucc),
                            .r(p_r), .g(p_g), .b(p_b), .ox(p_x), .oy(p_y));
         end
     endgenerate
@@ -347,14 +359,14 @@ module top (
     end
     wire        fb_we, cap_field, raw_done, cap_eof;
     wire [9:0]  cap_ln;
-    wire [8:0]  cap_col;
+    wire [9:0]  cap_col;
     wire [7:0]  l_r, l_g, l_b;
     wire [31:0] fb_wd;
     wire [10:0] cap_pix;
     wire [9:0]  cap_lines;
     wire [15:0] cap_fields;
     wire [18:0] raw_rd;
-    vcap u_cap (.llc(in_llc), .y(in_y), .c(in_c), .hs(in_hs), .vs(in_vs), .de(in_de), .freeze(vid[1]), .wide(vid[2]),
+    vcap u_cap (.llc(in_llc), .ncol(src[18:9]), .nlin(src[28:19]), .y(in_y), .c(in_c), .hs(in_hs), .vs(in_vs), .de(in_de), .freeze(vid[1]), .wide(vid[2]),
                 .we(fb_we), .wa(), .wd(fb_wd), .w_ln(cap_ln), .w_col(cap_col), .eof(cap_eof), .f_we(), .f_wa(), .f_wd(), .pix(cap_pix), .lines(cap_lines), .field(cap_field),
                 .fields(cap_fields), .arm(raw_arm), .mode(raw_mode), .done(raw_done), .rclk(clk),
                 .ra(raw_ra), .rd(raw_rd));
@@ -368,11 +380,11 @@ module top (
             bd_thr <= wdata[7:0];
             bd_clr <= !bd_clr;
         end
-    border u_border (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .thr(bd_thr), .clr(bd_clr),
+    border u_border (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col[8:0]), .wd(fb_wd), .thr(bd_thr), .clr(bd_clr),
                      .any(bd_any), .x_min(bd_x0), .x_max(bd_x1), .ln_min(bd_l0), .ln_max(bd_l1));
     wire [27:0] fo_sum;
     wire [3:0]  fo_n;
-    focus u_focus (.llc(in_llc), .we(fb_we), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof), .sum(fo_sum), .n(fo_n));
+    focus u_focus (.llc(in_llc), .we(fb_we), .w_col(cap_col[8:0]), .wd(fb_wd), .eof(cap_eof), .sum(fo_sum), .n(fo_n));
     reg                  vid_s0, vid_on, swap_s0, swap, dn_s0, dn;
     reg [4:0]            sharp_s0, sharp;
     always @(posedge tx_clk) begin
@@ -387,8 +399,10 @@ module top (
     end
     wire [6 * PPC - 1:0]  dl_t;
     wire [24 * PPC - 1:0] dl_p;
-    dline #(.W(6 * PPC), .D(LAT)) u_dlt (.clk(tx_clk), .d({p_de, p_hs, p_vs, p_pre, p_gb, p_ucc}), .q(dl_t));
-    dline #(.W(24 * PPC), .D(LAT)) u_dlp (.clk(tx_clk), .d({p_r, p_g, p_b}), .q(dl_p));
+    dline #(.W(6 * PPC), .D(LAT)) u_dlt (.clk(tx_clk), .ce(pce), .d({p_de, p_hs, p_vs, p_pre, p_gb, p_ucc}), .q(dl_t));
+    // (1280 x 720 as it came: pthru.v's picture in the test picture's place, LATP pixels behind it)
+    localparam LATP = 10;
+    dline #(.W(24 * PPC), .D(LAT)) u_dlp (.clk(tx_clk), .ce(pce), .d(hd_t && vid_on ? {{(24 * PPC - 24){1'b0}}, pt_rgb} : {p_r, p_g, p_b}), .q(dl_p));
     wire [PPC - 1:0]      v_de, v_hs, v_vs, v_pre, v_gb, v_ucc;
     wire [8 * PPC - 1:0]  v_r, v_g, v_b;
     // (the on-screen text over it, at one pixel a clock: osd.v, a few clocks more for everything)
@@ -398,7 +412,15 @@ module top (
             osd_on <= wdata[0];
     generate
         if (PPC == 1) begin : g_osd
-            osd u_osd (.clk(tx_clk), .on(osd_on), .i_t(dl_t), .i_rgb(vid_on ? {l_r, l_g, l_b} : dl_p),
+            // (the timing, and the scaler's picture or the test picture, LATP pixels more: beside pthru.v's)
+            reg [29:0] al [0:LATP - 1] /* synthesis syn_srlstyle = "registers" */;
+            integer    ai;
+            always @(posedge tx_clk) if (pce) begin
+                al[0] <= {dl_t, vid_on ? {l_r, l_g, l_b} : dl_p};
+                for (ai = 1; ai < LATP; ai = ai + 1)
+                    al[ai] <= al[ai - 1];
+            end
+            osd u_osd (.clk(tx_clk), .ce(pce), .on(osd_on), .i_t(al[LATP - 1][29:24]), .i_rgb(hd_t ? dl_p : al[LATP - 1][23:0]),
                        .o_t({v_de, v_hs, v_vs, v_pre, v_gb, v_ucc}), .o_rgb({v_r, v_g, v_b}), .wclk(clk),
                        .we(we && addr == 8'h29), .wa(wdata[16:8]), .wd(wdata[7:0]));
         end else begin : g_noosd
@@ -413,7 +435,7 @@ module top (
     wire                  a_pre, a_act;
     wire [9:0]            a_k0, a_k1, a_k2;
     reg  [30:0]           a_d1, a_d2;
-    always @(posedge tx_clk) begin
+    always @(posedge tx_clk) if (pce) begin
         a_d1 <= {a_act, a_k2, a_k1, a_k0};
         a_d2 <= a_d1;
     end
@@ -429,11 +451,11 @@ module top (
     wire [8 * PPC - 1:0]  s_r, s_g, s_b;
     wire [PPC - 1:0]      s_r_de, s_g_de, s_b_de;
     wire [10 * PPC - 1:0] q_r, q_g, q_b, k_r, k_g, k_b, t_r, t_g, t_b;
-    hdmi_scr #(.N(PPC), .CH(0)) u_s0 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_b), .c(c0),
+    hdmi_scr #(.N(PPC), .CH(0)) u_s0 (.clk(tx_clk), .ce(pce), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_b), .c(c0),
                                      .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_b), .de_o(s_b_de), .tok(q_b));
-    hdmi_scr #(.N(PPC), .CH(1)) u_s1 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_g), .c(c1),
+    hdmi_scr #(.N(PPC), .CH(1)) u_s1 (.clk(tx_clk), .ce(pce), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_g), .c(c1),
                                      .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_g), .de_o(s_g_de), .tok(q_g));
-    hdmi_scr #(.N(PPC), .CH(2)) u_s2 (.clk(tx_clk), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_r),
+    hdmi_scr #(.N(PPC), .CH(2)) u_s2 (.clk(tx_clk), .ce(pce), .frame(hd[1]), .scramble(hd[0]), .opt(hd[7:4]), .d(v_r),
                                      .c(c2), .de(v_de), .gb(v_gb), .ucc(v_ucc), .d_o(s_r),
                                      .de_o(s_r_de), .tok(q_r));
     generate
@@ -447,9 +469,9 @@ module top (
             assign k_r = q_r;
         end
     endgenerate
-    tmds_enc #(.N(PPC)) u_t2 (.clk(tx_clk), .d(s_r), .tok(k_r), .de(s_r_de), .q(t_r));
-    tmds_enc #(.N(PPC)) u_t1 (.clk(tx_clk), .d(s_g), .tok(k_g), .de(s_g_de), .q(t_g));
-    tmds_enc #(.N(PPC)) u_t0 (.clk(tx_clk), .d(s_b), .tok(k_b), .de(s_b_de), .q(t_b));
+    tmds_enc #(.N(PPC)) u_t2 (.clk(tx_clk), .ce(pce), .d(s_r), .tok(k_r), .de(s_r_de), .q(t_r));
+    tmds_enc #(.N(PPC)) u_t1 (.clk(tx_clk), .ce(pce), .d(s_g), .tok(k_g), .de(s_g_de), .q(t_g));
+    tmds_enc #(.N(PPC)) u_t0 (.clk(tx_clk), .ce(pce), .d(s_b), .tok(k_b), .de(s_b_de), .q(t_b));
     // a lane's word: its characters in order, the line's first pixel's at the low end (sent
     // first); `AVB_SWAP: the other way round
 `ifdef AVB_SWAP
@@ -468,8 +490,18 @@ module top (
     // the TMDS clock's lane: a tenth of the bit rate, five ones and five zeros a character; above
     // 3.4 Gb/s a fortieth [HDMI 2.0 6.1.3.2], twenty and twenty across the clock's four characters
     wire [79:0] ck_word = PPC == 4 ? 80'h00000FFFFF : word({PPC{10'b0000011111}});
+    // (hd_t: a character is two words, its five low bits then its five high ones, each bit twice;
+    // a character changes after a clock with pce: the first half while pce is low)
+    function [79:0] half(input [9:0] c);
+        reg [4:0] h;
+        begin
+            h = pce ? c[9:5] : c[4:0];
+            half = {70'd0, {2{h[4]}}, {2{h[3]}}, {2{h[2]}}, {2{h[1]}}, {2{h[0]}}};
+        end
+    endfunction
     always @(posedge tx_clk)
-        tx_data <= {word(t_g), word(t_b), ck_word, word(t_r)};
+        tx_data <= hd_t ? {half(t_g[9:0]), half(t_b[9:0]), half(10'b0000011111), half(t_r[9:0])} :
+                          {word(t_g), word(t_b), ck_word, word(t_r)};
 
     // the picture as sent, for the host (grab.v)
     reg         grab_arm = 1'b0;
@@ -490,7 +522,7 @@ module top (
         else if (addr == 8'h39 && u_mon.state == 4'd6)      // read: on to the next (the step's next column)
             grab_ra <= grab_ra + (grab_cfg[15:12] == 4'd0 ? 14'd1 : {10'd0, grab_cfg[15:12]});
     end
-    grab u_grab (.clk(tx_clk), .de(v_de[0]), .vs(v_vs[0]), .rgb({v_r[7:0], v_g[7:0], v_b[7:0]}), .row(grab_cfg[10:0]),
+    grab u_grab (.clk(tx_clk), .ce(pce), .de(v_de[0]), .vs(v_vs[0]), .rgb({v_r[7:0], v_g[7:0], v_b[7:0]}), .row(grab_cfg[10:0]),
                  .step(grab_cfg[15:12]), .arm(grab_arm), .done(grab_done), .rclk(clk), .ra(grab_ra), .rd(grab_rd));
 
     // the DDR3: its controller on its own clock (pclk, 100 MHz), its users through ddr_arb.v
@@ -566,6 +598,18 @@ module top (
     // lineview.v's ring
     reg  [31:0]  dcfg = 32'h140D0620;
     reg  [7:0]   ll_min = 8'd16;
+    // what comes in and how it goes out (SRC: set while nothing depends on it); on the DDR3's clock
+    reg  [28:0]  src = {10'd244, 10'd360, 7'd45, 1'b0, 1'b0};
+    reg  [8:0]   src_p0, src_p;
+    wire         pg_p = src_p[0], hd_p = src_p[1];
+    wire [6:0]   nch_p = src_p[8:2];
+    always @(posedge clk)
+        if (we && addr == 8'h2C)
+            src <= wdata[28:0];
+    always @(posedge pclk) begin
+        src_p0 <= src[8:0];
+        src_p <= src_p0;
+    end
     wire [9:0]   f_prog;
     wire [2:0]   f_pslot;
     reg  [27:0]  g_xr = -28'sd11808768;
@@ -598,7 +642,9 @@ module top (
     wire [15:0]  d_frames;
     wire         l_ev, l_first, r_we, d_fstart, d_hold, w_we;
     wire [9:0]   l_goal, d_emitted, w_x;
-    wire [8:0]   r_wa;
+    wire [9:0]   r_wa;
+    wire         pt_ev, pt_first, pt_hold, ls_hold;
+    wire [9:0]   pt_goal;
     wire [2:0]   r_slot_d, r_slot_i, w_slot;
     wire [31:0]  r_wd_d, r_wd_i;
     wire [53:0]  w_d;
@@ -613,20 +659,22 @@ module top (
         if (lg1 != lg2)
             s_goal <= {1'b0, l_goal} + 11'd18;
     end
-    cap_ddr u_capd (.llc(in_llc), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
+    cap_ddr u_capd (.llc(in_llc), .nch(src[8:2]), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
                     .eof_f(cap_field), .eof_lines(cap_lines), .freeze(vid[1]), .pclk(pclk), .a_valid(ca_valid),
                     .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
                     .nfields(f_n), .flines(f_lines), .prog(f_prog), .prog_slot(f_pslot));
-    deint u_deint (.clk(pclk), .ev(l_ev), .ev_first(l_first), .goal(s_goal[9:0]), .hold(d_hold), .latest(f_latest),
+    assign d_hold = hd_p ? pt_hold : ls_hold;
+    deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
+                   .goal(hd_p ? pt_goal : s_goal[9:0]), .hold(d_hold), .latest(f_latest),
                    .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
                    .state_o(d_state));
-    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .hold(d_hold), .r_we(r_we),
+    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .hold(ls_hold), .r_we(r_we),
                   .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),
-                  .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
+                  .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     // how old the newest field is when a frame is begun: from the field's end (latest changes), in 10 us
     reg  [9:0]   lt_div = 10'd0;
@@ -665,7 +713,10 @@ module top (
                          .clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
                          .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
                          .o_cr(e_cr));
-            dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .d({p_x, p_y}), .q(e_xy));
+            pthru u_pt (.w_clk(pclk), .r_we(r_we), .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa),
+                        .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .hold(pt_hold), .goal(pt_goal), .clk(tx_clk),
+                        .ce(pce), .swap(swap), .x(p_x), .y(p_y), .ev(pt_ev), .ev_first(pt_first), .rgb(pt_rgb));
+            dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .ce(1'b1), .d({p_x, p_y}), .q(e_xy));
             rcas u_rcas (.dn(dn), .wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
                          .cri(swap ? e_cb : e_cr), .sharp(sharp), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
@@ -674,6 +725,11 @@ module top (
             assign l_b = 8'd0;
             assign l_ev = 1'b0;
             assign l_first = 1'b0;
+            assign pt_rgb = 24'd0;
+            assign pt_ev = 1'b0;
+            assign pt_first = 1'b0;
+            assign pt_hold = 1'b0;
+            assign pt_goal = 10'd0;
             assign l_goal = 10'd0;
         end
     endgenerate
@@ -694,7 +750,7 @@ module top (
     audio_in u_au (.clk(pll_clk2), .scki(in_scki), .bck(in_bck), .lrck(in_lrck), .dout(in_dout), .l(au_l), .r(au_r),
                    .tick(au_tick));
     // (to HDMI: the samples as they come, the word clock's side taking them by the tick)
-    hdmi_audio u_ha (.clk(tx_clk), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]), .cts_alt(hd[3]), .s_tick(au_tick), .s_l(au_l[30:7]),
+    hdmi_audio u_ha (.clk(tx_clk), .ce(pce), .hd(hd_t), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]), .cts_alt(hd[3]), .s_tick(au_tick), .s_l(au_l[30:7]),
                      .s_r(au_r[30:7]), .pre(a_pre), .act(a_act), .k0(a_k0), .k1(a_k1), .k2(a_k2));
     reg         au_t0, au_t1, au_t2;
     reg  [31:0] au_ls, au_rs;
@@ -769,6 +825,7 @@ module top (
             8'h35: rdata <= dcfg;
             8'h27: rdata <= {6'd0, lat_s[21:12], 4'd0, lat_s[11:0]};
             8'h2B: rdata <= {24'd0, ll_min};
+            8'h2C: rdata <= {3'd0, src};
             8'h28: rdata <= {31'd0, osd_on};
             8'h2A: rdata <= {temp[14], 17'd0, temp[13:0]};
             8'h70: rdata <= sp_stat;

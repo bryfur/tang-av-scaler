@@ -23,6 +23,18 @@ struct link_settings set = LINK_SETTINGS_DEFAULT;
 struct link_status st;
 
 static bool want_again, want_measure, want_tune;
+/* 1280 x 720 progressive comes in: it goes out as it came, 1280 x 720 (rtl/pthru.v: nothing
+ * deinterlaced, anti-aliased or scaled), the output's clock as it is, a pixel every other edge */
+static bool hd;
+/* ... at 60 Hz exactly (the PS2's 720p: 74.25 MHz from the decoder), not 60 / 1.001: the output's
+ * clock is the one for it (the frame lock moves it 300 ppm at most; the two are 1000 apart) */
+static bool hd60;
+#define NTSC (hd ? !hd60 : set.ntsc != 0)
+
+bool board_hd(void)
+{
+    return hd;
+}
 static uint32_t grab_ms;                /* a screen capture holds the fields still: when it last asked */
 static bool grabbing;
 
@@ -103,7 +115,8 @@ static bool clkgen(bool ntsc)
     return ok;
 }
 
-/* ---- the ADV7181D: 480i component through its CP core (gateware/tools/adv.py CP480I) ---- */
+/* ---- the ADV7181D: component through its CP core: 480i (gateware/tools/adv.py CP480I: SD 525i
+ * 4x1, the free-run line length the input's), or 720p (component HD 1x1 720p; the same otherwise) ---- */
 static bool decoder(uint32_t ctrl)
 {
     static const uint8_t regs[][2] = {
@@ -113,14 +126,24 @@ static bool decoder(uint32_t ctrl)
         {0xF6, 0x3B}, {0x0E, 0x00},
     };
     bool ok = true;
+    /* what comes in, to the capture and the picture's path (SRC): 720p: progressive, out as it is,
+     * 80 DDR3 lines a line, 640 words, 720 lines; else 45, 360, 244 */
+    REG(R_SRC) = hd ? 720u << 19 | 640u << 9 | 80u << 2 | 3 : 244u << 19 | 360u << 9 | 45u << 2;
     REG(R_CTRL) = ctrl & ~IN_RESET_N;
     wait_ms(20);
     REG(R_CTRL) = ctrl | IN_RESET_N;
     wait_ms(50);
     for (size_t k = 0; k < sizeof regs / sizeof regs[0]; k++) {
+        uint8_t reg = regs[k][0], val = regs[k][1];
         bool done = false;
+        if (hd) {
+            if (reg == 0x8F || reg == 0x90)
+                continue;
+            if (reg == 0x05)
+                val = 0x01;
+        }
         for (int t = 0; t < 4 && !done; t++)
-            done = i2c_set(BUS_IN, ADV, regs[k][0], regs[k][1]);
+            done = i2c_set(BUS_IN, ADV, reg, val);
         ok &= done;
     }
     return ok;
@@ -145,7 +168,7 @@ static void picture(void)
                    (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
     REG(R_OSD) = s->osd || !st.in_ok ? 1 : 0;
     /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */
-    REG(R_HDMI) = s->audio ? (audio48 && !s->ntsc ? 14 : 6) : 0;
+    REG(R_HDMI) = s->audio ? (audio48 && !NTSC ? 14 : 6) : 0;
     REG(R_VID) = (uint32_t)(s->sharp > 16 ? 16 : s->sharp) << 16 | (s->dn ? 16 : 0) | (s->swap ? 8 : 0) | 4 |
                  (s->pattern || !st.in_ok ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
 }
@@ -180,8 +203,24 @@ static void input_detect(void)
         seen = std;
         return;
     }
+    /* 1280 x 720: sent as it comes; back when 480i (240p) is seen again: everything brought up for it */
+    /* (a design from before SRC cannot: its register reads nothing: 720p is named, not shown) */
+    if (std == LINK_IN_720P && !hd && REG(R_SRC) == 0) {
+        st.in_lines = n;
+        st.in_hz100 = (uint16_t)(line * 200 / twice);
+        if (st.in_std != LINK_IN_720P || st.in_ok) {
+            st.in_std = LINK_IN_720P;
+            st.in_ok = 0;
+            picture();
+        }
+        return;
+    }
+    if ((std == LINK_IN_720P) != hd && (std == LINK_IN_720P || std == LINK_IN_480I || std == LINK_IN_240P)) {
+        hd = std == LINK_IN_720P;
+        want_again = true;
+    }
     /* (what is not known is left to the picture's path as it was: only what is known not to fit is kept from it) */
-    ok = std <= LINK_IN_480I || std == LINK_IN_OTHER;
+    ok = std <= LINK_IN_480I || std == LINK_IN_OTHER || std == LINK_IN_720P;
     st.in_lines = std == LINK_IN_NONE ? 0 : n;
     st.in_hz100 = twice ? (uint16_t)(line * 200 / twice) : 0;
     if (std != st.in_std || ok != (st.in_ok != 0)) {
@@ -282,10 +321,12 @@ static int settle;                      /* seconds until the decoder's picture i
  * be in (the scaler's LLMIN): what the picture's first rows need of the field (half the part shown's
  * first line and 24 more: the anti-aliasing looks 18 ahead) less the 8 that come in before the first
  * row is sent, and 5 to spare; the frame is begun 4 lines after that. */
-#define LL_BLANK   143
+/* 720p as it comes (hd): 30 lines of blanking of 22.24 us (0.67 ms); six lines in are enough (the
+ * lines are sent as they are, three rows after the frame is begun). */
+#define LL_BLANK   (hd ? 67 : 143)
 static int ll_min(void)
 {
-    return st.show_y / 2 + 10;
+    return hd ? 6 : st.show_y / 2 + 10;
 }
 #define LOCK_MAX   300                  /* ppm either way at most */
 static int32_t lock_i;                  /* the errors' sum */
@@ -314,7 +355,7 @@ void board_lock(void)
         return;
     }
     /* how far the frame's start is from where it should be: the nearer way round a field's time */
-    e = (int32_t)(lat & 0xFFF) - (set.lowlat && st.hist ? LL_BLANK + (ll_min() + 4) * 636 / 100 : LOCK_AT);
+    e = (int32_t)(lat & 0xFFF) - (set.lowlat && (st.hist || hd) ? LL_BLANK + (ll_min() + 4) * (hd ? 222 : 636) / 100 : LOCK_AT);
     while (e > 834)
         e -= 1668;
     while (e < -834)
@@ -348,7 +389,7 @@ static void bringup(void)
     REG(R_I2C) = 0;
     REG(R_CTRL) = IN_RESET_N;           /* the redriver's outputs off (OE low clears its registers) */
     REG(R_GT_CTRL) = 0;                 /* the lanes in reset */
-    ok = clkgen(set.ntsc);
+    ok = clkgen(NTSC);
     REG(R_CTRL) = IN_RESET_N | DP_OE;
     wait_ms(50);
     i2c_set(BUS_DP, 0x5E, 0x0A, 0x38);  /* a redriver (as a retimer it corrupts 2.97 Gb/s); PD_EN toggled, it takes */
@@ -453,7 +494,9 @@ void board_second(void)
         uint32_t lat = REG(R_LAT);
         st.ll = dstat >> 12 & 1;
         st.ll_lines = lat >> 16 & 0x3FF;
-        st.delay_us10 = st.ll ? (lat & 0xFFF) + 67 - LL_BLANK : (lat & 0xFFF) + 1630;
+        /* (hd: the first row out 0.07 ms after the frame's start; a whole frame's lines take 16.0 ms) */
+        st.delay_us10 = hd ? (st.ll ? (lat & 0xFFF) + 7 - LL_BLANK : (lat & 0xFFF) + 1608) :
+                        st.ll ? (lat & 0xFFF) + 67 - LL_BLANK : (lat & 0xFFF) + 1630;
         REG(R_LLMIN) = ll_min();
     }
 
@@ -469,6 +512,12 @@ void board_second(void)
     }
 
     input_detect();
+    /* (hd: which of the two rates it is, by the decoder's clock once it has the picture) */
+    if (hd && st.lines == 720 && st.fields_s >= 55 && st.llc_hz > 74000000 && st.llc_hz < 74400000 &&
+        (st.llc_hz > 74213000) != hd60) {
+        hd60 = !hd60;
+        want_again = true;
+    }
 
     /* the sampling phase: as set; or tuned, and that kept */
     if (want_tune) {
@@ -480,6 +529,8 @@ void board_second(void)
         phase_was = set.phase;
     }
 
+    if (hd)
+        return;                         /* (nothing scaled: no part to find) */
     /* the part shown (not looked for while the decoder is still finding the picture) */
     if (settle) {
         settle--;

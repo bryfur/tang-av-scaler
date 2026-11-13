@@ -18,6 +18,7 @@ module osd #(
     parameter PAD = 12
 ) (
     input             clk,
+    input             ce,            // a pixel's clock (0: everything here stays as it is)
     input             on,
     input      [5:0]  i_t,
     input      [23:0] i_rgb,
@@ -53,7 +54,7 @@ module osd #(
     reg [15:0] frow;
     reg [29:0] sb [1:LAT] /* synthesis syn_srlstyle = "registers" */;
     integer    i;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         de_q <= de;
         vs_q <= vs;
         on0 <= on;

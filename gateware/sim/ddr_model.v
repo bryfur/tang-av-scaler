@@ -1,6 +1,6 @@
 // ddr_model.v: the DDR3 controller's user port (rtl/ddr3/ddr3_top.v) as a memory, for the
 // testbenches: a command when cmd_en, ready now and then, a read's line eight clocks later.
-// The lines kept: {slot 3, line 9, sixteen pixels' number 6} of cap_ddr.v's address.
+// The lines kept: {slot 3, line 10, sixteen pixels' number 7} of cap_ddr.v's address.
 module ddr_model (
     input              clk,
     output reg         cmd_ready = 1'b0,
@@ -12,9 +12,9 @@ module ddr_model (
     output reg [255:0] rd_data,
     output reg         rd_data_valid = 1'b0
 );
-    reg [255:0] mem [0:262143];
+    reg [255:0] mem [0:1048575];
     wire [24:0] line = addr[27:3];
-    wire [17:0] ix = {line[24:22], line[15:7], line[5:0]};
+    wire [19:0] ix = {line[24:22], line[16:0]};
     reg [255:0] pd [0:7];
     reg [7:0]   pv = 8'd0;
     reg [15:0]  lfsr = 16'hACE1;

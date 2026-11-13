@@ -11,6 +11,7 @@
 
 module tmds_enc #(parameter N = 1) (
     input                     clk,
+    input                     ce,            // a pixel's clock (0: everything here stays as it is)
     input      [8 * N - 1:0]  d,
     input      [10 * N - 1:0] tok,
     input      [N - 1:0]      de,
@@ -51,7 +52,7 @@ module tmds_enc #(parameter N = 1) (
     reg [10 * N - 1:0] tok_q;
     reg [N - 1:0]     de_q = {N{1'b0}};
     reg [8:0]         m;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         for (k = 0; k < N; k = k + 1) begin
             m = minimise(d[8 * k +: 8]);
             m_q[9 * k +: 9] <= m;
@@ -69,7 +70,7 @@ module tmds_enc #(parameter N = 1) (
     reg signed [4:0]   diff, d_bal, d_inv, d_pla;
     reg [8:0]          w;
     reg [9:0]          q_bal, q_inv, q_pla;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         for (k = 0; k < N; k = k + 1) begin
             w = m_q[9 * k +: 9];
             diff = diff_q[5 * k +: 5];
@@ -105,7 +106,7 @@ module tmds_enc #(parameter N = 1) (
             f_d[j] = {T * N{1'b0}};             // blanking sets the count)
             pre[j] = {T * N{1'b0}};
         end
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         for (k = 0; k < N; k = k + 1) begin
             for (s = 0; s < 9; s = s + 1)
                 tab[4 * s +: 4] = !de_r[k] ? 4'd4 :
@@ -125,7 +126,7 @@ module tmds_enc #(parameter N = 1) (
 
     // the characters to choose from, kept until their counts are known (N + 1 stages)
     reg [30 * N - 1:0] q_d [0:N];
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         q_d[0] <= {qn, qp, qz};
         for (j = 1; j <= N; j = j + 1)
             q_d[j] <= q_d[j - 1];
@@ -134,7 +135,7 @@ module tmds_enc #(parameter N = 1) (
     // stage N + 3: the loop: the count (as count / 2 + 4) before each of the clock's characters
     reg [3:0]         cnt = 4'd4;
     reg [4 * N - 1:0] t;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         cnt <= look(pre[N - 1][T * (N - 1) +: T], cnt);
         t[3:0] <= cnt;
         for (k = 1; k < N; k = k + 1)
@@ -142,7 +143,7 @@ module tmds_enc #(parameter N = 1) (
     end
 
     // stage N + 4: each character by its count
-    always @(posedge clk)
+    always @(posedge clk) if (ce)
         for (k = 0; k < N; k = k + 1)
             q[10 * k +: 10] <= t[4 * k +: 4] == 4'd4 ? q_d[N][10 * k +: 10] :
                                t[4 * k +: 4] > 4'd4 ? q_d[N][10 * (N + k) +: 10] : q_d[N][10 * (2 * N + k) +: 10];

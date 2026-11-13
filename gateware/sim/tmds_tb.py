@@ -65,7 +65,7 @@ module tb;
             default: token = 10'b1010101011;
         endcase
     endfunction
-    tmds_enc #(.N(N)) dut (.clk(clk), .d(d), .tok(tok), .de(de), .q(q));
+    tmds_enc #(.N(N)) dut (.clk(clk), .ce(1'b1), .d(d), .tok(tok), .de(de), .q(q));
     integer i, j;
     initial begin
         $readmemh("%s/in.hex", mem);

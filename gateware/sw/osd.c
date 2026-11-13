@@ -82,6 +82,10 @@ void osd_update(void)
         str(" Hz  ");
         num(st.in_lines, 1);
         str(" lines  NOT HANDLED");
+    } else if (in && board_hd()) {
+        str("720p ");
+        fix(st.in_hz100, 2);
+        str(" Hz  YPbPr  1280x720");
     } else if (in) {
         str(st.in_std == LINK_IN_240P ? "240p " : "480i ");
         fix(st.llc_hz * 100 / 225225, 2);       /* (a field is 858 x 262.5 samples of the decoder's clock) */
@@ -95,14 +99,24 @@ void osd_update(void)
         str("no signal");
 
     line(1);
-    str("OUT  1080p ");
-    fix(tx_hz / 24750, 2);              /* (2200 x 1125 pixels a frame: Hz x 100) */
+    str(board_hd() ? "OUT  720p " : "OUT  1080p ");
+    fix(tx_hz / 24750, 2);              /* (2200 x 1125 pixels a frame, or 1650 x 750 at half the clock: Hz x 100) */
     str(" Hz  ");
-    str(s->wide ? "16:9" : "4:3 ");
+    str(board_hd() || s->wide ? "16:9" : "4:3 ");
     str(s->audio ? "  HDMI + sound" : "  DVI");
     if (!st.hpd)
         str("  no display");
 
+    if (board_hd()) {
+        line(2);
+        str("SHOWN as it came: not scaled");
+        line(3);
+        line(4);
+        line(5);
+        if (REG(R_VID) >> 1 & 1)
+            str("FROZEN");
+        goto delay;
+    }
     line(2);
     str("SHOWN ");
     num(st.show_w, 1);
@@ -141,6 +155,7 @@ void osd_update(void)
     if (REG(R_VID) >> 1 & 1)
         str("  FROZEN");
 
+delay:
     line(6);
     str("DELAY ");
     if (in) {

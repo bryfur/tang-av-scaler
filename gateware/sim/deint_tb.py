@@ -76,22 +76,22 @@ module tb;
     reg clk = 0; always #3.37 clk = ~clk;
     reg [15:0] mem [0:%(last)d];
     reg [15:0] y = 16'h8010;
-    wire fb_we, eof, field; wire [16:0] fb_wa; wire [31:0] fb_wd; wire [9:0] w_ln, lines; wire [8:0] w_col;
+    wire fb_we, eof, field; wire [16:0] fb_wa; wire [31:0] fb_wd; wire [9:0] w_ln, lines; wire [9:0] w_col;
     wire [10:0] pix; wire [15:0] nfields16; wire done; wire [18:0] raw_rd; wire f_we, f_wd; wire [7:0] f_wa;
-    vcap u_cap (.llc(llc), .y(y[7:0]), .c(y[15:8]), .hs(1'b0), .vs(1'b0), .de(1'b0), .freeze(1'b0), .wide(1'b1),
+    vcap u_cap (.llc(llc), .ncol(10'd360), .nlin(10'd244), .y(y[7:0]), .c(y[15:8]), .hs(1'b0), .vs(1'b0), .de(1'b0), .freeze(1'b0), .wide(1'b1),
                 .we(fb_we), .wa(fb_wa), .wd(fb_wd), .w_ln(w_ln), .w_col(w_col), .eof(eof), .f_we(f_we), .f_wa(f_wa),
                 .f_wd(f_wd), .pix(pix), .lines(lines), .field(field), .fields(nfields16), .arm(1'b0), .mode(2'd0),
                 .done(done), .rclk(clk), .ra(10'd0), .rd(raw_rd));
     wire bd_any; wire [8:0] bd_x0, bd_x1; wire [9:0] bd_l0, bd_l1;
-    border u_bd (.llc(llc), .we(fb_we), .w_ln(w_ln), .w_col(w_col), .wd(fb_wd), .thr(8'd40), .clr(1'b0), .any(bd_any),
+    border u_bd (.llc(llc), .we(fb_we), .w_ln(w_ln), .w_col(w_col[8:0]), .wd(fb_wd), .thr(8'd40), .clr(1'b0), .any(bd_any),
                  .x_min(bd_x0), .x_max(bd_x1), .ln_min(bd_l0), .ln_max(bd_l1));
     wire [27:0] fo_sum; wire [3:0] fo_n;
-    focus u_fo (.llc(llc), .we(fb_we), .w_col(w_col), .wd(fb_wd), .eof(eof), .sum(fo_sum), .n(fo_n));
+    focus u_fo (.llc(llc), .we(fb_we), .w_col(w_col[8:0]), .wd(fb_wd), .eof(eof), .sum(fo_sum), .n(fo_n));
     wire [9:0] f_prog; wire [2:0] f_pslot;
     wire ca_valid, ca_ack, db_valid, db_ack, db_rvalid; wire [24:0] ca_line, db_line; wire [255:0] ca_data, rd_data;
     wire [2:0] latest, fn; wire [7:0] par; wire [9:0] flines;
     reg [255:0] rd_q; always @(posedge pclk) rd_q <= rd_data;
-    cap_ddr u_capd (.llc(llc), .we(fb_we), .w_ln(w_ln), .w_col(w_col), .wd(fb_wd), .eof(eof), .eof_f(field),
+    cap_ddr u_capd (.llc(llc), .nch(7'd45), .we(fb_we), .w_ln(w_ln), .w_col(w_col), .wd(fb_wd), .eof(eof), .eof_f(field),
                     .eof_lines(lines), .freeze(1'b0), .pclk(pclk), .a_valid(ca_valid), .a_line(ca_line),
                     .a_data(ca_data), .a_ack(ca_ack), .latest(latest), .par(par), .nfields(fn), .flines(flines), .prog(f_prog), .prog_slot(f_pslot));
     wire cmd_ready, cmd_en, wr_en, rd_valid; wire [2:0] cmd; wire [28:0] addr; wire [255:0] wr_data;
@@ -102,31 +102,31 @@ module tb;
                    .c_valid(1'b0), .c_wr(1'b0), .c_line(25'd0), .c_data(256'd0), .c_ack(), .c_rvalid());
     ddr_model u_ddr (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),
                      .wr_data_en(wr_en), .rd_data(rd_data), .rd_data_valid(rd_valid));
-    wire ev, ev_first, r_we, fstart, hold, w_we; wire [9:0] ev_goal, emitted, w_x; wire [8:0] r_wa;
+    wire ev, ev_first, r_we, fstart, hold, w_we; wire [9:0] ev_goal, emitted, w_x; wire [9:0] r_wa;
     reg [10:0] s_goal = 0; reg lg0 = 0, lg1 = 0, lg2 = 0;
     always @(posedge pclk) begin lg0 <= ev; lg1 <= lg0; lg2 <= lg1; if (lg1 != lg2) s_goal <= {1'b0, ev_goal} + 11'd18; end
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
-    deint u_deint (.clk(pclk), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
+    deint u_deint (.clk(pclk), .nch(7'd45), .pg(1'b0), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
                    .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
     lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .hold(hold), .aa_en(1'b%(aa_en)d), .aa_dbg(1'b%(aa_dbg)d), .aa_diag(1'b%(aa_diag)d), .aa_corner(1'b%(aa_corner)d),
                   .aa_thr(8'd%(aa_thr)d), .r_we(r_we), .r_slot_d(sd[1:0]),
-                  .r_slot_i(si[1:0]), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
+                  .r_slot_i(si[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
                   .w_x(w_x), .w_d(w_d));
     wire de, hs, vs, pre, gb, ucc; wire [7:0] pr, pg, pb, r, g, b; wire [12:0] ox; wire [11:0] oy;
-    pattern u_pat (.clk(clk), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
+    pattern u_pat (.clk(clk), .ce(1'b1), .hd(1'b0), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
                    .ox(ox), .oy(oy));
     wire [7:0] e_y, e_cb, e_cr; wire [24:0] e_xy;
     easu u_easu (.g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
                  .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
-    dline #(.W(25), .D(26)) u_dxy (.clk(clk), .d({ox, oy}), .q(e_xy));
+    dline #(.W(25), .D(26)) u_dxy (.clk(clk), .ce(1'b1), .d({ox, oy}), .q(e_xy));
     rcas u_rcas (.wide(1'b%(g_wide)d), .clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d), .dn(1'b%(dn)d),
                  .r(r), .g(g), .b(b));
     wire de_d;
-    dline #(.W(1), .D(%(latv)d)) u_dde (.clk(clk), .d(de), .q(de_d));
+    dline #(.W(1), .D(%(latv)d)) u_dde (.clk(clk), .ce(1'b1), .d(de), .q(de_d));
     integer f, i, j, gf;
     reg llbit = 0;
     reg dumping = 0;

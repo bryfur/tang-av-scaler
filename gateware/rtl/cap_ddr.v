@@ -15,7 +15,8 @@ module cap_ddr (
     input              llc,
     input              we,
     input      [9:0]   w_ln,
-    input      [8:0]   w_col,
+    input      [9:0]   w_col,
+    input      [6:0]   nch,             // DDR3 lines (16 pixels) a line of picture (45: 720; 80: 1280)
     input      [31:0]  wd,
     input              eof,
     input              eof_f,
@@ -51,7 +52,7 @@ module cap_ddr (
                 sh[32 * w_col[2:0] +: 32] <= wd;
             else begin
                 hold <= {wd, sh};
-                hold_a <= {slot, w_ln, 1'b0, w_col[8:3]};
+                hold_a <= {slot, w_ln, w_col[9:3]};
                 tg <= !tg;
             end
         end
@@ -74,11 +75,13 @@ module cap_ddr (
     wire [275:0] head = fifo[rp[3:0]];
     // (a_valid a register: what it gates is wide)
     reg         av = 1'b0;
+    reg [6:0]   nch_s0, nch_s;
     wire [4:0]  wp_n = t1 != t2 ? wp + 5'd1 : wp, rp_n = a_ack ? rp + 5'd1 : rp;
     assign a_valid = av;
     assign a_line = {head[275:273], 5'd0, head[272:256]};
     assign a_data = head[255:0];
     always @(posedge pclk) begin
+        {nch_s, nch_s0} <= {nch_s0, nch};
         t0 <= tg;
         t1 <= t0;
         t2 <= t1;
@@ -90,7 +93,7 @@ module cap_ddr (
         wp <= wp_n;
         rp <= rp_n;
         // (a line's last sixteen pixels taken: the line is in)
-        if (a_ack && head[261:256] == 6'd44) begin
+        if (a_ack && head[262:256] == nch_s - 7'd1) begin
             prog <= head[272:263] + 10'd1;
             prog_slot <= head[275:273];
         end

@@ -31,6 +31,7 @@
 
 module hdmi_scr #(parameter N = 1, parameter CH = 0) (
     input                     clk,
+    input                     ce,            // a pixel's clock (0: everything here stays as it is)
     input                     frame,
     input                     scramble,
     input      [3:0]          opt,
@@ -91,7 +92,7 @@ module hdmi_scr #(parameter N = 1, parameter CH = 0) (
     // the settings, here (they do not change while a picture is sent)
     reg       frame_q, scr_q;
     reg [3:0] opt_q;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         frame_q <= frame;
         scr_q <= scramble;
         opt_q <= opt;
@@ -105,7 +106,7 @@ module hdmi_scr #(parameter N = 1, parameter CH = 0) (
     reg [N - 1:0]     de_q, gb_q, ucc_q;
     integer           k;
     reg [15:0]        v;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         v = lfsr;
         for (k = 0; k < N; k = k + 1) begin
             lq[16 * k +: 16] <= v;
@@ -126,7 +127,7 @@ module hdmi_scr #(parameter N = 1, parameter CH = 0) (
     reg [7:0]  mask;
     reg [3:0]  cv, cm;
     reg        is_data;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         t = itoggle;
         for (k = 0; k < N; k = k + 1) begin
             q = lq[16 * k +: 16];

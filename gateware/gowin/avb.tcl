@@ -45,7 +45,7 @@ create_project -name avb -dir $out -pn GW5AST-LV138PG484AC1/I0 -device_version [
 cd $out/avb
 add_file -type verilog $out/defines.v
 #   GW_SRCS   the sources, from gateware/ (default: the bring-up image's; a test's: test/loop.v)
-foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/cpu.v rtl/spis.v rtl/osd.v rtl/vcap.v rtl/border.v rtl/focus.v rtl/grab.v rtl/cap_ddr.v rtl/deint.v rtl/lstream.v rtl/smaa.v rtl/easu.v rtl/rcas.v rtl/dline.v rtl/audio_in.v rtl/hdmi_audio.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
+foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/cpu.v rtl/spis.v rtl/osd.v rtl/vcap.v rtl/border.v rtl/focus.v rtl/grab.v rtl/cap_ddr.v rtl/deint.v rtl/pthru.v rtl/lstream.v rtl/smaa.v rtl/easu.v rtl/rcas.v rtl/dline.v rtl/audio_in.v rtl/hdmi_audio.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
     add_file -type verilog $gw/$f
 }
 # the hard CPU's SoC (Gowin's RiscV_AE350_SOC, from the IDE's own files: its top in plain Verilog, the rest

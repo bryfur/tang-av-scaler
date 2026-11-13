@@ -7,17 +7,18 @@
 // Cb, Cr in turn on the C pins, a Y sample a clock (13.5 MHz for 480i), the same sync codes on both.
 //
 // A field goes to the frame store as it comes, 360 words a line, {Cb, Y0, Cr, Y1}, line n of the
-// field at 360 n (the field's lines counted from the end of its vertical blanking): LINES at most.
+// field at 360 n (the field's lines counted from the end of its vertical blanking): nlin at most,
+// ncol words of each (a progressive picture: a field is a frame).
 //
 // For the host: pix, the Y samples of the last line; lines, the lines of picture in the last field;
 // field, its F; fields, a count of them.  And raw: 1024 samples of all the pins, taken when arm
 // changes: from then on (mode 0), from the next sync code (1: the first sample is its XY), from the
 // next start of a line of picture (2).
 
-module vcap #(
-    parameter LINES = 244
-) (
+module vcap (
     input             llc,
+    input      [9:0]  ncol,             // a line's words (360: 720 samples; 640: 1280) and
+    input      [9:0]  nlin,             // a field's lines kept at most (set while nothing is shown)
     input      [7:0]  y,
     input      [7:0]  c,
     input             hs,
@@ -29,7 +30,7 @@ module vcap #(
     output reg [16:0] wa,
     output reg [31:0] wd,
     output reg [9:0]  w_ln,             // with we: the line and the pair of the word
-    output reg [8:0]  w_col,
+    output reg [9:0]  w_col,
     output reg        eof = 1'b0,       // a clock: a field's picture is over (lines, field tell of it)
     output reg        f_we,             // at a line's start: the field (F) the store's line f_wa is of
     output reg [7:0]  f_wa,
@@ -59,7 +60,8 @@ module vcap #(
 
     reg        v = 1'b1, in_line = 1'b0;
     reg [1:0]  ph;
-    reg [8:0]  col;
+    reg [9:0]  col;
+    reg [9:0]  ncol_s0, ncol_s, nlin_s0, nlin_s;
     reg [10:0] n;
     reg [9:0]  ln;
     reg [16:0] base;
@@ -69,6 +71,8 @@ module vcap #(
         frz_s0 <= freeze;
         frz <= frz_s0;
         wide_s0 <= wide;
+        {ncol_s, ncol_s0} <= {ncol_s0, ncol};
+        {nlin_s, nlin_s0} <= {nlin_s0, nlin};
         wd16 <= wide_s0;
         we <= 1'b0;
         f_we <= 1'b0;
@@ -76,12 +80,12 @@ module vcap #(
         if (trs) begin
             v <= b[5];
             if (!b[4]) begin                        // SAV
-                f_we <= !b[5] && !frz && ln < LINES;
+                f_we <= !b[5] && !frz && ln < nlin_s;
                 f_wa <= ln[7:0];
                 f_wd <= b[6];
                 in_line <= !b[5];
                 ph <= 2'd0;
-                col <= 9'd0;
+                col <= 10'd0;
                 n <= 11'd0;
             end else begin                          // EAV
                 if (in_line) begin
@@ -108,11 +112,11 @@ module vcap #(
                 y0 <= b;
             end else begin
                 wd <= {cb, y0, s[15:8], b};
-                wa <= base + {8'd0, col};
+                wa <= base + {7'd0, col};
                 w_ln <= ln;
                 w_col <= col;
-                we <= !frz && col < 9'd360 && ln < LINES;
-                col <= col + 9'd1;
+                we <= !frz && col < ncol_s && ln < nlin_s;
+                col <= col + 10'd1;
             end
             if (!(&n))
                 n <= n + 11'd1;
@@ -124,11 +128,11 @@ module vcap #(
                 2'd2: cr <= b;
                 2'd3: begin
                     wd <= {cb, y0, cr, b};
-                    wa <= base + {8'd0, col};
+                    wa <= base + {7'd0, col};
                 w_ln <= ln;
                 w_col <= col;
-                    we <= !frz && col < 9'd360 && ln < LINES;
-                    col <= col + 9'd1;
+                    we <= !frz && col < ncol_s && ln < nlin_s;
+                    col <= col + 10'd1;
                 end
             endcase
             if (ph[0] && !(&n))

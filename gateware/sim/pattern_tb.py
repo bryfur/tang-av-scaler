@@ -21,7 +21,7 @@ module tb;
     reg clk = 0; always #1 clk = ~clk;
     wire [P - 1:0] de, hs, vs, pre, gb, ucc;
     wire [8 * P - 1:0] r, g, b;
-    pattern %s dut (.clk(clk), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(r), .g(g), .b(b));
+    pattern %s dut (.clk(clk), .ce(1'b1), .hd(1'b0), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(r), .g(g), .b(b));
     integer f, i, k;
     initial begin
         f = $fopen("%s/pat.bin", "wb");

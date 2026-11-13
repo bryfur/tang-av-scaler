@@ -14,7 +14,7 @@
 
 enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, R_I2C_SH = 0x05, R_FREQ = 0x10,
        R_GT_CTRL = 0x20, R_GT_STAT = 0x21, R_MODE = 0x25, R_HDMI = 0x26, R_LAT = 0x27, R_OSD = 0x28, R_OSDW = 0x29,
-       R_TEMP = 0x2a, R_LLMIN = 0x2b, R_VID = 0x30, R_CAP = 0x31, R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36, R_FOCUS = 0x37,
+       R_TEMP = 0x2a, R_LLMIN = 0x2b, R_SRC = 0x2c, R_VID = 0x30, R_CAP = 0x31, R_FIELDS = 0x32, R_DEINT = 0x35, R_DSTAT = 0x36, R_FOCUS = 0x37,
        R_GRAB = 0x38, R_GRABD = 0x39, R_GEOM = 0x3a, R_BORDER = 0x3e, R_BORDERL = 0x3f, R_CPUM = 0x64,
        R_SPIS = 0x70, R_SPIRX = 0x71, R_SPITXA = 0x72, R_SPITXD = 0x73 };
 #define DP_OE       (1u << 2)
@@ -39,6 +39,7 @@ void board_init(void);
 void board_second(void);                /* once a second */
 void board_apply(const struct link_settings *was);      /* the settings changed */
 void board_cmd(int cmd);
+bool board_hd(void);                /* 1280 x 720 comes in and goes out as it is */
 void board_grab_seen(void);         /* (a screen capture is still asking) */
 bool board_grabbing(void);
 void board_lock(void);              /* ten times a second: the output's clock trimmed to follow the input */

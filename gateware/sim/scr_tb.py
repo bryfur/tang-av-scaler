@@ -74,7 +74,7 @@ module tb;
     reg [13 * N - 1:0] mem [0:LEN - 1];
     reg [8 * N - 1:0] d; reg [2 * N - 1:0] c; reg [N - 1:0] de, gb, ucc;
     wire [8 * N - 1:0] d_o; wire [N - 1:0] de_o; wire [10 * N - 1:0] tok;
-    hdmi_scr #(.N(N), .CH(%d)) dut (.clk(clk), .frame(1'b%d), .scramble(1'b%d), .opt(4'd%d), .d(d), .c(c), .de(de),
+    hdmi_scr #(.N(N), .CH(%d)) dut (.clk(clk), .ce(1'b1), .frame(1'b%d), .scramble(1'b%d), .opt(4'd%d), .d(d), .c(c), .de(de),
                                     .gb(gb), .ucc(ucc), .d_o(d_o), .de_o(de_o), .tok(tok));
     integer i, j;
     initial begin

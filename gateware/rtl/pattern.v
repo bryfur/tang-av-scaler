@@ -17,6 +17,8 @@ module pattern #(
     parameter VA = 1080, VF = 4, VS = 5, VT = 1125
 ) (
     input                      clk,
+    input                      ce,            // a pixel's clock (0: everything here stays as it is)
+    input                      hd,      // 1280 x 720 [VIC 4: 1650 x 750] for the parameters' picture (PPC 1; set while nothing is shown)
     output reg [PPC - 1:0]     de,
     output reg [PPC - 1:0]     hs,
     output reg [PPC - 1:0]     vs,
@@ -29,18 +31,21 @@ module pattern #(
     output reg [12:0]          ox,      // the clock's first pixel as de, r, g, b have it: its column
     output reg [11:0]          oy       // and row (in the picture: below HA, VA)
 );
-    localparam BAR = HA / 8, BOX = HA / 16, STEP = HA / 480;
+    // (the picture's numbers: the parameters', or 1280 x 720's)
+    wire [12:0] ha = hd ? 13'd1280 : HA, hf = hd ? 13'd110 : HF, hsw = hd ? 13'd40 : HS, ht = hd ? 13'd1650 : HT;
+    wire [11:0] va = hd ? 12'd720 : VA, vf = hd ? 12'd5 : VF, vsw = hd ? 12'd5 : VS, vt = hd ? 12'd750 : VT;
+    wire [12:0] BAR = hd ? 13'd160 : HA / 8, BOX = hd ? 13'd80 : HA / 16, STEP = hd ? 13'd3 : HA / 480;
 
     reg [12:0] x = 13'd0;               // the clock's first pixel
     reg [11:0] y = 12'd0;
     reg [12:0] box = 13'd0;
-    wire       eol = x == HT - PPC;
-    always @(posedge clk) begin
+    wire       eol = x == ht - PPC;
+    always @(posedge clk) if (ce) begin
         x <= eol ? 13'd0 : x + PPC[12:0];
         if (eol) begin
-            y <= y == VT - 1 ? 12'd0 : y + 12'd1;
-            if (y == VT - 1)
-                box <= box >= HA - BOX - STEP ? 13'd0 : box + STEP[12:0];
+            y <= y == vt - 12'd1 ? 12'd0 : y + 12'd1;
+            if (y == vt - 12'd1)
+                box <= box >= ha - BOX - STEP ? 13'd0 : box + STEP;
         end
     end
 
@@ -49,16 +54,16 @@ module pattern #(
     reg next_act, vs_first, vs_row, vs_last;
     reg row_act, row_edge, row_box, row_ramp;       // (the test picture's rows, likewise ahead)
     reg [12:0] box_end;
-    always @(posedge clk) begin
-        row_act <= y < VA;
-        row_edge <= y == 0 || y == VA - 1;
-        row_box <= y >= VA / 2 - BOX / 2 && y < VA / 2 + BOX / 2;
-        row_ramp <= y >= VA - VA / 8;
-        box_end <= box + BOX[12:0];
-        next_act <= y == VT - 1 || y < VA - 1;
-        vs_first <= y == VA + VF - 1;
-        vs_row <= y >= VA + VF && y < VA + VF + VS - 1;
-        vs_last <= y == VA + VF + VS - 1;
+    always @(posedge clk) if (ce) begin
+        row_act <= y < va;
+        row_edge <= y == 0 || y == va - 12'd1;
+        row_box <= y >= va[11:1] - BOX[12:1] && y < va[11:1] + BOX[12:1];
+        row_ramp <= y >= va - va[11:3];
+        box_end <= box + BOX;
+        next_act <= y == vt - 12'd1 || y < va - 12'd1;
+        vs_first <= y == va + vf - 12'd1;
+        vs_row <= y >= va + vf && y < va + vf + vsw - 12'd1;
+        vs_last <= y == va + vf + vsw - 12'd1;
     end
 
     integer    k;
@@ -67,24 +72,24 @@ module pattern #(
     reg [7:0]  grey;
     reg [12:0] x_q;
     reg [11:0] y_q;
-    always @(posedge clk) begin
+    always @(posedge clk) if (ce) begin
         x_q <= x;
         y_q <= y;
         ox <= x_q;
         oy <= y_q;
         for (k = 0; k < PPC; k = k + 1) begin
             px = x_q + k[12:0];
-            de[k] <= px < HA && row_act;
-            hs[k] <= px >= HA + HF && px < HA + HF + HS;
-            vs[k] <= vs_row || (vs_first && px >= HA + HF) || (vs_last && px < HA + HF);
-            pre[k] <= next_act && px >= HT - 10 && px < HT - 2;
-            gb[k] <= next_act && px >= HT - 2;
-            ucc[k] <= vs_first && px >= HA + HF && px < HA + HF + 8;
-            bar = (px >= BAR) + (px >= 2 * BAR) + (px >= 3 * BAR) + (px >= 4 * BAR) + (px >= 5 * BAR) +
-                  (px >= 6 * BAR) + (px >= 7 * BAR);
+            de[k] <= px < ha && row_act;
+            hs[k] <= px >= ha + hf && px < ha + hf + hsw;
+            vs[k] <= vs_row || (vs_first && px >= ha + hf) || (vs_last && px < ha + hf);
+            pre[k] <= next_act && px >= ht - 13'd10 && px < ht - 13'd2;
+            gb[k] <= next_act && px >= ht - 13'd2;
+            ucc[k] <= vs_first && px >= ha + hf && px < ha + hf + 13'd8;
+            bar = (px >= BAR) + (px >= {BAR, 1'b0}) + (px >= BAR + {BAR, 1'b0}) + (px >= {BAR, 2'b00}) + (px >= BAR + {BAR, 2'b00}) +
+                  (px >= {BAR, 1'b0} + {BAR, 2'b00}) + (px >= {BAR, 3'b000} - BAR);
             rgb = ~bar;                 // {g, r, b}: white yellow cyan green magenta red blue black
             grey = HA > 2048 ? px[11:4] : px[10:3];
-            if (px == 0 || px == HA - 1 || row_edge || (px >= box && px < box_end && row_box)) begin
+            if (px == 0 || px == ha - 13'd1 || row_edge || (px >= box && px < box_end && row_box)) begin
                 r[8 * k +: 8] <= 8'hFF; g[8 * k +: 8] <= 8'hFF; b[8 * k +: 8] <= 8'hFF;
             end else if (row_ramp) begin
                 r[8 * k +: 8] <= grey; g[8 * k +: 8] <= grey; b[8 * k +: 8] <= grey;
