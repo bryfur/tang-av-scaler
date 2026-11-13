@@ -22,6 +22,8 @@ display and a capture device. The table below is what it does now, on the board.
 has been run with is a PlayStation 2; an Xbox or a GameCube with its component cable puts out the
 same signal (480i, YPbPr, 59.94 Hz) and has not been tried yet.
 
+![The board, rev C-B, rendered from its design](hardware/av-board/rev-cb/img/av-board-cb-3d.png)
+
 ![A frame of the scaler's 1080p output, its on-screen display on](docs/compare/game-osd.png)
 
 A frame as it leaves for the display, the on-screen display on (read back from the FPGA: no camera,
