@@ -82,7 +82,12 @@ def pattern_area(pat, left, right):
                 a1 = (a1[0] / 2, a1[1] / 2)
                 a2 = area(0.0, orr, d / 2, 0)
                 a2 = (a2[0] / 2, a2[1] / 2)
-            a = (a1[0] + a2[0], a1[1] + a2[1])
+            # SMAA's own for short U patterns [AreaTex.py smootharea]: a small bump's parts are small,
+            # and their square root's half is taken, less and less of it to 32 pixels (left out until
+            # 2026-11-12: a tenth to a fifth of a picture's blending)
+            p = min(1.0, d / 32.0)
+            sm = lambda v: math.sqrt(2 * v) * 0.5 * (1 - p) + v * p
+            a = (sm(a1[0]) + sm(a2[0]), sm(a1[1]) + sm(a2[1]))
     elif ol:                                        # an L: a half line from the left end
         a = area(ol, 0.0, d / 2, left) if 2 * left + 1 <= d else (0.0, 0.0)
     elif orr:
