@@ -175,14 +175,15 @@ endmodule
     hexf = os.path.join(WORK, "easu")
     subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)
     subprocess.check_call([sys.executable, os.path.join(HERE, "smaa.py"), "table", os.path.join(WORK, "smaa.hex"),
-                           os.path.join(WORK, "smaad.hex")])
+                           os.path.join(WORK, "smaad.hex"), os.path.join(WORK, "smaah.hex")])
     # Verilator (a compiled model: iverilog takes half an hour for a frame through easu.v)
     mdir = os.path.join(WORK, "vl_" + tag)
     subprocess.check_call(["verilator", "--binary", "--timing", "-j", "16", "-Wno-fatal", "-Wno-WIDTH", "-Wno-UNUSED",
                            "-Wno-DECLFILENAME", "-Wno-STMTDLY", "-Wno-INITIALDLY", "-Wno-MULTIDRIVEN", "-Wno-TIMESCALEMOD",
                            "--top-module", "tb", "--Mdir", mdir, "-o", tag] +
                           ['-DEASU_HEX%d="%s%d.hex"' % (k, hexf, k) for k in range(4)] +
-                          ['-DSMAA_HEX="%s"' % os.path.join(WORK, "smaa.hex"), '-DSMAA_DHEX="%s"' % os.path.join(WORK, "smaad.hex")] +
+                          ['-DSMAA_HEX="%s"' % os.path.join(WORK, "smaa.hex"), '-DSMAA_DHEX="%s"' % os.path.join(WORK, "smaad.hex"),
+                           '-DSMAA_HHEX="%s"' % os.path.join(WORK, "smaah.hex")] +
                           [os.path.join(WORK, tag + "_tb.v"), os.path.join(HERE, "ddr_model.v")] + rtl,
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     log = subprocess.check_output([os.path.join(mdir, tag)]).decode().strip()

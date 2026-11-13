@@ -5,7 +5,7 @@
 // - A store of four lines (words {Cb, Y0, Cr, Y1}; deint.v's r_*).  hold: deint.v waits (the two
 //   lines before its last two are not read out yet).
 // - Line j is read out when deint.v has made it and the output is near enough to wanting it
-//   (j <= goal): a pixel a clock (its luma and one chroma sample), 24 clocks between lines.  After
+//   (j <= goal): a pixel a clock (its luma and one chroma sample), 48 clocks between lines.  After
 //   the picture's last line FL more (whatever): smaa.v's lines come out LAG = FL - 1 lines late, and
 //   the analysis wants a line after the last.
 // - smaa.v; then 4:4:4: an even pixel has its word's chroma, an odd one the mean of its word's and
@@ -65,7 +65,7 @@ module lstream #(
     reg [9:0]  sj = 10'd0;              // the line being or to be read out (from H: the last again)
     reg        run = 1'b0, ph = 1'b0, prime = 1'b0;
     reg [1:0]  pw;
-    reg [4:0]  gap = 5'd0;
+    reg [5:0]  gap = 6'd0;
     reg [8:0]  q;
     reg [31:0] cur;
     wire [9:0] src = sj >= H ? H - 1 : sj;
@@ -79,14 +79,14 @@ module lstream #(
     always @(posedge clk) begin
         r_v <= 1'b0;
         r_last <= 1'b0;
-        if (gap != 5'd0)
-            gap <= gap - 5'd1;
+        if (gap != 6'd0)
+            gap <= gap - 6'd1;
         if (fstart) begin
             sj <= 10'd0;
             run <= 1'b0;
             prime <= 1'b0;
         end else if (!run && !prime) begin
-            if (have && gap == 5'd0) begin
+            if (have && gap == 6'd0) begin
                 prime <= 1'b1;
                 pw <= 2'd0;
                 ra <= 9'd0;
@@ -121,7 +121,7 @@ module lstream #(
                 if (q == W / 2 - 1) begin
                     run <= 1'b0;
                     sj <= sj + 10'd1;
-                    gap <= 5'd31;
+                    gap <= 6'd47;         // (smaa.v takes a line through as W + NH + 4 columns)
                 end
             end
         end

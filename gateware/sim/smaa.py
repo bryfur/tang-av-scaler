@@ -8,21 +8,26 @@ it is scaled.
    |y - y(top)| >= T; and each only if it is at least half the greatest luma step round the pixel
    (to its left, top, right, bottom neighbours, and from the left one to its left, the top one to
    its top): a strong edge beside hides a weak one.
-2. For a pixel with a top edge: how far the edge runs to the left and to the right (to N pixels: it
+2. For a pixel with a top edge: how far the edge runs to the left and to the right (to NH pixels: it
    ends where the next pixel has no top edge, or where an edge crosses it), and which way the edge
    turns at each end (up, down).  The stair this is a step of is taken for a straight line through
    the steps' middles: the part of the pixel (or of the one above) the line cuts off is the weight
-   with which it takes its neighbour's colour (area()).  The same for a left edge, up and down.
+   with which it takes its neighbour's colour (area()).  The same for a left edge, up and down (to
+   N: every line more the search looks down is a line more the picture waits; along a line it is
+   only registers).
 3. Each pixel is mixed with the neighbour (left, right, top, bottom) whose weight is greatest.
 
     smaa.py picture IN.png OUT.png [edges]    # a picture through it (edges: the edges found, as a picture)
-    smaa.py table OUT.hex [DIAG.hex]          # the areas for $readmemh: {pattern 4, left 4, right 4} ->
-                                              # {above 8, below 8}; and the diagonals' table
+    smaa.py table OUT.hex [DIAG.hex [H.hex]]  # the areas for $readmemh: {pattern 4, left 4, right 4} ->
+                                              # {above 8, below 8}; the diagonals' table; and the one
+                                              # for along a line: {pattern 4, left 5, right 5}
 """
 import math
 import sys
 
-N = 15              # the search's reach, each way
+N = 15              # the search's reach up and down (the lines kept: the picture's delay)
+NH = 15             # ... and along a line, left and right (31: rtl/smaa.v NH 31, a table of 16384;
+                    # tried 2026-11-12: 0.2 % of a game's pixels differ, 10 block RAMs, the clocks missed)
 T = 20              # the luma step that is an edge (of 255)
 
 
@@ -198,16 +203,40 @@ def lookup(pat, left, right):
 def corner_round(wv, d1, d2, a1, a2):
     """[SMAA: SMAADetectHorizontalCornerPattern, SMAA_CORNER_ROUNDING 25] a weight less where the edge
     crossing at the line's nearer end (a1 at the first, a2 at the second; both ends if as near) goes on
-    a pixel further: there the line ends in a corner, not in a step.  x 1/4, or x 5/8 with one of two"""
+    a pixel further (the same edge: weights()): there the line ends in a corner, not in a step.
+    x 1/4, or x 5/8 with one of two"""
     k = (a1 + a2 if d1 == d2 else 2 * a1 if d1 < d2 else 2 * a2)
     return wv if k == 0 else (5 * wv + 4) >> 3 if k == 1 else (wv + 2) >> 2
 
 
-def weights(e, w, h, n=N, diag=False, corner=False):
+def weights(e, w, h, n=N, diag=False, corner=False, nh=NH, y=None, thr=T):
     """[row][col] -> (top, up_of_top, left, left_of_left): with a top edge, top: how much the pixel
     takes of the one above, up_of_top: how much the one above takes of it; the same for a left
-    edge"""
+    edge.
+
+    Two things past SMAA's own, for lines drawn as thin layers side by side (a rail with a highlight
+    along it: each layer's steps cross the next one's edge):
+    - y (the lumas) given: an end where edges cross both ways, up and down, is taken for the way the
+      pixels go on: the turn across which the two pixels diagonally over the crossing are alike
+      (within thr); both or neither alike: no turn, as before.
+    - corner: an end is a corner (the weight less) only where the crossing edge goes on a pixel
+      further with nothing crossing it there: the same edge, not the next layer's."""
     E = lambda x, r: e[r][x] if 0 <= x < w and 0 <= r < h else (0, 0)
+    L = lambda x, r: y[min(max(r, 0), h - 1)][min(max(x, 0), w - 1)]
+    alike = lambda a, b: abs(a - b) < thr
+
+    def turn(up, down, up_ok, down_ok):
+        """the crossing edges at an end (up: the other side's, down: the pixel's own side's) and
+        which of them the pixels speak for -> the pattern's two bits"""
+        if up and down and y is not None and up_ok() != down_ok():
+            return 1 if up_ok() else 2
+        return up | down << 1
+    # the crossing edge at (x, r) goes on with nothing across it: a left edge from the row above
+    # (the top edges of its row), from the row below; a top edge from the column before, the one after
+    on_v = lambda x, r: int(E(x, r)[0] and not (E(x, r)[1] or E(x - 1, r)[1]))
+    on_v_up = lambda x, r: int(E(x, r)[0] and not (E(x, r + 1)[1] or E(x - 1, r + 1)[1]))
+    on_h = lambda x, r: int(E(x, r)[1] and not (E(x, r)[0] or E(x, r - 1)[0]))
+    on_h_l = lambda x, r: int(E(x, r)[1] and not (E(x + 1, r)[0] or E(x + 1, r - 1)[0]))
     out = []
     for r in range(h):
         line = []
@@ -222,36 +251,40 @@ def weights(e, w, h, n=N, diag=False, corner=False):
             if et:
                 # leftwards: the boundary on the left of pixel x - i
                 i = 0
-                while i < n and not (E(x - i, r)[0] or E(x - i, r - 1)[0]) and E(x - i - 1, r)[1]:
+                while i < nh and not (E(x - i, r)[0] or E(x - i, r - 1)[0]) and E(x - i - 1, r)[1]:
                     i += 1
                 d1 = i
-                pl = E(x - i, r - 1)[0] | E(x - i, r)[0] << 1
+                c = x - i
+                pl = turn(E(c, r - 1)[0], E(c, r)[0], lambda: alike(L(c, r), L(c - 1, r - 1)), lambda: alike(L(c - 1, r), L(c, r - 1)))
                 i = 0
-                while i < n and not (E(x + i + 1, r)[0] or E(x + i + 1, r - 1)[0]) and E(x + i + 1, r)[1]:
+                while i < nh and not (E(x + i + 1, r)[0] or E(x + i + 1, r - 1)[0]) and E(x + i + 1, r)[1]:
                     i += 1
                 d2 = i
-                pr = E(x + i + 1, r - 1)[0] | E(x + i + 1, r)[0] << 1
+                c = x + i + 1
+                pr = turn(E(c, r - 1)[0], E(c, r)[0], lambda: alike(L(c - 1, r), L(c, r - 1)), lambda: alike(L(c, r), L(c - 1, r - 1)))
                 above, below = lookup(pl | pr << 2, d1, d2)
                 wt, wu = below, above
                 if corner:
-                    wt = corner_round(wt, d1, d2, E(x - d1, r + 1)[0], E(x + d2 + 1, r + 1)[0])
-                    wu = corner_round(wu, d1, d2, E(x - d1, r - 2)[0], E(x + d2 + 1, r - 2)[0])
+                    wt = corner_round(wt, d1, d2, on_v(x - d1, r + 1), on_v(x + d2 + 1, r + 1))
+                    wu = corner_round(wu, d1, d2, on_v_up(x - d1, r - 2), on_v_up(x + d2 + 1, r - 2))
             if el:
                 i = 0
                 while i < n and not (E(x, r - i)[1] or E(x - 1, r - i)[1]) and E(x, r - i - 1)[0]:
                     i += 1
                 d1 = i
-                pu = E(x - 1, r - i)[1] | E(x, r - i)[1] << 1
+                c = r - i
+                pu = turn(E(x - 1, c)[1], E(x, c)[1], lambda: alike(L(x, c), L(x - 1, c - 1)), lambda: alike(L(x - 1, c), L(x, c - 1)))
                 i = 0
                 while i < n and not (E(x, r + i + 1)[1] or E(x - 1, r + i + 1)[1]) and E(x, r + i + 1)[0]:
                     i += 1
                 d2 = i
-                pd = E(x - 1, r + i + 1)[1] | E(x, r + i + 1)[1] << 1
+                c = r + i + 1
+                pd = turn(E(x - 1, c)[1], E(x, c)[1], lambda: alike(L(x - 1, c), L(x, c - 1)), lambda: alike(L(x, c), L(x - 1, c - 1)))
                 other, own = lookup(pu | pd << 2, d1, d2)
                 wl, wo = own, other
                 if corner:
-                    wl = corner_round(wl, d1, d2, E(x + 1, r - d1)[1], E(x + 1, r + d2 + 1)[1])
-                    wo = corner_round(wo, d1, d2, E(x - 2, r - d1)[1], E(x - 2, r + d2 + 1)[1])
+                    wl = corner_round(wl, d1, d2, on_h(x + 1, r - d1), on_h(x + 1, r + d2 + 1))
+                    wo = corner_round(wo, d1, d2, on_h_l(x - 2, r - d1), on_h_l(x - 2, r + d2 + 1))
             line.append((wt, wu, wl, wo))
         out.append(line)
     return out
@@ -283,7 +316,7 @@ def blend(pix, wts, w, h):
     return out
 
 
-def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False):
+def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False, nh=NH):
     """rtl/smaa.v: the picture as lines of 4:2:2 words (cb, y0, cr, y1) -> the same: luma mixed as
     blend() does; a chroma sample mixed only with the one above or below it (a pixel carries one:
     Cb the even pixels, Cr the odd)"""
@@ -291,7 +324,7 @@ def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False):
     y = [[v for wd in line for v in (wd[1], wd[3])] for line in lines]
     c = [[v for wd in line for v in (wd[0], wd[2])] for line in lines]
     e = edges(y, w, h, thr)
-    wts = weights(e, w, h, n, diag, corner)
+    wts = weights(e, w, h, n, diag, corner, nh, y, thr)
     W = lambda x, r: wts[r][x] if 0 <= x < w and 0 <= r < h else (0, 0, 0, 0)
     mix = lambda a, b, k: a + (((b - a) * k + 128) >> 8)
     out = []
@@ -325,9 +358,10 @@ def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False):
     return out
 
 
-def smaa(pix, w, h, thr=T, n=N, diag=False, corner=False):
-    e = edges([[p[0] for p in row] for row in pix], w, h, thr)
-    return blend(pix, weights(e, w, h, n, diag, corner), w, h), e
+def smaa(pix, w, h, thr=T, n=N, diag=False, corner=False, nh=NH):
+    y = [[p[0] for p in row] for row in pix]
+    e = edges(y, w, h, thr)
+    return blend(pix, weights(e, w, h, n, diag, corner, nh, y, thr), w, h), e
 
 
 def main():
@@ -353,6 +387,13 @@ def main():
                     for right in range(16):
                         ab, be = lookup(pat, left, right)
                         f.write("%04x\n" % (ab << 8 | be))
+        if len(a) > 3:              # along a line: {pattern 4, left 5, right 5}
+            with open(a[3], "w") as f:
+                for pat in range(16):
+                    for left in range(32):
+                        for right in range(32):
+                            ab, be = lookup(pat, left, right)
+                            f.write("%04x\n" % (ab << 8 | be))
         if len(a) > 2:              # the diagonals': {end 1's edges 2, end 2's 2, the distances 4 and 4}
             with open(a[2], "w") as f:
                 for e1 in range(4):
