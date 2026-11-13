@@ -69,14 +69,14 @@ module tb;
     integer i, j;
     initial begin
         $readmemh("%s/in.hex", mem);
-        for (i = 0; i < LEN + N + 3; i = i + 1) begin
+        for (i = 0; i < LEN + N + 4; i = i + 1) begin
             for (j = 0; j < N; j = j + 1) begin
                 d[8 * j +: 8] = i < LEN ? mem[i][11 * j +: 8] : 8'd0;
                 tok[10 * j +: 10] = token(i < LEN ? mem[i][11 * j + 8 +: 2] : 2'd0);
                 de[j] = i < LEN ? mem[i][11 * j + 10] : 1'b0;
             end
             @(posedge clk); #0.1;
-            if (i >= N + 3) $display("%%x", q);
+            if (i >= N + 4) $display("%%x", q);
         end
         $finish;
     end

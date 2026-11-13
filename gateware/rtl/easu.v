@@ -149,7 +149,12 @@ module easu (
     // 1, 2: the column asked of the ring: the newest of the four, the one left of its place and 2, in 0 to W - 1
     reg signed [27:0] xq = 28'sd0;
     reg        xc = 1'b0;
-    wire signed [27:0] x_from = x == 13'd2080 ? g_xr : xq;     // (2200 a line: 120 before column 0)
+    // (x_at: x is 2080 now, 120 before column 0 of the 2200 a line: known a clock before, x counts on:
+    // the comparison is not before the sum)
+    reg        x_at = 1'b0;
+    always @(posedge clk)
+        x_at <= x == 13'd2079;
+    wire signed [27:0] x_from = x_at ? g_xr : xq;
     wire signed [27:0] x_next = x_from + $signed({11'd0, g_dx});
     wire signed [12:0] cn = $signed(xq[27:16]) + 13'sd2;
     reg [9:0]  ra_n;                    // (a register of its own before the eight beside the lines)

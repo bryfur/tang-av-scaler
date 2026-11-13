@@ -129,6 +129,8 @@ module smaa #(
     reg [23:0] a_q /* synthesis syn_preserve = 1 */;
     reg        e0_v = 1'b0, e0_b, e1_v = 1'b0, e1_b;
     reg [10:0] e0_x, e1_x;
+    reg        xc_first, xc_le1, xc_last, xc_out;       // xc is 0; is 0 or 1; is W - 1 or more; is W or more
+    reg        ee_ge1, ee_ge2, ee_leh2;
     reg [9:0]  e0_j, e1_j;
     reg [7:0]  e0_y, e1_y;
     always @(posedge clk) begin
@@ -137,6 +139,15 @@ module smaa #(
         {e1_v, e0_v} <= {e0_v, t_v};
         {e1_b, e0_b} <= {e0_b, t_b};
         {e1_x, e0_x} <= {e0_x, t_x};
+        // (where the column before e1_x's, xc, is in the line: known a clock before: not before the steps' sums)
+        xc_first <= e0_x == 11'd1;
+        xc_le1 <= e0_x == 11'd1 || e0_x == 11'd2;
+        xc_last <= e0_x == 11'd0 || e0_x >= W;
+        xc_out <= e0_x == 11'd0 || e0_x > W;
+        // (and the edges' line, ee = e1_j - 1: 1 or more, 2 or more, H - 2 or less)
+        ee_ge1 <= e0_j != 10'd1;
+        ee_ge2 <= e0_j != 10'd1 && e0_j != 10'd2;
+        ee_leh2 <= e0_j != 10'd0 && e0_j <= H - 1;
         {e1_j, e0_j} <= {e0_j, t_j};
         {e1_y, e0_y} <= {e0_y, t_y};
         if (e1_v && !e1_b)
@@ -145,21 +156,22 @@ module smaa #(
     // the line of the edges: e1_j - 1; this column's luma on it, above it, above that, below it
     wire [9:0] ee = e1_j - 10'd1;
     wire [7:0] cC = a_q[23:16];
-    wire [7:0] cT = ee >= 10'd1 ? a_q[15:8] : cC;
-    wire [7:0] cTT = ee >= 10'd2 ? a_q[7:0] : cT;
-    wire [7:0] cB = ee <= H - 2 ? e1_y : cC;
+    wire [7:0] cT = ee_ge1 ? a_q[15:8] : cC;
+    wire [7:0] cTT = ee_ge2 ? a_q[7:0] : cT;
+    wire [7:0] cB = ee_leh2 ? e1_y : cC;
     // the column before (the edges' own), and the two before it
     reg [7:0]  n1_c, n1_t, n1_tt, n1_b, n2_c, n3_c, n2_t;
     reg        sl2, sr2, sl3, sr3, g_sl, g_sr;     // (the column's pixel like the one up and to its left, to its right)
     reg        e2_v = 1'b0, e3_v = 1'b0;
     reg [10:0] e2_x, e3_x;
     reg [9:0]  e2_e, e3_e;
-    reg [7:0]  dl, dt, dr, db, dll, dtt, mx3a, mx3b, mx3c, dl3, dt3;
+    reg [7:0]  dl, dt, dr, db, dll, dtt, mx3b, mx3c, dl3, dt3;
     reg        g_v = 1'b0, g_el, g_et, e2_z, e3_z;
     reg [10:0] g_x;
     reg [9:0]  g_e;
     wire [10:0] xc = e1_x - 11'd1;
-    wire [7:0]  mx = max2(max2(mx3a, mx3b), mx3c);
+    // (twice a step no less than the greatest of the six: than each of the others, side by side)
+    wire [8:0]  dl3x = {dl3, 1'b0}, dt3x = {dt3, 1'b0};
     always @(posedge clk) begin
         e2_v <= 1'b0;
         if (e1_v) begin
@@ -174,24 +186,23 @@ module smaa #(
             e2_v <= e1_x != 11'd0 && e1_j != 10'd0;
             e2_x <= xc;
             e2_e <= ee;
-            e2_z <= xc >= W || ee >= H || !en;
-            dl <= xc == 11'd0 ? 8'd0 : absd(n1_c, n2_c);
+            e2_z <= xc_out || ee >= H || !en;
+            dl <= xc_first ? 8'd0 : absd(n1_c, n2_c);
             dt <= absd(n1_c, n1_t);
-            dr <= xc >= W - 1 ? 8'd0 : absd(n1_c, cC);
+            dr <= xc_last ? 8'd0 : absd(n1_c, cC);
             db <= absd(n1_c, n1_b);
-            dll <= xc <= 11'd1 ? 8'd0 : absd(n2_c, n3_c);
+            dll <= xc_le1 ? 8'd0 : absd(n2_c, n3_c);
             dtt <= absd(n1_t, n1_tt);
             // (for the turns where edges cross both ways: sim/smaa.py weights(); beyond the picture's
             // side the pixel above itself)
-            sl2 <= absd(n1_c, xc == 11'd0 ? n1_t : n2_t) < thr;
-            sr2 <= absd(n1_c, xc >= W - 1 ? n1_t : cT) < thr;
+            sl2 <= absd(n1_c, xc_first ? n1_t : n2_t) < thr;
+            sr2 <= absd(n1_c, xc_last ? n1_t : cT) < thr;
         end
         // (3) the greatest, two and two
         e3_v <= e2_v;
         e3_x <= e2_x;
         e3_e <= e2_e;
         e3_z <= e2_z;
-        mx3a <= max2(dl, dt);
         mx3b <= max2(dr, db);
         mx3c <= max2(dll, dtt);
         dl3 <= dl;
@@ -202,8 +213,8 @@ module smaa #(
         g_v <= e3_v;
         g_x <= e3_x;
         g_e <= e3_e;
-        g_el <= !e3_z && dl3 >= thr && dl3 != 8'd0 && {1'b0, dl3, 1'b0} >= {2'b00, mx};
-        g_et <= !e3_z && dt3 >= thr && dt3 != 8'd0 && {1'b0, dt3, 1'b0} >= {2'b00, mx};
+        g_el <= !e3_z && dl3 >= thr && dl3 != 8'd0 && dl3x >= {1'b0, dt3} && dl3x >= {1'b0, mx3b} && dl3x >= {1'b0, mx3c};
+        g_et <= !e3_z && dt3 >= thr && dt3 != 8'd0 && dt3x >= {1'b0, dl3} && dt3x >= {1'b0, mx3b} && dt3x >= {1'b0, mx3c};
     end
 
     // ---- weights ----
@@ -531,7 +542,12 @@ module smaa #(
     reg [9:0]  m_b;
     reg [7:0]  m_w, m_y, m_c, m_ny, m_nc;
     wire [7:0] a_r = b1_in ? c_q[7:0] : 8'd0;
-    wire [7:0] best = max2(max2(v_at, v_ab), max2(v_al, a_r));
+    // (the greatest of the four weights and whose it is, the first of equals: by the three
+    // comparisons that find it, not by comparing it with each again)
+    wire       tb_t = v_at >= v_ab, lr_l = v_al >= a_r;
+    wire [7:0] best_tb = tb_t ? v_at : v_ab, best_lr = lr_l ? v_al : a_r;
+    wire       tb_best = best_tb >= best_lr;
+    wire [7:0] best = tb_best ? best_tb : best_lr;
     wire signed [17:0] py, pc;
     easu_mul #(.AW(9), .BW(9)) u_my (.clk(clk), .a($signed({1'b0, m_ny}) - $signed({1'b0, m_y})), .b({1'b0, m_w}), .p(py));
     easu_mul #(.AW(9), .BW(9)) u_mc (.clk(clk), .a($signed({1'b0, m_nc}) - $signed({1'b0, m_c})), .b({1'b0, m_w}), .p(pc));
@@ -557,7 +573,7 @@ module smaa #(
             n_b <= b1_r - 10'd1;
             n_w <= best;
             n_e <= v_e;
-            n_sel <= best == v_at ? 2'd0 : best == v_ab ? 2'd1 : best == v_al ? 2'd2 : 2'd3;
+            n_sel <= tb_best ? (tb_t ? 2'd0 : 2'd1) : (lr_l ? 2'd2 : 2'd3);
             n_ctr <= v_ctr;
             n_top <= v_top;
             n_bot <= v_bot;

@@ -211,7 +211,9 @@ module rcas (
     end
 
     // 19 to 23: R'G'B'
-    reg signed [9:0]  yv;
+    // (luma x 298 + 128: its four shifted copies summed two and two, then together: a clock each)
+    wire [7:0]  yvc = yo < 8'd16 ? 8'd0 : yo - 8'd16;
+    reg [17:0]  my_a, my_b;
     reg signed [8:0]  cbv, crv;
     reg signed [19:0] my, mrv, mgu, mgv, mbu;
     reg signed [19:0] sr, sg, sb;
@@ -221,10 +223,11 @@ module rcas (
         clamp = v[19] ? 8'd0 : |v[18:16] ? 8'hFF : v[15:8];
     endfunction
     always @(posedge clk) begin
-        yv <= yo < 8'd16 ? 10'sd0 : $signed({2'b00, yo}) - 10'sd16;
+        my_a <= {2'd0, yvc, 8'd0} + {5'd0, yvc, 5'd0};
+        my_b <= {7'd0, yvc, 3'd0} + {9'd0, yvc, 1'b0} + 18'd128;
         cbv <= $signed({1'b0, c17[15:8]}) - 9'sd128;
         crv <= $signed({1'b0, c17[7:0]}) - 9'sd128;
-        my <= yv * 11'sd298 + 20'sd128;      // (with the rounding)
+        my <= $signed({2'b00, my_a}) + $signed({2'b00, my_b});     // (with the rounding)
         mrv <= crv * 11'sd409;
         mgu <= cbv * 11'sd100;
         mgv <= crv * 11'sd208;

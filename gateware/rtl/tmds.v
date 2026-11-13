@@ -1,6 +1,6 @@
 // tmds.v: a TMDS channel's encoder [DVI 1.0 3.2, HDMI 1.4 5.4.4], N characters a clock (N pixels of
 // the line side by side, the first at the low end): a byte while its de, else the ten bits of tok
-// as they are (a control character: hdmi_scr.v makes them).  N + 4 clocks from input to q; of each
+// as they are (a control character: hdmi_scr.v makes them).  N + 5 clocks from input to q; of each
 // character q[0] goes first.
 //
 // The DC balance's running count threads through every character, N of them a clock.  It takes
@@ -46,20 +46,22 @@ module tmds_enc #(parameter N = 1) (
 
     integer k, j, s;
 
-    // stage 1: each character's minimised word and its ones less its zeros
-    reg [9 * N - 1:0] m_q;
+    // stage 1: each character's minimised word; 1b: its ones less its zeros (a stage of its own:
+    // the two together were the output clock's longest logic)
+    reg [9 * N - 1:0] m_a, m_q;
     reg [5 * N - 1:0] diff_q;
-    reg [10 * N - 1:0] tok_q;
-    reg [N - 1:0]     de_q = {N{1'b0}};
-    reg [8:0]         m;
+    reg [10 * N - 1:0] tok_a, tok_q;
+    reg [N - 1:0]     de_a = {N{1'b0}}, de_q = {N{1'b0}};
     always @(posedge clk) if (ce) begin
         for (k = 0; k < N; k = k + 1) begin
-            m = minimise(d[8 * k +: 8]);
-            m_q[9 * k +: 9] <= m;
-            diff_q[5 * k +: 5] <= {ones(m[7:0]), 1'b0} - 5'd8;
+            m_a[9 * k +: 9] <= minimise(d[8 * k +: 8]);
+            diff_q[5 * k +: 5] <= {ones(m_a[9 * k +: 8]), 1'b0} - 5'd8;
         end
-        tok_q <= tok;
-        de_q <= de;
+        m_q <= m_a;
+        tok_a <= tok;
+        tok_q <= tok_a;
+        de_a <= de;
+        de_q <= de_a;
     end
 
     // stage 2: for the count zero (z), above (p) and below (n): the character sent and what it
@@ -96,7 +98,7 @@ module tmds_enc #(parameter N = 1) (
         de_r <= de_q;
     end
 
-    // stages 3 to N + 2: each character's table (f_d[0]); then, a stage a character, the tables
+    // stages 3 to N + 2 (counted without 1b): each character's table (f_d[0]); then, a stage a character, the tables
     // put together: pre[j]'s slot i (i <= j) is the count after characters 0 to i
     reg [T * N - 1:0] f_d [0:N - 1];
     reg [T * N - 1:0] pre [0:N - 1];
