@@ -45,18 +45,14 @@ module lstream #(
 );
     // the store
     reg [8:0]  ra;
-    reg [31:0] sq [0:3] /* synthesis syn_ramstyle = "registers" */;
+    wire [31:0] sq [0:3];
     genvar k;
     generate
+        // (a line in one block RAM (bram.v): a line is not read while it is written: hold)
         for (k = 0; k < 4; k = k + 1) begin : g_st
-            reg [31:0] mem [0:511];
             wire        wen = r_we && (r_slot_d == k || r_slot_i == k);
             wire [31:0] wd = r_slot_d == k ? r_wd_d : r_wd_i;
-            always @(posedge clk) begin
-                if (wen)
-                    mem[r_wa] <= wd;
-                sq[k] <= mem[ra];
-            end
+            bram32 #(.LAT(1)) u (.clk(clk), .we(wen), .wa(r_wa), .wd(wd), .ra(ra), .q(sq[k]));
         end
     endgenerate
 

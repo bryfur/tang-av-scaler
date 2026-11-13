@@ -179,7 +179,7 @@ endmodule
 ''' % dict(last=len(data) - 1, first_n=first_n, ll_on=1 if ll else 0, ll=ll, ll_wait=ll_wait, lat=LAT,
            sw=1 if sw else 0, work=WORK, tag=tag, n_out=2 * (1650 * 750 + 1650 * 10))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "pthru.v", "pattern.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint.v", "pthru.v", "pattern.v")]
     if os.environ.get("PT_DEINT"):      # (another deint.v: does the test catch what it is for)
         rtl[3] = os.environ["PT_DEINT"]
     mdir = os.path.join(WORK, "vl_" + tag)

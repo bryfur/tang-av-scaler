@@ -195,7 +195,7 @@ endmodule
 ''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, edi=1 if edi else 0,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
     subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)

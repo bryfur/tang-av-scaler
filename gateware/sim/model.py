@@ -227,8 +227,8 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
         m = [max(a, b, d) for a, b, d in zip(dcp[new], dcp[old], dw)]
         al = []
         for i in range(2 * PAIRS):
-            left = (m[i - 1] if i % 16 else (m[i - 1] if i else 0))
-            right = m[i] if i % 16 == 15 else m[i + 1]
+            left = m[i - 1] if i else 0
+            right = m[i + 1] if i < 2 * PAIRS - 1 else 0
             md = max(left, m[i], right)
             if mode == 1 or (not hist and mode != 2):
                 al.append(16)
@@ -265,10 +265,14 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
                 part = lambda a_, b_: 255 if a_ is None or b_ is None else abs(a_ - b_)
                 mm.append(255 if edge else max(part(co_[x], po), part(cn_[x], pn), part(e, f)))
                 wy.append(e)
+            # (a pair with a pixel of the field before's outside the picture: no pan for either)
+            for q in range(PAIRS):
+                if wy[2 * q] is None or wy[2 * q + 1] is None:
+                    mm[2 * q] = mm[2 * q + 1] = 255
             lo_, ln_ = luma(c[old]), luma(c[new])
             for i in range(W):
-                left = (mm[i - 1] if i % 16 else (mm[i - 1] if i else 0))
-                right = mm[i] if i % 16 == 15 else mm[i + 1]
+                left = mm[i - 1] if i else 0
+                right = mm[i + 1] if i < W - 1 else 0
                 a_ = min(16, max(0, max(left, mm[i], right) - thr))
                 # (and the pixel it would put there must lie near the lines above and below)
                 if wy[i] is None or not (min(lo_[i], ln_[i]) - MC_HOLD <= wy[i] <= max(lo_[i], ln_[i]) + MC_HOLD):
