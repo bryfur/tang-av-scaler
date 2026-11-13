@@ -22,7 +22,10 @@ display and a capture device. The table below is what it does now, on the board.
 has been run with is a PlayStation 2; an Xbox or a GameCube with its component cable puts out the
 same signal (480i, YPbPr, 59.94 Hz) and has not been tried yet.
 
-![The board, rev C-B](hardware/av-board/rev-cb/img/av-board-cb-3d.png)
+![A frame of the scaler's 1080p output, its on-screen display on](docs/compare/game-osd.png)
+
+A frame as it leaves for the display, the on-screen display on (read back from the FPGA: no camera,
+no capture device). The board itself: [hardware/av-board/](hardware/av-board/README.md).
 
 ## What it does
 
@@ -49,54 +52,24 @@ adaptive deinterlacing, noise reduction medium, SMAA with diagonals and corners 
 read out of the FPGA's memory and the output is read back from its last stage, pixel for pixel
 (`gateware/tools/still.py`).
 
+![The gun: the plain way and the scaler's, three times the size](docs/compare/gun.png)
+
 **[Drag to compare](https://bryfur.github.io/tang-av-scaler/compare/)**: both frames on a page with a
 line to drag between the plain picture and the scaler's, at any size up to four screen pixels a
 pixel (`docs/compare/index.html`).
 
-### Whole frames
+The pictures themselves, in [`docs/compare/`](docs/compare/):
 
-All are 1920 x 1080 and the page shows them smaller: click one for every pixel.
-
-In the game, the plain way:
-
-[![In the game, the plain way](docs/compare/game-plain.png)](docs/compare/game-plain.png)
-
-The scaler:
-
-[![In the game, the scaler](docs/compare/game-scaler.png)](docs/compare/game-scaler.png)
-
-A results screen, the plain way:
-
-[![A results screen, the plain way](docs/compare/scores-plain.png)](docs/compare/scores-plain.png)
-
-The scaler:
-
-[![A results screen, the scaler](docs/compare/scores-scaler.png)](docs/compare/scores-scaler.png)
-
-The game's frame with its left half the plain way and its right half the scaler's:
-
-[![The left half the plain way, the right half the scaler's](docs/compare/game-split.png)](docs/compare/game-split.png)
-
-The frames as they came, the fields woven and nothing else (720 x 480):
-[the game](docs/compare/game-480i.png), [the results screen](docs/compare/scores-480i.png).
-
-### Parts, three times the size
-
-![The tower and its guy wires](docs/compare/tower.png)
-
-![Palms behind the crosshair](docs/compare/palms.png)
-
-![Hanging foliage](docs/compare/foliage.png)
-
-![The gun](docs/compare/gun.png)
-
-![HUD text](docs/compare/hud-text.png)
-
-![The ammunition counter](docs/compare/ammo.png)
-
-![The results screen's text](docs/compare/scores-text.png)
-
-![The results screen's buttons](docs/compare/scores-buttons.png)
+- Whole frames, 1920 x 1080. In the game: [the plain way](docs/compare/game-plain.png),
+  [the scaler](docs/compare/game-scaler.png), [a half of each](docs/compare/game-split.png). A
+  results screen: [the plain way](docs/compare/scores-plain.png),
+  [the scaler](docs/compare/scores-scaler.png).
+- The frames as they came, the fields woven and nothing else (720 x 480):
+  [the game](docs/compare/game-480i.png), [the results screen](docs/compare/scores-480i.png).
+- Parts of both side by side, three times the size: [the tower and its guy wires](docs/compare/tower.png),
+  [palms](docs/compare/palms.png), [hanging foliage](docs/compare/foliage.png),
+  [HUD text](docs/compare/hud-text.png), [the ammunition counter](docs/compare/ammo.png),
+  the results screen's [text](docs/compare/scores-text.png) and [buttons](docs/compare/scores-buttons.png).
 
 ## How it is put together
 
