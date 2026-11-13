@@ -30,10 +30,19 @@ static bool hd;
  * clock is the one for it (the frame lock moves it 300 ppm at most; the two are 1000 apart) */
 static bool hd60;
 #define NTSC (hd ? !hd60 : set.ntsc != 0)
+/* 720 x 480 progressive comes in (480p): every "field" in the memory is a whole frame (rtl/deint.v
+ * pg): nothing to deinterlace; anti-aliased, scaled and sent as the deinterlaced 480i is.  (In
+ * simulation the picture is right, sim/deint_tb.py pg; not yet seen from a console.) */
+static bool ed;
 
 bool board_hd(void)
 {
     return hd;
+}
+
+bool board_ed(void)
+{
+    return ed;
 }
 static uint32_t grab_ms;                /* a screen capture holds the fields still: when it last asked */
 static bool grabbing;
@@ -116,7 +125,8 @@ static bool clkgen(bool ntsc)
 }
 
 /* ---- the ADV7181D: component through its CP core: 480i (gateware/tools/adv.py CP480I: SD 525i
- * 4x1, the free-run line length the input's), or 720p (component HD 1x1 720p; the same otherwise) ---- */
+ * 4x1, the free-run line length the input's), or 720p (component HD 1x1 720p; the same otherwise),
+ * or 480p (component 525p 2x1, as ADI's evaluation script for it: the same otherwise) ---- */
 static bool decoder(uint32_t ctrl)
 {
     static const uint8_t regs[][2] = {
@@ -127,8 +137,9 @@ static bool decoder(uint32_t ctrl)
     };
     bool ok = true;
     /* what comes in, to the capture and the picture's path (SRC): 720p: progressive, out as it is,
-     * 80 DDR3 lines a line, 640 words, 720 lines; else 45, 360, 244 */
-    REG(R_SRC) = hd ? 720u << 19 | 640u << 9 | 80u << 2 | 3 : 244u << 19 | 360u << 9 | 45u << 2;
+     * 80 DDR3 lines a line, 640 words, 720 lines; 480p: progressive, 45, 360, 484 lines; else 45, 360, 244 */
+    REG(R_SRC) = hd ? 720u << 19 | 640u << 9 | 80u << 2 | 3 : ed ? 484u << 19 | 360u << 9 | 45u << 2 | 1 :
+                 244u << 19 | 360u << 9 | 45u << 2;
     REG(R_CTRL) = ctrl & ~IN_RESET_N;
     wait_ms(20);
     REG(R_CTRL) = ctrl | IN_RESET_N;
@@ -136,11 +147,13 @@ static bool decoder(uint32_t ctrl)
     for (size_t k = 0; k < sizeof regs / sizeof regs[0]; k++) {
         uint8_t reg = regs[k][0], val = regs[k][1];
         bool done = false;
-        if (hd) {
+        if (hd || ed) {
             if (reg == 0x8F || reg == 0x90)
                 continue;
             if (reg == 0x05)
                 val = 0x01;
+            if (ed && reg == 0x06)
+                val = 0x06;
         }
         for (int t = 0; t < 4 && !done; t++)
             done = i2c_set(BUS_IN, ADV, reg, val);
@@ -166,12 +179,13 @@ static void picture(void)
     REG(R_DEINT) = (uint32_t)s->aa_thr << 24 | (s->aa_corner ? 1u : 0) << 19 | (s->aa_diag ? 1u : 0) << 18 |
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
                    (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
-    REG(R_OSD) = s->osd || !st.in_ok ? 1 : 0;
+    bool no_mem = REG(R_DDR) & 2;       /* (the memory's calibration failed: the test picture and the text say so) */
+    REG(R_OSD) = s->osd || !st.in_ok || no_mem ? 1 : 0;
     /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */
     REG(R_HDMI) = s->audio ? (audio48 && !NTSC ? 14 : 6) : 0;
     audio_set(s->surround && s->audio && audio48 && !board_hd());   /* (720p's own packets carry two channels) */
     REG(R_VID) = (uint32_t)(s->sharp > 16 ? 16 : s->sharp) << 16 | (s->dn ? 16 : 0) | (s->swap ? 8 : 0) | 4 |
-                 (s->pattern || !st.in_ok ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
+                 (s->pattern || !st.in_ok || no_mem ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
 }
 
 /* What comes in, once a second: the decoder measures the signal's lines and their time whatever
@@ -206,28 +220,37 @@ static void input_detect(void)
     }
     /* 1280 x 720: sent as it comes; back when 480i (240p) is seen again: everything brought up for it */
     /* (a design from before SRC cannot: its register reads nothing: 720p is named, not shown) */
-    if (std == LINK_IN_720P && !hd && REG(R_SRC) == 0) {
+    if ((std == LINK_IN_720P || std == LINK_IN_480P) && !hd && !ed && REG(R_SRC) == 0) {
         st.in_lines = n;
         st.in_hz100 = (uint16_t)(line * 200 / twice);
-        if (st.in_std != LINK_IN_720P || st.in_ok) {
-            st.in_std = LINK_IN_720P;
+        if (st.in_std != std || st.in_ok) {
+            st.in_std = std;
             st.in_ok = 0;
             picture();
         }
         return;
     }
-    if ((std == LINK_IN_720P) != hd && (std == LINK_IN_720P || std == LINK_IN_480I || std == LINK_IN_240P)) {
-        hd = std == LINK_IN_720P;
-        want_again = true;
+    /* what the picture's path is set for: 720p as it comes, 480p, or 480i (240p): changed when
+     * one of them is seen that it is not set for: everything brought up for it */
+    if (std == LINK_IN_720P || std == LINK_IN_480P || std == LINK_IN_480I || std == LINK_IN_240P) {
+        bool w_hd = std == LINK_IN_720P, w_ed = std == LINK_IN_480P;
+        if (w_hd != hd || w_ed != ed) {
+            hd = w_hd;
+            ed = w_ed;
+            want_again = true;
+        }
     }
     /* (what is not known is left to the picture's path as it was: only what is known not to fit is kept from it) */
-    ok = std <= LINK_IN_480I || std == LINK_IN_OTHER || std == LINK_IN_720P;
+    ok = std <= LINK_IN_480I || std == LINK_IN_OTHER || std == LINK_IN_720P || std == LINK_IN_480P;
     st.in_lines = std == LINK_IN_NONE ? 0 : n;
     st.in_hz100 = twice ? (uint16_t)(line * 200 / twice) : 0;
     /* (hd: by the decoder's clock, which has the picture: 1650 x 750 samples a frame; STDI's line
      * time is coarse) */
     if (hd && std == LINK_IN_720P && st.llc_hz > 74000000 && st.llc_hz < 74400000)
         st.in_hz100 = (uint16_t)(st.llc_hz / 12375);
+    /* (480p: 858 x 525 samples a frame of the decoder's 27 MHz) */
+    if (ed && std == LINK_IN_480P && st.llc_hz > 26500000 && st.llc_hz < 27500000)
+        st.in_hz100 = (uint16_t)((uint64_t)st.llc_hz * 100 / 450450);
     if (std != st.in_std || ok != (st.in_ok != 0)) {
         st.in_std = std;
         st.in_ok = ok;
@@ -255,12 +278,14 @@ static bool border(uint16_t *b)
     if (x != REG(R_BORDER) || l != REG(R_BORDERL) || !(x >> 31))
         return false;
     unsigned x0 = x & 0x1FF, x1 = x >> 16 & 0x1FF, l0 = l & 0x3FF, l1 = l >> 16 & 0x3FF;
-    if (x1 < x0 || l1 < l0 || x1 > 359 || l1 > 239 || 2 * (x1 - x0 + 1) < 560 || 2 * (l1 - l0 + 1) < 380)
+    /* (a field's line is two of the picture's; 480p's lines are the picture's own) */
+    unsigned per = ed ? 1 : 2;
+    if (x1 < x0 || l1 < l0 || x1 > 359 || l1 > 480 / per - 1 || 2 * (x1 - x0 + 1) < 560 || per * (l1 - l0 + 1) < 380)
         return false;
     b[0] = 2 * x0;
     b[1] = 2 * (x1 - x0 + 1);
-    b[2] = 2 * l0;
-    b[3] = 2 * (l1 - l0 + 1);
+    b[2] = per * l0;
+    b[3] = per * (l1 - l0 + 1);
     return true;
 }
 
@@ -328,10 +353,18 @@ static int settle;                      /* seconds until the decoder's picture i
  * row is sent, and 5 to spare; the frame is begun 4 lines after that. */
 /* 720p as it comes (hd): 30 lines of blanking of 22.24 us (0.67 ms); six lines in are enough (the
  * lines are sent as they are, three rows after the frame is begun). */
+/* 480p (ed): the same blanking in time (45 lines of 31.78 us); the lines are the picture's own and
+ * come twice as fast: the part shown's first line and 26 more must be in, less the 16 that come in
+ * before the first row is sent, 10 to spare; the frame is begun 8 lines after that. */
 #define LL_BLANK   (hd ? 67 : 143)
 static int ll_min(void)
 {
-    return hd ? 6 : st.show_y / 2 + 10;
+    return hd ? 6 : ed ? st.show_y + 20 : st.show_y / 2 + 10;
+}
+/* (when a frame is begun after the last field's end, made from the one coming in: in 10 us) */
+static int32_t ll_at(void)
+{
+    return LL_BLANK + (hd ? (ll_min() + 4) * 222 : ed ? (ll_min() + 8) * 318 : (ll_min() + 4) * 636) / 100;
 }
 #define LOCK_MAX   300                  /* ppm either way at most */
 static int32_t lock_i;                  /* the errors' sum */
@@ -360,7 +393,7 @@ void board_lock(void)
         return;
     }
     /* how far the frame's start is from where it should be: the nearer way round a field's time */
-    e = (int32_t)(lat & 0xFFF) - (set.lowlat && (st.hist || hd) ? LL_BLANK + (ll_min() + 4) * (hd ? 222 : 636) / 100 : LOCK_AT);
+    e = (int32_t)(lat & 0xFFF) - (set.lowlat && (st.hist || hd || ed) ? ll_at() : LOCK_AT);
     while (e > 834)
         e -= 1668;
     while (e < -834)

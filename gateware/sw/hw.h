@@ -41,6 +41,7 @@ void board_second(void);                /* once a second */
 void board_apply(const struct link_settings *was);      /* the settings changed */
 void board_cmd(int cmd);
 bool board_hd(void);                /* 1280 x 720 comes in and goes out as it is */
+bool board_ed(void);                /* 720 x 480 progressive comes in (480p) */
 void board_grab_seen(void);         /* (a screen capture is still asking) */
 bool board_grabbing(void);
 void board_lock(void);              /* ten times a second: the output's clock trimmed to follow the input */

@@ -73,6 +73,14 @@ void osd_update(void)
     bool in = st.fields_s >= 45 && st.pix != 0;
 
     line(0);
+    if (REG(R_DDR) & 2) {
+        /* (no picture gets through a memory that did not calibrate: say so, and which lane: a
+         * build can come out so: rtl/ddr3/ddr3_cal.v) */
+        str("DDR3 CALIBRATION FAILED  code ");
+        num(REG(R_DDR) >> 12 & 15, 1);
+        str(" lane ");
+        num(REG(R_DDR) >> 8 & 7, 1);
+    } else {
     str("IN   ");
     if (st.in_std != LINK_IN_NONE && !st.in_ok) {
         static const char *const names[] = LINK_IN_NAMES;
@@ -87,16 +95,18 @@ void osd_update(void)
         fix(st.in_hz100, 2);
         str(" Hz  YPbPr  1280x720");
     } else if (in) {
-        str(st.in_std == LINK_IN_240P ? "240p " : "480i ");
-        fix(st.llc_hz * 100 / 225225, 2);       /* (a field is 858 x 262.5 samples of the decoder's clock) */
+        str(board_ed() ? "480p " : st.in_std == LINK_IN_240P ? "240p " : "480i ");
+        /* (a field is 858 x 262.5 samples of the decoder's clock; a frame of 480p 858 x 525) */
+        fix(st.llc_hz * 100 / (board_ed() ? 450450 : 225225), 2);
         str(" Hz  YPbPr  ");
         num(st.pix, 1);
         put('x');
-        num(2 * st.lines, 1);
+        num(board_ed() ? st.lines : 2 * st.lines, 1);
         str("  phase ");
         num(s->phase, 1);
     } else
         str("no signal");
+    }
 
     line(1);
     str(board_hd() ? "OUT  720p " : "OUT  1080p ");
@@ -130,7 +140,8 @@ void osd_update(void)
 
     line(3);
     str("DEINT ");
-    str(s->mode == 1 ? "bob" : s->mode == 2 ? "weave" : st.hist ? "motion adaptive" : "bob (no history)");
+    str(board_ed() ? "none (progressive)" : s->mode == 1 ? "bob" : s->mode == 2 ? "weave" : st.hist ? "motion adaptive" :
+        "bob (no history)");
     str("   NOISE ");
     str(noise[s->nr & 3]);
 

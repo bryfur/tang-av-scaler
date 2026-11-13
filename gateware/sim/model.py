@@ -28,6 +28,27 @@ def field(t):
     return out
 
 
+def frame(t):
+    """frame t of the same picture, progressive: 2 LINES lines (480p: every line each time)"""
+    out = []
+    for n in range(2 * LINES):
+        line = []
+        for q in range(PAIRS):
+            ys = []
+            for x in (2 * q, 2 * q + 1):
+                if 100 + 24 * t <= x < 260 + 24 * t and 120 <= n < 300:
+                    ys.append(40 + (x * 7 + n * 3 + t * 31) % 180)
+                else:
+                    ys.append(16 + (x * 3 + n * 5) % 200)
+            if 50 + 12 * t <= q < 130 + 12 * t and 120 <= n < 300:
+                cb, cr = 200 - (q + t * 9) % 50, 90 + (q * 2 + n + t * 5) % 90
+            else:
+                cb, cr = 60 + (q * 5 + n * 2) % 120, 70 + (q * 3 + n * 7) % 110
+            line.append((cb, ys[0], cr, ys[1]))
+        out.append(line)
+    return out
+
+
 def noisy(fields, amp):
     """the fields with noise of +-amp added to every sample (the same each run), within 16 to 235"""
     import random
@@ -190,9 +211,11 @@ def upsample(line):
     return out
 
 
-def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0):
-    """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines"""
-    lines = deinterlace(fields, pars, mode, thr, nr=nr)
+def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
+              prog=False):
+    """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
+    in is progressive (each of fields a whole frame): the newest as it is"""
+    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr)
     if smaa_thr is not None:
         import smaa
         lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
@@ -200,10 +223,10 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False):
+               crop=(), nr=0, dn=False, prog=False):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog)
     w, h = len(pix[0]), len(pix)
     out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2
