@@ -26,7 +26,8 @@
 
 module hdmi_audio (
     input             clk,
-    input             ce,            // a pixel's clock (0: everything here stays as it is)
+    input             ce,
+    input      [2:0]  cex,              // ce three times more: for the wide registers (ce is on thousands otherwise)            // a pixel's clock (0: everything here stays as it is)
     input             en,
     input             hs,
     input             vs,
@@ -163,47 +164,24 @@ module hdmi_audio (
             take <= cnt >= 3'd2 ? 2'd2 : cnt[1:0];
         end
         if (x == 8'd2) begin
-            for (i = 0; i < 4; i = i + 1)
-                sp[i] <= 56'd0;
-            if (k_avi) begin
+            if (k_avi)
                 hb <= {8'h0D, 8'h02, 8'h82};
-                sp[0] <= {16'd0, AVI4, AVI3, AVI2, AVI1, AVI0};
-            end else if (k_aif) begin
+            else if (k_aif)
                 hb <= {8'h0A, 8'h01, 8'h84};
-                sp[0] <= {40'd0, 8'h01, AIF0};
-            end else if (k_ncts) begin
+            else if (k_ncts)
                 hb <= {8'h00, 8'h00, 8'h01};
-                for (i = 0; i < 4; i = i + 1)
-                    sp[i] <= {N[7:0], N[15:8], 4'd0, N[19:16], CTS[7:0], CTS[15:8], 4'd0, CTS[19:16], 8'd0};
-            end else begin
+            else begin
                 // (a sample's block start flag: bit 4 for the first, 5 for the second)
                 hb <= {2'b00, take == 2'd2 && bn == 8'd0, an == 8'd0, 4'd0, 6'd0, take == 2'd2, 1'b1, 8'h02};
-                sp[0] <= {status(al, ar, an), ar, al};
-                if (take == 2'd2)
-                    sp[1] <= {status(bl, br, bn), br, bl};
                 take_s <= k_smp;
             end
         end
         // (a subpacket's in four clocks, 14 bits each: spq the bits still to go)
         ph <= {ph[2:0], x == 8'd3};
-        if (x == 8'd3) begin
+        if (x == 8'd3)
             he <= ecc(8'd0, hb, 24);
-            for (i = 0; i < 4; i = i + 1) begin
-                e1[i] <= 8'd0;
-                spq[i] <= sp[i];
-            end
-        end else if (ph != 4'd0)
-            for (i = 0; i < 4; i = i + 1) begin
-                e1[i] <= ecc(e1[i], {10'd0, spq[i][13:0]}, 14);
-                spq[i] <= {14'd0, spq[i][55:14]};
-            end
         x_keep <= xn == 8'd9;
         x_shift <= xn >= 8'd22 && xn < 8'd54;
-        if (x_keep) begin
-            hdr <= {he, hb};
-            for (i = 0; i < 4; i = i + 1)
-                sub[i] <= {e1[i], sp[i]};
-        end
 
         // the characters
         pre <= kind != 3'd0 && x >= 8'd12 && x < 8'd20;
@@ -217,10 +195,53 @@ module hdmi_audio (
             k1 <= terc4({sub[3][0], sub[2][0], sub[1][0], sub[0][0]});
             k2 <= terc4({sub[3][1], sub[2][1], sub[1][1], sub[0][1]});
         end
+    end
+    // the wide registers, each kind on its own copy of ce: the subpackets' bytes (x 2) ...
+    integer    j;
+    always @(posedge clk) if (cex[0]) begin
+        if (x == 8'd2) begin
+            for (j = 0; j < 4; j = j + 1)
+                sp[j] <= 56'd0;
+            if (k_avi)
+                sp[0] <= {16'd0, AVI4, AVI3, AVI2, AVI1, AVI0};
+            else if (k_aif)
+                sp[0] <= {40'd0, 8'h01, AIF0};
+            else if (k_ncts)
+                for (j = 0; j < 4; j = j + 1)
+                    sp[j] <= {N[7:0], N[15:8], 4'd0, N[19:16], CTS[7:0], CTS[15:8], 4'd0, CTS[19:16], 8'd0};
+            else begin
+                sp[0] <= {status(al, ar, an), ar, al};
+                if (take == 2'd2)
+                    sp[1] <= {status(bl, br, bn), br, bl};
+            end
+        end
+    end
+    // ... their error correction (a subpacket's in four clocks, 14 bits each: spq the bits still to go) ...
+    integer    m;
+    always @(posedge clk) if (cex[1]) begin
+        if (x == 8'd3)
+            for (m = 0; m < 4; m = m + 1) begin
+                e1[m] <= 8'd0;
+                spq[m] <= sp[m];
+            end
+        else if (ph != 4'd0)
+            for (m = 0; m < 4; m = m + 1) begin
+                e1[m] <= ecc(e1[m], {10'd0, spq[m][13:0]}, 14);
+                spq[m] <= {14'd0, spq[m][55:14]};
+            end
+    end
+    // ... and the packet as it is sent, two bits of each subpacket a character
+    integer    q;
+    always @(posedge clk) if (cex[2]) begin
+        if (x_keep) begin
+            hdr <= {he, hb};
+            for (q = 0; q < 4; q = q + 1)
+                sub[q] <= {e1[q], sp[q]};
+        end
         if (x_shift) begin
             hdr <= {1'b0, hdr[31:1]};
-            for (i = 0; i < 4; i = i + 1)
-                sub[i] <= {2'b00, sub[i][63:2]};
+            for (q = 0; q < 4; q = q + 1)
+                sub[q] <= {2'b00, sub[q][63:2]};
         end
     end
 endmodule

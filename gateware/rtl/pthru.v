@@ -42,13 +42,18 @@ module pthru #(
     localparam LAT = 10;
 
     // ---- the output's side: the events ----
+    // (where the output is, a pixel behind: a row is long)
     reg [9:0]  line = 10'd0;
+    reg        at0 = 1'b0, y_first = 1'b0, y_row = 1'b0;
     always @(posedge clk) if (ce) begin
-        if (x == 13'd0 && y == VT - FIRST) begin
+        at0 <= x == 13'd0;
+        y_first <= y == VT - FIRST;
+        y_row <= y != 12'd0 && y < H;
+        if (at0 && y_first) begin
             ev_first <= 1'b1;
             line <= 10'd0;
             ev <= !ev;
-        end else if (x == 13'd0 && y != 12'd0 && y < H) begin
+        end else if (at0 && y_row) begin
             ev_first <= 1'b0;
             line <= y[9:0];
             ev <= !ev;
