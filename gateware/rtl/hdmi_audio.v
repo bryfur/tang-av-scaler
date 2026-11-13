@@ -16,6 +16,11 @@
 // 16:9, VIC 16), line 4 the audio InfoFrame (two channels, the rest as the stream says), every 32nd
 // line N and CTS, else the samples waiting (two at most in a packet).
 //
+// mc: six channels of L-PCM [HDMI 1.4 5.3.4 layout 1; CEA-861 CA 0x0B: FL FR LFE FC RL RR]: a
+// packet is one sample, its channels two a subpacket (three of the four); the audio InfoFrame says
+// six channels and their places.  (One packet a line: at 1080p's 67.4 thousand lines a second; a
+// 720p line rate is under 48 kHz: two channels only there.)
+//
 // The sound: fs is 48 kHz, its clock from the PLL the pixel clock comes from (audio_in.v; the CPU
 // sets the MS5351M's dividers: sw/board.c), so 128 fs = pixel clock x N / CTS holds exactly with
 // N = 6144 and CTS = 148352 at 148.5 / 1.001 MHz, or 148500 at 148.5 MHz (cts_alt).  The channel
@@ -36,6 +41,11 @@ module hdmi_audio (
     input             s_tick,
     input      [23:0] s_l,
     input      [23:0] s_r,
+    input             mc,               // six channels (5.1: below), with s_l and s_r the front pair's
+    input      [23:0] s_c,
+    input      [23:0] s_lfe,
+    input      [23:0] s_ls,
+    input      [23:0] s_rs,
     output reg        pre = 1'b0,
     output reg        act = 1'b0,
     output reg [9:0]  k0,
@@ -52,6 +62,7 @@ module hdmi_audio (
     wire [7:0] AVI4 = hd ? 8'h04 : 8'h10;
     wire [7:0] AVI0 = 8'h00 - (8'h82 + 8'h02 + 8'h0D + AVI1 + AVI2 + AVI3 + AVI4);
     localparam [7:0] AIF0 = 8'h00 - (8'h84 + 8'h01 + 8'h0A + 8'h01);
+    localparam [7:0] AIF0M = 8'h00 - (8'h84 + 8'h01 + 8'h0A + 8'h05 + 8'h0B);
 
     function [9:0] terc4(input [3:0] v);
         case (v)
@@ -87,6 +98,8 @@ module hdmi_audio (
     // the samples waiting (four at most), each with its place in the 192 of a block
     reg        t0, t1, t2;
     reg [23:0] fl [0:3], fr [0:3];
+    reg [95:0] fm [0:3];                // (mc: {rs, ls, lfe, c})
+    reg [95:0] am;
     reg [7:0]  fn [0:3];
     reg [1:0]  wp = 2'd0, rp = 2'd0;
     reg [2:0]  cnt = 3'd0;
@@ -107,10 +120,15 @@ module hdmi_audio (
     reg [7:0]  e1 [0:3];
     reg [7:0]  he;
     reg [55:0] spq [0:3];
-    reg [3:0]  ph = 4'd0;
+    reg [7:0]  ph = 8'd0;
     // (the next clock's place in the line, for what is wide: the subpackets kept and shifted)
     wire [7:0] xn = hs_q2 && !hs_q ? 8'd0 : x != 8'd255 ? x + 8'd1 : x;
     reg        x_keep = 1'b0, x_shift = 1'b0;
+    // (and the clocks the packet's bytes are made in, which packet: registers too: what they
+    // enable and clear is hundreds of bits)
+    reg        x2 = 1'b0, x3 = 1'b0, g_avi = 1'b0, g_aif = 1'b0, g_ncts = 1'b0, g_smp = 1'b0;
+    reg        ecc_run = 1'b0;          // (the error correction's four clocks: ph is not 0)
+    reg        x_gb = 1'b0, x_first = 1'b0, x_pre = 1'b0, x_act = 1'b0;     // (the characters' places)
     // (the two samples at the front: a clock late, but they wait there since before the line's start)
     reg [23:0] al, ar, bl, br;
     reg [7:0]  an, bn;
@@ -136,10 +154,12 @@ module hdmi_audio (
         k_ncts <= kind == 3'd3;
         k_smp <= kind == 3'd4;
         {al, ar, an} <= {fl[rp], fr[rp], fn[rp]};
+        am <= fm[rp];
         {bl, br, bn} <= {fl[rp + 2'd1], fr[rp + 2'd1], fn[rp + 2'd1]};
         if (t1 != t2 && cnt != 3'd4) begin
             fl[wp] <= s_l;
             fr[wp] <= s_r;
+            fm[wp] <= {s_rs, s_ls, s_lfe, s_c};
             fn[wp] <= frame;
             wp <= wp + 2'd1;
             frame <= frame == 8'd191 ? 8'd0 : frame + 8'd1;
@@ -157,13 +177,24 @@ module hdmi_audio (
         else if (x != 8'd255)
             x <= x + 8'd1;
 
-        // 0: which packet; 2: its bytes; 3 to 9: with their error correction
+        // 0: which packet; 2: its bytes; 3 to 13: with their error correction
         if (x == 8'd0) begin
             kind <= !en ? 3'd0 : line == 11'd2 ? 3'd1 : line == 11'd4 ? 3'd2 : line[4:0] == 5'd8 ? 3'd3 :
                     cnt != 3'd0 ? 3'd4 : 3'd0;
-            take <= cnt >= 3'd2 ? 2'd2 : cnt[1:0];
+            take <= mc ? {1'b0, cnt != 3'd0} : cnt >= 3'd2 ? 2'd2 : cnt[1:0];
         end
-        if (x == 8'd2) begin
+        x2 <= xn == 8'd2;
+        x3 <= xn == 8'd3;
+        ecc_run <= x3 || ph[6:0] != 7'd0;
+        x_gb <= (xn >= 8'd20 && xn < 8'd22) || (xn >= 8'd54 && xn < 8'd56);
+        x_first <= xn == 8'd22;
+        x_pre <= xn >= 8'd12 && xn < 8'd20;
+        x_act <= xn >= 8'd20 && xn < 8'd56;
+        g_avi <= xn == 8'd2 && kind == 3'd1;
+        g_aif <= xn == 8'd2 && kind == 3'd2;
+        g_ncts <= xn == 8'd2 && kind == 3'd3;
+        g_smp <= xn == 8'd2 && (kind == 3'd0 || kind[2]);
+        if (x2) begin
             if (k_avi)
                 hb <= {8'h0D, 8'h02, 8'h82};
             else if (k_aif)
@@ -172,26 +203,27 @@ module hdmi_audio (
                 hb <= {8'h00, 8'h00, 8'h01};
             else begin
                 // (a sample's block start flag: bit 4 for the first, 5 for the second)
-                hb <= {2'b00, take == 2'd2 && bn == 8'd0, an == 8'd0, 4'd0, 6'd0, take == 2'd2, 1'b1, 8'h02};
+                hb <= mc ? {1'b0, {3{an == 8'd0}}, 4'd0, 8'b0001_0111, 8'h02} :
+                           {2'b00, take == 2'd2 && bn == 8'd0, an == 8'd0, 4'd0, 6'd0, take == 2'd2, 1'b1, 8'h02};
                 take_s <= k_smp;
             end
         end
-        // (a subpacket's in four clocks, 14 bits each: spq the bits still to go)
-        ph <= {ph[2:0], x == 8'd3};
-        if (x == 8'd3)
+        // (a subpacket's in eight clocks, 7 bits each: spq the bits still to go)
+        ph <= {ph[6:0], x3};
+        if (x3)
             he <= ecc(8'd0, hb, 24);
-        x_keep <= xn == 8'd9;
+        x_keep <= xn == 8'd13;
         x_shift <= xn >= 8'd22 && xn < 8'd54;
 
         // the characters
-        pre <= kind != 3'd0 && x >= 8'd12 && x < 8'd20;
-        act <= kind != 3'd0 && x >= 8'd20 && x < 8'd56;
-        if ((x >= 8'd20 && x < 8'd22) || (x >= 8'd54 && x < 8'd56)) begin
+        pre <= kind != 3'd0 && x_pre;
+        act <= kind != 3'd0 && x_act;
+        if (x_gb) begin
             k0 <= terc4({2'b11, vs_q, hs_q});
             k1 <= 10'b0100110011;
             k2 <= 10'b0100110011;
         end else begin
-            k0 <= terc4({x != 8'd22, hdr[0], vs_q, hs_q});
+            k0 <= terc4({!x_first, hdr[0], vs_q, hs_q});
             k1 <= terc4({sub[3][0], sub[2][0], sub[1][0], sub[0][0]});
             k2 <= terc4({sub[3][1], sub[2][1], sub[1][1], sub[0][1]});
         end
@@ -199,35 +231,37 @@ module hdmi_audio (
     // the wide registers, each kind on its own copy of ce: the subpackets' bytes (x 2) ...
     integer    j;
     always @(posedge clk) if (cex[0]) begin
-        if (x == 8'd2) begin
+        if (x2)
             for (j = 0; j < 4; j = j + 1)
                 sp[j] <= 56'd0;
-            if (k_avi)
-                sp[0] <= {16'd0, AVI4, AVI3, AVI2, AVI1, AVI0};
-            else if (k_aif)
-                sp[0] <= {40'd0, 8'h01, AIF0};
-            else if (k_ncts)
-                for (j = 0; j < 4; j = j + 1)
-                    sp[j] <= {N[7:0], N[15:8], 4'd0, N[19:16], CTS[7:0], CTS[15:8], 4'd0, CTS[19:16], 8'd0};
-            else begin
-                sp[0] <= {status(al, ar, an), ar, al};
-                if (take == 2'd2)
-                    sp[1] <= {status(bl, br, bn), br, bl};
-            end
+        if (g_avi)
+            sp[0] <= {16'd0, AVI4, AVI3, AVI2, AVI1, AVI0};
+        if (g_aif)
+            sp[0] <= mc ? {16'd0, 8'h0B, 16'd0, 8'h05, AIF0M} : {40'd0, 8'h01, AIF0};
+        if (g_ncts)
+            for (j = 0; j < 4; j = j + 1)
+                sp[j] <= {N[7:0], N[15:8], 4'd0, N[19:16], CTS[7:0], CTS[15:8], 4'd0, CTS[19:16], 8'd0};
+        if (g_smp) begin
+            sp[0] <= {status(al, ar, an), ar, al};
+            if (mc) begin                   // {LFE, FC}, {RL, RR}
+                sp[1] <= {status(am[47:24], am[23:0], an), am[23:0], am[47:24]};
+                sp[2] <= {status(am[71:48], am[95:72], an), am[95:72], am[71:48]};
+            end else if (take == 2'd2)
+                sp[1] <= {status(bl, br, bn), br, bl};
         end
     end
-    // ... their error correction (a subpacket's in four clocks, 14 bits each: spq the bits still to go) ...
+    // ... their error correction (a subpacket's in eight clocks, 7 bits each: spq the bits still to go) ...
     integer    m;
     always @(posedge clk) if (cex[1]) begin
-        if (x == 8'd3)
+        if (x3)
             for (m = 0; m < 4; m = m + 1) begin
                 e1[m] <= 8'd0;
                 spq[m] <= sp[m];
             end
-        else if (ph != 4'd0)
+        else if (ecc_run)
             for (m = 0; m < 4; m = m + 1) begin
-                e1[m] <= ecc(e1[m], {10'd0, spq[m][13:0]}, 14);
-                spq[m] <= {14'd0, spq[m][55:14]};
+                e1[m] <= ecc(e1[m], {17'd0, spq[m][6:0]}, 7);
+                spq[m] <= {7'd0, spq[m][55:7]};
             end
     end
     // ... and the packet as it is sent, two bits of each subpacket a character

@@ -4,14 +4,16 @@
 // - Its program: WORDS x 32 bits of block RAM at 0x80000000 (the SoC's ROM AHB port), HEX in it
 //   from the bitstream; the register bus can write it (pm_*: a new program without a new
 //   bitstream: the core held in reset meanwhile, rst_n).  Its data: the core's own DLM.
+// - Its data memory port (0x00000000 to 0x3FFFFFFF): the DDR3, all of it, through rtl/cpu_ddr.v
+//   (pclk and d_*: rtl/ddr_arb.v's user d).
 // - The register bus (top.v's: the monitor's) at 0xE8000000 + 4 x the register (the SoC's extended
 //   AHB slave): a word read or written is a turn on the bus between the monitor's (stall keeps
 //   the monitor where it is; mon_busy: it is in the middle of one).  The AHB side runs on the
 //   clock the SoC gives back, the bus on clk: a request and an answer across, each a level that
 //   changes.
 // - Clocks: core_clk is PLL_R[0]'s CLKOUT1, wired to the core inside the chip (Gowin MUG1031
-//   8.3.2: gowin/avb.cst places the PLL there), clk (the system's 50 MHz, CLKOUT0) the SoC's
-//   buses: 8 to 1, as the fpc console runs it (800 and 100 there).
+//   8.3.2: gowin/avb.cst places the PLL there): 800 MHz; clk (the system's 50 MHz, CLKOUT0) the
+//   SoC's buses: 16 to 1.
 
 module cpu #(
     parameter HEX = "cpu.hex",
@@ -33,7 +35,21 @@ module cpu #(
     input      [31:0] rdata,
     output            txd,
     input             rxd,
-    output            wfi
+    output            wfi,
+    input             pclk,
+    input             d_ok,             // (the memory is calibrated)
+    output            d_valid,
+    output            d_wr,
+    output     [24:0] d_line,
+    output    [255:0] d_data,
+    output     [31:0] d_mask,
+    input             d_ack,
+    input             d_rvalid,
+    input     [255:0] d_rdata,
+    output     [23:0] d_nrd,
+    output     [23:0] d_nwr,
+    output            d_dead,
+    output     [25:0] d_first
 );
     localparam AW = $clog2(WORDS);
 
@@ -141,11 +157,22 @@ module cpu #(
         endcase
     end
 
+    // the data memory
+    wire [31:0] m_haddr;
+    wire [1:0]  m_htrans;
+    wire [2:0]  m_hsize;
+    wire [63:0] m_hwdata, m_hrdata;
+    wire        m_hwrite, m_hready, m_hrstn;
+    cpu_ddr u_mem (.clk(clk), .rstn(m_hrstn), .haddr(m_haddr), .htrans(m_htrans), .hwrite(m_hwrite), .hsize(m_hsize),
+                   .hwdata(m_hwdata), .hrdata(m_hrdata), .hready(m_hready), .ok(d_ok), .pclk(pclk), .d_valid(d_valid),
+                   .d_wr(d_wr), .d_line(d_line), .d_data(d_data), .d_mask(d_mask), .d_ack(d_ack),
+                   .d_rvalid(d_rvalid), .d_rdata(d_rdata), .n_rd(d_nrd), .n_wr(d_nwr), .dead(d_dead), .first_line(d_first));
+
     RiscV_AE350_SOC_Top u_soc (
         .ROM_HRDATA(rom_hrdata), .ROM_HREADY(1'b1), .ROM_HRESP(1'b0), .ROM_HADDR(rom_haddr), .ROM_HTRANS(rom_htrans),
         .ROM_HWRITE(), .ROM_HCLK(rom_hclk), .ROM_HRSTN(),
-        .DDR_HRDATA(64'd0), .DDR_HREADY(1'b1), .DDR_HRESP(1'b0), .DDR_HADDR(), .DDR_HBURST(), .DDR_HPROT(),
-        .DDR_HSIZE(), .DDR_HTRANS(), .DDR_HWDATA(), .DDR_HWRITE(), .DDR_HCLK(), .DDR_HRSTN(),
+        .DDR_HRDATA(m_hrdata), .DDR_HREADY(m_hready), .DDR_HRESP(1'b0), .DDR_HADDR(m_haddr), .DDR_HBURST(), .DDR_HPROT(),
+        .DDR_HSIZE(m_hsize), .DDR_HTRANS(m_htrans), .DDR_HWDATA(m_hwdata), .DDR_HWRITE(m_hwrite), .DDR_HCLK(), .DDR_HRSTN(m_hrstn),
         .TCK_IN(1'b0), .TMS_IN(1'b1), .TRST_IN(1'b1), .TDI_IN(1'b0), .TDO_OUT(), .TDO_OE(),
         .EXT_INT(16'd0),
         .EXTS_HRDATA(s_hrdata), .EXTS_HREADYIN(!s_busy), .EXTS_HRESP(1'b0), .EXTS_HADDR(s_haddr), .EXTS_HBURST(),

@@ -58,6 +58,7 @@ struct scaler_settings {
                          * padding in what older firmware kept: 0, the lock on) */
     bool lowlat;        /* a frame made from the field still coming in (new settings go at the end: the
                          * ones kept in flash are read as far as they go) */
+    bool surround;      /* the sound's two channels made 5.1 by the FPGA's CPU */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */

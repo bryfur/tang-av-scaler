@@ -169,6 +169,7 @@ static void picture(void)
     REG(R_OSD) = s->osd || !st.in_ok ? 1 : 0;
     /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */
     REG(R_HDMI) = s->audio ? (audio48 && !NTSC ? 14 : 6) : 0;
+    audio_set(s->surround && s->audio && audio48 && !board_hd());   /* (720p's own packets carry two channels) */
     REG(R_VID) = (uint32_t)(s->sharp > 16 ? 16 : s->sharp) << 16 | (s->dn ? 16 : 0) | (s->swap ? 8 : 0) | 4 |
                  (s->pattern || !st.in_ok ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
 }
@@ -477,6 +478,7 @@ bool board_grabbing(void)
 void board_second(void)
 {
     static uint32_t fields_was, frames_was;
+    static int mem_tries;
     uint32_t cap = REG(R_CAP), fields = REG(R_FIELDS), dstat = REG(R_DSTAT), temp = REG(R_TEMP);
     uint16_t want[4] = {0, 720, 0, 480};
 
@@ -523,6 +525,11 @@ void board_second(void)
     if (grabbing && ms() - grab_ms > 3000) {
         grabbing = false;
         picture();
+    }
+    /* the data memory: tested once, when its controller is calibrated (a few tries: it may not be yet) */
+    if (mem_state == MEM_NONE && mem_tries < 5 && st.up_s >= 2) {
+        mem_tries++;
+        mem_test();
     }
     if (!set.on || st.host)
         return;

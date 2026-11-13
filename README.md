@@ -96,7 +96,11 @@ The pictures themselves, in [`docs/compare/`](docs/compare/):
 - **Everything else runs on the FPGA's hard CPU** (an Andes A25 RISC-V in the GW5AST, `gateware/sw/`,
   no operating system): it brings the board's chips up, holds the settings, finds the picture's
   border, tunes the sampling phase, keeps the output in step with the input, writes the on-screen
-  text. A new program is loaded in a second, with no new bitstream.
+  text. A new program is loaded in a second, with no new bitstream. It runs at 800 MHz and has the
+  SOM's 1 GB of DDR3 as its memory, beside the picture's fields.
+- **The sound** goes out over HDMI as it comes in, 48 kHz stereo; or, when switched on, through
+  the CPU: a matrix decoder of our own (`gateware/sw/surround.c`) makes five channels of a game's
+  Pro Logic II mix, sent as 5.1 PCM.
 - **The XIAO ESP32-C5** (`firmware/xiao-wifi/`) is the way in: Wi-Fi, the web page, updates, and
   JTAG to load bitstreams. It talks to the CPU over SPI in small messages, keeps the settings for
   when the power is off, and carries the CPU's program.
@@ -118,8 +122,10 @@ The design uses 16 % of the FPGA's logic, 75 % of its block RAM and 15 % of its 
 - Consoles other than the PlayStation 2 have not been tried. The Xbox and the GameCube put out the
   same 480i over their component cables; the Dreamcast has no component output (its VGA and RGB
   would come in at the board's inputs that are not used yet).
-- Inputs other than 480i: 480p, 576i, 720p and 1080i need the decoder's settings and the capture's
-  timing for each.
+- Inputs other than 480i and 720p (which goes out as it came, 720p): 480p, 576i and 1080i need the
+  decoder's settings and the capture's timing for each.
+- The surround decoding runs on the board (the CPU keeps up, nothing lost), but has not been
+  heard through a receiver yet: off unless switched on.
 - 4K output: a 2160p30 test picture is clean on a display; at 2160p60 the link runs and the display
   sees scrambling but shows nothing; the scaler's own path ends at 1080p.
 - The board's other inputs (S/PDIF, VGA, RGB with SCART sync) are wired but not used.

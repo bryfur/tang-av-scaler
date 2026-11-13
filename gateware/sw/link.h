@@ -53,7 +53,7 @@ struct link_settings {
     uint8_t flock;          /* the output's frames kept in step with the input's fields (the clock trimmed) */
     uint8_t lowlat;         /* a frame made from the field still coming in: the output a few lines behind
                              * the input (with flock: without it only when it happens to fit) */
-    uint8_t rsvd[1];
+    uint8_t surround;       /* the sound's two channels made 5.1 (a game's Pro Logic II mix decoded: sw/surround.c) */
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
 

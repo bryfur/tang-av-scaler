@@ -103,7 +103,7 @@ void osd_update(void)
     fix(tx_hz / 24750, 2);              /* (2200 x 1125 pixels a frame, or 1650 x 750 at half the clock: Hz x 100) */
     str(" Hz  ");
     str(board_hd() || s->wide ? "16:9" : "4:3 ");
-    str(s->audio ? "  HDMI + sound" : "  DVI");
+    str(!s->audio ? "  DVI" : audio_on() ? "  HDMI + 5.1" : "  HDMI + sound");
     if (!st.hpd)
         str("  no display");
 
@@ -191,7 +191,10 @@ delay:
         str("\x7f" "C");
     } else
         str("--");
-    str("   CPU A25 400 MHz  up ");
+    str("   CPU A25 ");
+    num(core_hz / 1000000, 1);
+    str(mem_state == MEM_GOOD ? " MHz 1 GB  up " : mem_state == MEM_BAD ? " MHz MEM BAD  up " :
+        mem_state == MEM_DEAD ? " MHz MEM DEAD  up " : " MHz  up ");
     num(st.up_s / 3600, 1);
     put(':');
     put('0' + st.up_s / 600 % 6);

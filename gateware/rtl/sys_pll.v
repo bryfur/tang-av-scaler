@@ -1,7 +1,8 @@
 // sys_pll.v: the system clock, 50 MHz, from the SOM's 50 MHz oscillator through a PLL (the
-// oscillator's pin has no clock route of its own): x 24 is a VCO of 1200 MHz, / 24.  And the hard
-// CPU's core clock, 400 MHz (/ 3): CLKOUT1 of PLL_R[0] is wired to the core inside the chip
-// (Gowin MUG1031 8.3.2), so this PLL is placed there (gowin/avb.cst).
+// oscillator's pin has no clock route of its own): x 16 is a VCO of 800 MHz, / 16.  And the hard
+// CPU's core clock, the VCO's 800 MHz itself (the A25's rating: Gowin MUG1031 table 4-1; sixteen
+// of them a clock of its buses: it runs so on the board): CLKOUT1 of PLL_R[0] is wired to the
+// core inside the chip (MUG1031 8.3.2), so this PLL is placed there (gowin/avb.cst).
 
 module sys_pll (
     input  wire clkin,
@@ -32,11 +33,11 @@ PLL u (
 defparam u.FCLKIN = "50";
 defparam u.IDIV_SEL = 1;
 defparam u.FBDIV_SEL = 1;
-defparam u.MDIV_SEL = 24;
+defparam u.MDIV_SEL = 16;
 defparam u.MDIV_FRAC_SEL = 0;
-defparam u.ODIV0_SEL = 24;
+defparam u.ODIV0_SEL = 16;
 defparam u.ODIV0_FRAC_SEL = 0;
-defparam u.ODIV1_SEL = 3;
+defparam u.ODIV1_SEL = 1;
 defparam u.ODIV2_SEL = 8;
 defparam u.ODIV3_SEL = 8;
 defparam u.ODIV4_SEL = 8;

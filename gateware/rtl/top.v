@@ -61,6 +61,10 @@
 //                    luma a pixel of picture is above); read: 8:0 the first pair of pixels, 24:16 the
 //                    last, 31 there was picture
 //   3F R   BORDERL  9:0 the first line of a field with picture, 25:16 the last
+//   2E R   CPUMR    23:0 the DDR3's lines the CPU's data memory has read (rtl/cpu_ddr.v), 31 the memory
+//                    did not answer (the port dead until the core's reset); 2F CPUMW: lines written
+//   29 R   CPUMF    the first line the CPU's data memory port was ever asked for (24:0; 31 there was one)
+//   2D R   CPUMHZ   the hard CPU's core clock, MHz (rtl/sys_pll.v; a design from before reads 0: 400)
 //   2C RW  SRC      what comes in: 0 it is progressive (a field is a frame: deint.v pg), 1 it goes out
 //                    as it is, 1280 x 720 (pthru.v; the word clock's every other edge a pixel, each
 //                    bit sent twice), 8:2 the DDR3 lines (16 pixels) a line of it (45: 720), 18:9 a
@@ -86,6 +90,7 @@
 //   48-4F RW DDRD    the line: written, a write's; read, the last read's
 //   50-51 R AUD      the PCM1808's last left and right words as they came (audio_in.v: 32 bits; the
 //                    24-bit sample at 30:7)
+//   54-57  AUD, AUDL, AUDR, AUDO  the sound through the CPU: audio_fifo.v
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
 //                    sample's upper 16 bits)
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
@@ -198,10 +203,21 @@ module top (
         if (we && addr == 8'h67)
             cpu_m3 <= wdata;
     end
+    // (its data memory: the DDR3 through ddr_arb.v's user d, further down)
+    wire         pclk;
+    wire         cm_valid, cm_wr, cm_ack, cm_rvalid, cm_dead;
+    wire [24:0]  cm_line;
+    wire [255:0] cm_data, cm_rdata;
+    wire [31:0]  cm_mask;
+    wire [23:0]  cm_nrd, cm_nwr;
+    wire [25:0]  cm_first;
+    wire         ddr_ok_w;
     cpu #(.HEX(`CPU_HEX)) u_cpu (.clk(clk), .core_clk(core_clk), .rst_n(pll_lock && cpu_run), .pm_we(cpu_pwe),
                                 .pm_wa(cpu_pa), .pm_wd(wdata), .stall(c_stall), .mon_busy(m_busy), .other(s_own), .c_own(c_own),
                                 .c_we(c_we), .c_addr(c_addr), .c_wdata(c_wdata), .rdata(rdata), .txd(), .rxd(1'b1),
-                                .wfi());
+                                .wfi(), .pclk(pclk), .d_valid(cm_valid), .d_wr(cm_wr), .d_line(cm_line), .d_data(cm_data),
+                                .d_mask(cm_mask), .d_ack(cm_ack), .d_rvalid(cm_rvalid), .d_rdata(cm_rdata), .d_nrd(cm_nrd),
+                                .d_nwr(cm_nwr), .d_dead(cm_dead), .d_ok(ddr_ok_w), .d_first(cm_first));
 
     wire [31:0] sp_stat, sp_rx, sp_pins;
     spis u_spi (.clk(clk), .cs_n(esp_cs), .sck(esp_sck), .mosi(esp_mosi), .miso(esp_miso), .irq_n(esp_irq),
@@ -534,18 +550,19 @@ module top (
             por <= 8'd0;
         else if (!por[7])
             por <= por + 8'd1;
-    wire         memory_clk, ddr_lock, pll_stop, pclk, ddr_ok, cal_fail;
+    wire         memory_clk, ddr_lock, pll_stop, ddr_ok, cal_fail;
     wire [7:0]   cal_info, dll_step;
     wire         d_cmd_ready, d_cmd_en, d_wr_en, d_rd_valid;
     wire [2:0]   d_cmd;
     wire [28:0]  d_addr;
     wire [255:0] d_wr_data, d_rd_data;
+    wire [31:0]  d_wr_mask;
     ddr_pll u_ddr_pll (.clkin(sys_clk), .rst(!por[7]), .enclk(pll_stop), .memory_clk(memory_clk), .lock(ddr_lock));
     ddr3_top #(.CL(6), .CWL(5), .TCK_PS(2500), .PCLK_KHZ(100000), .FAST(0)) u_ddr3 (
         .memory_clk(memory_clk), .pll_stop(pll_stop), .clk(clk), .rst_n(por[7]), .pll_lock(ddr_lock),
         .clk_out(pclk), .init_calib_complete(ddr_ok),
         .cmd_ready(d_cmd_ready), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr), .wr_data_rdy(),
-        .wr_data(d_wr_data), .wr_data_en(d_wr_en), .wr_data_end(d_wr_en), .wr_data_mask(32'd0),
+        .wr_data(d_wr_data), .wr_data_en(d_wr_en), .wr_data_end(d_wr_en), .wr_data_mask(d_wr_mask),
         .rd_data(d_rd_data), .rd_data_valid(d_rd_valid), .rd_data_end(),
         .cal_fail(cal_fail), .cal_info(cal_info), .cal_dbg(), .cal_map(), .cal_snap(), .rd_stray(),
         .cal_opt(16'h0020), .dll_step(dll_step),
@@ -557,6 +574,8 @@ module top (
     reg  [255:0] d_rd_q;                 // (a read's line, with ddr_arb.v's rvalid)
     always @(posedge pclk)
         d_rd_q <= d_rd_data;
+    assign cm_rdata = d_rd_q;
+    assign ddr_ok_w = ddr_ok;
 
     // the host's line: asked for on the system clock, done on pclk
     reg  [31:0]  dm_cmd = 32'd0;
@@ -591,11 +610,13 @@ module top (
         end
     end
     ddr_arb u_arb (.clk(pclk), .cmd_ready(d_cmd_ready), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr),
-                   .wr_data(d_wr_data), .wr_data_en(d_wr_en), .rd_data_valid(d_rd_valid),
+                   .wr_data(d_wr_data), .wr_mask(d_wr_mask), .wr_data_en(d_wr_en), .rd_data_valid(d_rd_valid),
                    .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .c_valid(dm_valid), .c_wr(dm_cmd[31]), .c_line(dm_cmd[24:0]), .c_data(dm_wdata),
-                   .c_ack(dm_ack), .c_rvalid(dm_rvalid));
+                   .c_ack(dm_ack), .c_rvalid(dm_rvalid),
+                   .d_valid(cm_valid), .d_wr(cm_wr), .d_line(cm_line), .d_data(cm_data), .d_mask(cm_mask),
+                   .d_ack(cm_ack), .d_rvalid(cm_rvalid));
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
     reg  [31:0]  dcfg = 32'h140D0620;
@@ -612,8 +633,6 @@ module top (
         src_p0 <= src[8:0];
         src_p <= src_p0;
     end
-    wire [9:0]   f_prog;
-    wire [2:0]   f_pslot;
     reg  [27:0]  g_xr = -28'sd11808768;
     reg          g_wide = 1'b0;
     reg  [16:0]  g_dx = 17'd32768;
@@ -638,9 +657,7 @@ module top (
     wire         ca_valid, ca_ack, db_valid, db_ack, db_rvalid;
     wire [24:0]  ca_line, db_line;
     wire [255:0] ca_data;
-    wire [2:0]   f_latest, f_n;
-    wire [7:0]   f_par, d_state;
-    wire [9:0]   f_lines;
+    wire [7:0]   d_state;
     wire [15:0]  d_frames;
     wire         l_ev, l_first, r_we, d_fstart, d_hold, w_we;
     wire [9:0]   l_goal, d_emitted, w_x;
@@ -661,13 +678,30 @@ module top (
         if (lg1 != lg2)
             s_goal <= {1'b0, l_goal} + 11'd18;
     end
+    // (the capture's side is placed by the DDR3 (gowin/avb.cst), deint.v where it likes: what it takes
+    // of the capture, and its goal, through registers of its own)
+    wire [2:0]   c_latest, c_n, c_pslot;
+    wire [7:0]   c_par;
+    wire [9:0]   c_lines, c_prog;
+    reg  [2:0]   f_latest = 3'd0, f_n = 3'd0, f_pslot = 3'd0;
+    reg  [7:0]   f_par = 8'd0;
+    reg  [9:0]   f_lines = 10'd0, f_prog = 10'd0, d_goal = 10'd0;
+    always @(posedge pclk) begin
+        f_latest <= c_latest;
+        f_n <= c_n;
+        f_pslot <= c_pslot;
+        f_par <= c_par;
+        f_lines <= c_lines;
+        f_prog <= c_prog;
+        d_goal <= hd_p ? pt_goal : s_goal[9:0];
+    end
     cap_ddr u_capd (.llc(in_llc), .nch(src[8:2]), .we(fb_we), .w_ln(cap_ln), .w_col(cap_col), .wd(fb_wd), .eof(cap_eof),
                     .eof_f(cap_field), .eof_lines(cap_lines), .freeze(vid[1]), .pclk(pclk), .a_valid(ca_valid),
-                    .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(f_latest), .par(f_par),
-                    .nfields(f_n), .flines(f_lines), .prog(f_prog), .prog_slot(f_pslot));
+                    .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(c_latest), .par(c_par),
+                    .nfields(c_n), .flines(c_lines), .prog(c_prog), .prog_slot(c_pslot));
     assign d_hold = hd_p ? pt_hold : ls_hold;
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
-                   .goal(hd_p ? pt_goal : s_goal[9:0]), .hold(d_hold), .latest(f_latest),
+                   .goal(d_goal), .hold(d_hold), .latest(f_latest),
                    .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
@@ -751,9 +785,23 @@ module top (
     wire        au_tick;
     audio_in u_au (.clk(pll_clk2), .scki(in_scki), .bck(in_bck), .lrck(in_lrck), .dout(in_dout), .l(au_l), .r(au_r),
                    .tick(au_tick));
-    // (to HDMI: the samples as they come, the word clock's side taking them by the tick)
-    hdmi_audio u_ha (.clk(tx_clk), .ce(pcev[12]), .cex(pcev[15:13]), .hd(hd_t), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]), .cts_alt(hd[3]), .s_tick(au_tick), .s_l(au_l[30:7]),
-                     .s_r(au_r[30:7]), .pre(a_pre), .act(a_act), .k0(a_k0), .k1(a_k1), .k2(a_k2));
+    // (to HDMI: the samples as they come, the word clock's side taking them by the tick; or, through
+    // the CPU, the six channels it makes of them (audio_fifo.v, sw/audio.c: the surround decoder):
+    // not at 1280 x 720 out, whose lines are fewer a second than the samples)
+    wire [31:0] af_stat, af_l, af_r;
+    wire        af_on, af_tick;
+    wire [143:0] af_s;
+    audio_fifo u_af (.clk(clk), .we(we), .addr(addr), .wdata(wdata), .in_tick(au_tick), .in_l(au_l[30:7]), .in_r(au_r[30:7]),
+                     .r_stat(af_stat), .r_l(af_l), .r_r(af_r), .on(af_on), .o_tick(af_tick), .o_s(af_s));
+    reg         mc_t0 = 1'b0, mc_t = 1'b0;
+    always @(posedge tx_clk) begin
+        mc_t0 <= af_on && !src[1];
+        mc_t <= mc_t0;
+    end
+    hdmi_audio u_ha (.clk(tx_clk), .ce(pcev[12]), .cex(pcev[15:13]), .hd(hd_t), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]),
+                     .cts_alt(hd[3]), .mc(mc_t), .s_tick(mc_t ? af_tick : au_tick), .s_l(mc_t ? af_s[23:0] : au_l[30:7]),
+                     .s_r(mc_t ? af_s[47:24] : au_r[30:7]), .s_c(af_s[71:48]), .s_lfe(af_s[95:72]), .s_ls(af_s[119:96]),
+                     .s_rs(af_s[143:120]), .pre(a_pre), .act(a_act), .k0(a_k0), .k1(a_k1), .k2(a_k2));
     reg         au_t0, au_t1, au_t2;
     reg  [31:0] au_ls, au_rs;
     reg  [15:0] au_pl = 16'd0, au_pr = 16'd0;
@@ -828,6 +876,7 @@ module top (
             8'h27: rdata <= {6'd0, lat_s[21:12], 4'd0, lat_s[11:0]};
             8'h2B: rdata <= {24'd0, ll_min};
             8'h2C: rdata <= {3'd0, src};
+            8'h2D: rdata <= 32'd800;
             8'h28: rdata <= {31'd0, osd_on};
             8'h2A: rdata <= {temp[14], 17'd0, temp[13:0]};
             8'h70: rdata <= sp_stat;
@@ -851,6 +900,12 @@ module top (
             8'h50: rdata <= au_ls;
             8'h51: rdata <= au_rs;
             8'h52: rdata <= {au_pr, au_pl};
+            8'h2E: rdata <= {cm_dead, 7'd0, cm_nrd};
+            8'h2F: rdata <= {8'd0, cm_nwr};
+            8'h29: rdata <= {cm_first[25], 6'd0, cm_first[24:0]};
+            8'h54: rdata <= af_stat;
+            8'h55: rdata <= af_l;
+            8'h56: rdata <= af_r;
             8'h40: rdata <= {8'd0, ddr_s[18:3], 5'd0, ddr_s[2:0]};
             8'h48, 8'h49, 8'h4A, 8'h4B, 8'h4C, 8'h4D, 8'h4E, 8'h4F: rdata <= dm_rdata[32 * addr[2:0] +: 32];
             8'h39: rdata <= {8'd0, grab_rd};

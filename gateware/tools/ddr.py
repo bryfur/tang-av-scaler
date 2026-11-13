@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ddr.py [test [N]]: the SOM's DDR3 through the monitor (rtl/top.v DDR, DDRD): its calibration's
-state; test: N lines (256 bits each, default 2000) of random data written all over the 1 GB and read
-back."""
+state; test: N lines (256 bits each, default 2000) of random data written all over the 1 GB (but where
+the picture's fields are: rtl/cap_ddr.v) and read back."""
 import random
 import sys
 import time
@@ -45,6 +45,8 @@ def main():
         want = {}
         for i in range(n):
             line = rnd.getrandbits(25) if i > 64 else (1 << (i % 25)) | (i >> 5)
+            if not line >> 17 & 31:         # (the first 4 MB of a bank: a field of the picture, written as it comes)
+                line |= 1 << 21
             want[line] = rnd.getrandbits(256)
             write(m, line, want[line])
         bad = 0

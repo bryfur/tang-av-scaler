@@ -107,7 +107,9 @@ module tb;
                    .wr_data_en(wr_en), .rd_data_valid(rd_valid),
                    .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
-                   .c_valid(1'b0), .c_wr(1'b0), .c_line(25'd0), .c_data(256'd0), .c_ack(), .c_rvalid());
+                   .c_valid(1'b0), .c_wr(1'b0), .c_line(25'd0), .c_data(256'd0), .c_ack(), .c_rvalid(),
+                   .d_valid(1'b0), .d_wr(1'b0), .d_line(25'd0), .d_data(256'd0), .d_mask(32'd0), .d_ack(), .d_rvalid(),
+                   .wr_mask());
     ddr_model u_ddr (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),
                      .wr_data_en(wr_en), .rd_data(rd_data), .rd_data_valid(rd_valid));
     wire ev, ev_first, r_we, fstart, hold; wire [9:0] goal, emitted, r_wa;

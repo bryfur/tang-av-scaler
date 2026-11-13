@@ -57,7 +57,7 @@ static void grab(int step, int y, int x, int n)
         uint32_t t = ms();
         REG(R_GRAB) = (uint32_t)step << 12 | (uint32_t)(first * step);
         while (!(REG(R_GRAB) >> 31) && ms() - t < 100)
-            ;
+            audio_service();
         have_step = step;
         have_y = first;
     }
@@ -147,6 +147,7 @@ int main(void)
     t_sec = t_osd = t_lock = ms();
     for (;;) {
         service();
+        audio_service();
         if (ms() - t_lock >= 100) {
             t_lock = ms();
             board_lock();

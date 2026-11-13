@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""audio_tb.py: rtl/hdmi_audio.v beside rtl/pattern.v's timing for a frame and a bit (Verilator):
+"""audio_tb.py [mc]: rtl/hdmi_audio.v beside rtl/pattern.v's timing for a frame and a bit (Verilator):
 its characters decoded here (TERC4, the guard bands, the packets' error correction by polynomial
 division, their contents): the InfoFrames' checksums, N and CTS, and every sample put in comes
 out once, in order, with its parity and channel status."""
@@ -31,6 +31,7 @@ def bch(bits):
 def main():
     os.makedirs(WORK, exist_ok=True)
     n = 2200 * 1125 + 2200 * 200
+    mc = 1 if "mc" in sys.argv[1:] else 0       # six channels
     tb = '''`timescale 1ns/1ps
 module tb;
     reg clk = 0; always #3.37 clk = ~clk;
@@ -44,7 +45,7 @@ module tb;
         if (c == 3071) begin sl <= sl + 24'd1; sr <= sr - 24'd3; tick <= !tick; end
     end
     wire a_pre, a_act; wire [9:0] k0, k1, k2;
-    hdmi_audio u (.clk(clk), .ce(1'b1), .cex(3'b111), .en(1'b1), .hs(hs), .vs(vs), .cts_alt(1'b0), .hd(1'b0), .s_tick(tick), .s_l(sl), .s_r(sr), .pre(a_pre), .act(a_act),
+    hdmi_audio u (.clk(clk), .ce(1'b1), .cex(3'b111), .en(1'b1), .hs(hs), .vs(vs), .cts_alt(1'b0), .hd(1'b0), .mc(1'b%d), .s_c(sl + 24'h200000), .s_lfe(sl + 24'h300000), .s_ls(sl + 24'h400000), .s_rs(sl + 24'h500000), .s_tick(tick), .s_l(sl), .s_r(sr), .pre(a_pre), .act(a_act),
                   .k0(k0), .k1(k1), .k2(k2));
     integer f, i;
     initial begin
@@ -57,7 +58,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % (WORK, n)
+''' % (mc, WORK, n)
     open(os.path.join(WORK, "audio_tb.v"), "w").write(tb)
     mdir = os.path.join(WORK, "vl_audio")
     subprocess.check_call(["verilator", "--binary", "--timing", "-j", "8", "-Wno-fatal", "-Wno-WIDTH", "-Wno-UNUSED",
@@ -129,12 +130,32 @@ endmodule
             body = sum(subs, [])[:hb[2] + 1]
             if (sum(hb) + sum(body)) & 0xFF:
                 bad("InfoFrame %02x: checksum" % hb[0])
+            if hb[0] == 0x84 and (body[1], body[4]) != ((5, 0x0B) if mc else (1, 0)):
+                bad("the audio InfoFrame's channels: count %d, places %02x" % (body[1], body[4]))
         elif hb[0] == 0x01:
             for sb in subs:
                 cts, nn = sb[1] << 16 | sb[2] << 8 | sb[3], sb[4] << 16 | sb[5] << 8 | sb[6]
                 if (nn, cts) != (6144, 148352):
                     bad("N %d CTS %d" % (nn, cts))
+        elif hb[0] == 0x02 and hb[1] & 0x10:        # layout 1: a sample, its channels two a subpacket
+            if not mc or hb[1] & 15 != 7:
+                bad("a multi-channel packet (present %x)" % (hb[1] & 15))
+            ch = []
+            for q in range(3):
+                sb = subs[q]
+                ch += [sb[0] | sb[1] << 8 | sb[2] << 16, sb[3] | sb[4] << 8 | sb[5] << 16]
+                par = lambda v: bin(v).count("1") & 1
+                cb = subs[0][6] >> 2 & 1                # (the channel status bit: the same for every channel)
+                want = (par(ch[-1]) ^ cb) << 7 | cb << 6 | (par(ch[-2]) ^ cb) << 3 | cb << 2
+                if sb[6] != want or (hb[2] >> 4 + q & 1) != (hb[2] >> 4 & 1):
+                    bad("a multi-channel sample's status %02x (want %02x) or block start" % (sb[6], want))
+            fl_, fr_, lfe, c_, rl, rr = ch
+            if (c_, lfe, rl, rr) != tuple((fl_ + o) & 0xFFFFFF for o in (0x200000, 0x300000, 0x400000, 0x500000)):
+                bad("a multi-channel sample's channels: %s" % ["%06x" % v for v in ch])
+            samples.append((fl_, fr_, subs[0][6], hb[2] >> 4 & 1))
         elif hb[0] == 0x02:
+            if mc:
+                bad("a two-channel packet with six channels on")
             for q in range(4):
                 if hb[1] >> q & 1:
                     sb = subs[q]

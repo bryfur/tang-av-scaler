@@ -15,6 +15,7 @@ static void lines(int bus, int scl, int sda)
     REG(R_I2C) = drv;
     while (REG(R_I2C) >> 16 & 1)
         ;
+    audio_service();
 }
 
 static void start(int bus)

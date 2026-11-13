@@ -2,7 +2,7 @@
 
 The GW5AST-138 has a hard RISC-V core beside the fabric (Andes A25 "AE350", run at 800 MHz in the
 fpc console's design). Since 2026-11-12 the scaler has it (`rtl/cpu.v`, its program in `sw/`): it
-runs at 400 MHz beside the picture's path, reaches every register the monitor does, and writes the
+runs at 800 MHz (400 until 2026-11-13) beside the picture's path, reaches every register the monitor does, and writes the
 on-screen text. The rest is still logic, and what is slow and rare is still done by the ESP32
 through a UART (`firmware/xiao-wifi/main/scaler.c`). This note sorts the design's parts by whether
 the CPU would do them better; "Where it stands" at the end says what is done.
@@ -61,10 +61,13 @@ for is whatever happens once a line, once a field, or once in a while.
 
 ## Where it stands (2026-11-12)
 
-- The core runs (`rtl/cpu.v`): the fpc console's configuration, the core clock 400 MHz from
-  PLL_R[0]'s CLKOUT1 (the system clock's PLL, placed there), the buses on the system's 50 MHz. Its
+- The core runs (`rtl/cpu.v`): the fpc console's configuration, the core clock 800 MHz from
+  PLL_R[0]'s CLKOUT1 (the system clock's PLL, placed there), the buses on the system's 50 MHz
+  (sixteen core clocks a bus clock: it runs so). Its
   program is 32 KB of block RAM at 0x80000000, the bitstream's `sw/build/cpu.hex` in it; the
-  register bus can write it. Its data is the core's own DLM. No operating system: a loop
+  register bus can write it. Its data is the core's own DLM; and since 2026-11-13 the DDR3 is its
+  data memory port (`rtl/cpu_ddr.v`: 1 GB at address 0, the picture's fields in it too: the first
+  4 MB of each 128 MB; `sw/mem.c`). No operating system: a loop
   (`sw/main.c`), and waits that keep answering the link.
 - The register bus at 0xE8000000 + 4 x the register: the CPU takes a turn between the monitor's
   words (`sim/cpu_tb.py`).
