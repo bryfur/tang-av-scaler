@@ -154,7 +154,8 @@ int main(void)
         if (ms() - t_osd >= 250) {
             t_osd += 250;
             REG(R_CPUM) = ++n;
-            osd_update();
+            if (!board_grabbing())
+                osd_update();
         }
         if (ms() - t_sec >= 1000) {
             /* (after something long, e.g. the phase's tuning: the seconds missed are counted, not made up) */

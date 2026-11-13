@@ -40,6 +40,7 @@ void board_second(void);                /* once a second */
 void board_apply(const struct link_settings *was);      /* the settings changed */
 void board_cmd(int cmd);
 void board_grab_seen(void);         /* (a screen capture is still asking) */
+bool board_grabbing(void);
 void board_lock(void);              /* ten times a second: the output's clock trimmed to follow the input */
 
 /* osd.c */

@@ -254,6 +254,8 @@ void board_lock(void)
         st.lock = 0, st.lock_err = 0, st.lock_ppm10 = 0;
         return;
     }
+    if (REG(R_VID) >> 1 & 1)
+        return;                         /* (the picture frozen: no fields to steer by; the clock as it is) */
     if (st.fields_s < 45 || !st.up_ok || lat != REG(R_LAT)) {
         if (st.fields_s < 45)
             st.lock = 1;                /* (the clock as it was: the input may come back) */
@@ -368,6 +370,12 @@ void board_grab_seen(void)
     grab_ms = ms();
 }
 
+/* the picture is held for a grab (the on-screen text is left as it was: it is in what is grabbed) */
+bool board_grabbing(void)
+{
+    return grabbing;
+}
+
 void board_second(void)
 {
     static uint32_t fields_was, frames_was;
@@ -388,7 +396,7 @@ void board_second(void)
     st.temp4 = temp >> 31 ? (int16_t)((int32_t)(temp << 18) >> 18) : -32768;
     /* (the field's end to the frame's start, and a field's time to its lines: 16.3 ms; or, made from
      * the field coming in: from its first line in to the first row out, 0.67 ms after the frame's start) */
-    {
+    if (!(REG(R_VID) >> 1 & 1)) {       /* (not of a frozen picture: that only grows older) */
         uint32_t lat = REG(R_LAT);
         st.ll = dstat >> 12 & 1;
         st.ll_lines = lat >> 16 & 0x3FF;
