@@ -25,6 +25,7 @@ module lstream #(
     input             fstart,
     input      [9:0]  emitted,
     input      [10:0] goal,
+    input      [9:0]  skip,             // the frame's first line made (a multiple of 8; deint.v)
     output reg        hold = 1'b0,      // (a clock after emitted)
     input             r_we,
     input      [1:0]  r_slot_d,
@@ -64,11 +65,21 @@ module lstream #(
     reg [5:0]  gap = 6'd0;
     reg [8:0]  q;
     reg [31:0] cur;
-    wire [9:0] src = sj >= H ? H - 1 : sj;
-    wire [31:0] nxt = sq[src[1:0]];
-    wire       have = (sj < emitted || (sj >= H && emitted == H)) && sj < H + FL && {1'b0, sj} <= goal;
+    // (sj and all after it count from the first line made: the picture is hr lines; a line's place in
+    // the stores is the same, skip being a multiple of 8)
+    reg  [9:0] skf = 10'd0;             // (skip, as the frame was begun with)
     always @(posedge clk)
-        hold <= emitted - (sj > H ? H : sj) > 10'd2;
+        if (fstart)
+            skf <= skip;
+    wire [9:0] hr = H - skf;
+    wire [9:0] em = emitted - skf;
+    wire       gok = goal >= {1'b0, skf};
+    wire [10:0] gl = goal - {1'b0, skf};
+    wire [9:0] src = sj >= hr ? hr - 10'd1 : sj;
+    wire [31:0] nxt = sq[src[1:0]];
+    wire       have = (sj < em || (sj >= hr && em == hr)) && sj < hr + FL && gok && {1'b0, sj} <= gl;
+    always @(posedge clk)
+        hold <= em - (sj > hr ? hr : sj) > 10'd2;
     reg        r_v = 1'b0, r_last = 1'b0;
     reg [9:0]  r_x, r_j;
     reg [7:0]  r_y, r_c;
@@ -127,7 +138,7 @@ module lstream #(
     wire       o_v, o_last;
     wire [9:0] o_x, o_j;
     wire [7:0] o_y, o_c;
-    smaa #(.W(W), .H(H), .N(FL - 4)) u_aa (.clk(clk), .en(aa_en), .dbg(aa_dbg), .diag(aa_diag), .corner(aa_corner), .thr(aa_thr), .i_v(r_v), .i_x(r_x), .i_j(r_j),
+    smaa #(.W(W), .N(FL - 4)) u_aa (.clk(clk), .h(hr), .en(aa_en), .dbg(aa_dbg), .diag(aa_diag), .corner(aa_corner), .thr(aa_thr), .i_v(r_v), .i_x(r_x), .i_j(r_j),
                                          .i_last(r_last), .i_y(r_y), .i_c(r_c), .o_v(o_v), .o_x(o_x), .o_j(o_j),
                                          .o_last(o_last), .o_y(o_y), .o_c(o_c));
 
@@ -206,7 +217,7 @@ module lstream #(
             if (c_v) begin
                 h0_p <= lbq[31:8];
                 h0_u <= a1_j == 10'd1 ? lbq[31:24] : lbq[7:0];
-                h0_d <= a1_j == H ? lbq[31:24] : a1_p[23:16];
+                h0_d <= a1_j == hr ? lbq[31:24] : a1_p[23:16];
                 h0_x <= a1_x;
                 h_j <= a1_j - 10'd1;
             end

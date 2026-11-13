@@ -52,18 +52,23 @@
 // begins from the pan (or no move).  first: no vectors for lines made before this one (a part of
 // the picture shown: its lines above are not seen, and are wanted fast).
 //
+// skip: the frame's lines before this one (a multiple of 8: the stores' places stay as they are)
+// are not made: the steps begin at it, emitted with them (a part of the picture shown that begins
+// far down: nothing is spent on what is above it).
+//
 // pg: what comes in is progressive: each field in the memory is a whole frame, and the frame made
 // is the newest one's lines as they are, two a step (line 2k + 1 read as C's, line 2k in P1's
 // place and taken as it is: weave, no noise reduction); with ll, the one coming in.
 //
 // How: the fields' rows are read from the DDR3 whole, into line buffers (a RAM a row; a window of
-// rows of each field around the step's: C 4, P1 N1, P2 N2, P3 N3: the rows the vectors can reach; a row
-// r in the buffer r mod N), each row once; then the step's passes go through them, a pair of
+// rows of each field around the step's: C 4, P1 N1, P2 4 and its luma alone N2, P3 N3: the rows the
+// vectors can reach; a row r in the buffer r mod N); then the step's passes go through them, a pair of
 // pixels (a word) a clock:
 //   - the load: the rows the step's windows still want, a DDR3 line (16 pixels) at a time, the four
 //     fields' in turn; a line's eight words are written a clock each (deint_fill)
 //   - the estimator's pass (mc): for each block six times five words of P2's four rows at the
-//     candidate's place, and C's; the sums; the least's vector kept (vec)
+//     candidate's place (its luma's buffers are read at two places a clock: three clocks a
+//     candidate), and C's; the sums; the least's vector kept (vec)
 //   - the vectors' pass (mc), by the blocks: C's old and new, P2's two rows, P1's and P3's at the
 //     moved places (five words of each: the block may begin at an odd pixel, and half a pixel
 //     wants one more); the differences' greatest and P1's moved words go to a RAM (vram)
@@ -103,7 +108,8 @@ module deint_ram #(
 endmodule
 
 // a row's words written as its DDR3 lines come: a line being written (eight clocks) and one more
-// held; room: another may be asked for (two asked for and not written out at most)
+// held; room: another may be asked for (two asked for and not written out at most; lines of a row
+// come two clocks apart or more)
 module deint_fill (
     input              clk,
     input              start,           // a row begins (nothing of one before is left)
@@ -117,16 +123,21 @@ module deint_fill (
     output reg [31:0]  wd,
     output reg         done = 1'b0      // (a clock) the row's last word is being written
 );
+    // a line as it comes goes into hb (nothing else decides that: push is a register, the 256 bits
+    // have one enable); from there into wb when wb is free or at its last word
     reg [1:0]   held = 2'd0;
     reg         hv = 1'b0, busy = 1'b0;
     reg [255:0] hb, wb;
     reg [2:0]   j;
     reg [9:0]   n;
     wire        last = j == 3'd7;
+    wire        take = hv && (!busy || last);
     assign room = !held[1];
     always @(posedge clk) begin
         we <= 1'b0;
         done <= 1'b0;
+        if (push)
+            hb <= d;
         if (start) begin
             n <= 10'd0;
             held <= 2'd0;
@@ -134,39 +145,34 @@ module deint_fill (
             busy <= 1'b0;
         end else begin
             held <= held + {1'b0, asked} - {1'b0, busy && last};
+            if (push)
+                hv <= 1'b1;
+            else if (take)
+                hv <= 1'b0;
             if (busy) begin
                 we <= 1'b1;
                 wa <= n;
                 wd <= wb[31:0];
-                wb <= {32'd0, wb[255:32]};
                 n <= n + 10'd1;
                 j <= j + 3'd1;
                 if (last) begin
                     done <= n + 10'd1 == nw;
-                    if (hv) begin
-                        wb <= hb;
-                        hv <= 1'b0;
-                    end else if (push)
-                        wb <= d;
-                    else
-                        busy <= 1'b0;
+                    busy <= hv;
                 end
-            end else if (push) begin
-                wb <= d;
+            end
+            if (take) begin
+                wb <= hb;
                 busy <= 1'b1;
                 j <= 3'd0;
-            end
-            if (push && busy && !(last && !hv)) begin
-                hb <= d;
-                hv <= 1'b1;
-            end
+            end else if (busy)
+                wb <= {32'd0, wb[255:32]};
         end
     end
 endmodule
 
 module deint #(
     parameter N1 = 5,                   // P1's rows kept: the line's own and two each way
-    parameter N2 = 12,                  // P2's: the four about the line made, and four each way
+    parameter N2 = 12,                  // P2's luma's: the four about the line made, and four each way
     parameter N3 = 13                   // P3's: the line's own and six each way
 ) (
     input              clk,
@@ -187,6 +193,7 @@ module deint #(
     input              mc,              // motion compensation
     input      [10:0]  mv,              // the picture's pan: {known, dyr, dx}
     input      [9:0]   first,           // no vectors for the lines made before this one
+    input      [9:0]   skip,            // the lines before this one (a multiple of 8) are not made at all
     input              ll,
     input      [7:0]   ll_min,
     input      [9:0]   prog,
@@ -225,10 +232,10 @@ module deint #(
             start <= 1'b0;
     end
 
-    localparam S_IDLE = 0, S_LD = 1, S_LDW = 2, S_V = 3, S_VW = 4, S_O = 5, S_OW = 6, S_NEXT = 7,
+    localparam S_F1 = 14, S_F2 = 15, S_F3 = 16, S_F2B = 17, S_GAP3 = 18, S_IDLE = 0, S_LD = 1, S_LDW = 2, S_V = 3, S_VW = 4, S_O = 5, S_OW = 6, S_NEXT = 7,
                S_MP = 8, S_M = 9, S_MW = 10, S_GAP = 11, S_GAP2 = 12, S_VP = 13;
-    reg [3:0]  st = S_IDLE;
-    reg        active = 1'b0, pc, hist, ll_used = 1'b0;
+    reg [4:0]  st = S_IDLE;
+    reg        active = 1'b0, actn, pc, hist, ll_used = 1'b0;
     // (pg and nch as they were when the frame was begun: a change of them in the middle of a step
     // must not leave it waiting for lines it did not ask for: seen on the board, 2026-11-12)
     reg        pgf = 1'b0;
@@ -246,7 +253,8 @@ module deint #(
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
     reg [9:0]  nl;                      // a field's lines
     reg [9:0]  k;                       // the step
-    reg [3:0]  km1, km2, km3;           // k mod N1, N2, N3
+    reg [3:0]  km1, km2, km3;           // k's place in the rings of N1, N2, N3 buffers (from the first row loaded)
+    reg [1:0]  kmc;                     // ... of C's four
 
     // a row's buffer: row + o's, from k mod n (o within a ring of n either way)
     function [3:0] wrap(input [3:0] km, input signed [4:0] o, input integer n);
@@ -275,6 +283,14 @@ module deint #(
     wire signed [4:0]  ow = pc ? 5'sd0 : -5'sd1;                // the line's own row of P1, from k
     wire [7:0]         nblk = {nchf, 1'b0};                     // a line's blocks of eight pixels
 
+    // a frame's first step and the first rows its windows want (skip), in the two clocks after
+    // the frame is begun (S_F1: k is the first step; S_F2: the rows)
+    reg  [9:0] skf = 10'd0;             // (skip, as the frame was begun with)
+    wire [9:0] sk = pgf ? 10'd0 : {skf[9:3], 3'b000};
+    reg  [9:0] n0c, n01, n03, n0l;
+    reg  [9:0] kf;                      // (the first step with vectors, or one before it)
+    wire [4:0] km2_d = k[4:0] - n0l[4:0];       // (P2's luma's first row may be past the first step: under 0)
+
     // the step's lines (registered: k changes between steps only, clocks before they are used)
     wire [9:0] kmax = pgf ? {1'b0, nl[9:1]} - 10'd1 : pc ? nl - 10'd1 : nl;
     wire [9:0] row_w = pc ? k : k - 10'd1;
@@ -284,16 +300,16 @@ module deint #(
     reg        mc_s = 1'b0;             // the step has vectors
     reg [9:0]  line_i, line_d;
     reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
-    reg [10:0] hC, h1, h2, h3;          // the windows' last rows
+    reg [10:0] hC, h1, hL, h3;          // the windows' last rows (hL: P2's luma's)
     reg [1:0]  sCA, sCB;                // the rows' buffers: C's old and new,
     reg [1:0]  sCm, sCp;                // the one before old and the one after new (the nearest in the field),
-    reg [3:0]  s2A, s2B, s1W, s3W;      // P2's, P1's and P3's own
+    reg [3:0]  s1W, s3W;                // P1's and P3's own (P2's: as C's)
     reg [8:0]  hk;                      // 37 k (mod 512) and 3 k (mod 16): the estimator's turns
     reg [3:0]  uk;
     wire signed [11:0] nl_s = $signed({2'b00, nl});
     always @(posedge clk) begin
-        line_ok <= !ll_used || latest == fc ||
-                   (prog_slot == fc && (pgf ? {k[8:0], 1'b1} : head({1'b0, k} + 11'd1, nl)) < prog);
+        // (from the head as registered: three clocks from k to can: S_GAP to S_GAP3)
+        line_ok <= !ll_used || latest == fc || (prog_slot == fc && (pgf ? {k[8:0], 1'b1} : hC[9:0]) < prog);
         can <= active && !hold && k <= kmax && emitted <= goal && line_ok;
         new_ok <= new_w;
         old_ok <= old_w;
@@ -301,15 +317,13 @@ module deint #(
         line_i <= line_i_w;
         line_d <= pc ? {k[8:0], 1'b1} : {k[8:0] - 9'd1, 1'b0};
         hC <= head({1'b0, k} + 11'd1, nl);
-        h2 <= head({1'b0, k} + 11'd5, nl);
+        hL <= head({1'b0, k} + 11'd5, nl);
         h1 <= head({1'b0, row_w} + 11'd2, nl);
         h3 <= head({1'b0, row_w} + 11'd6, nl);
-        sCA <= old_w ? k[1:0] - 2'd1 : k[1:0];
-        sCB <= new_w ? k[1:0] : k[1:0] - 2'd1;
-        sCm <= k >= 10'd2 ? k[1:0] - 2'd2 : 2'd0;
-        sCp <= {1'b0, k} + 11'd1 < {1'b0, nl} ? k[1:0] + 2'd1 : nl[1:0] - 2'd1;
-        s2A <= wrap(km2, old_w ? -5'sd1 : 5'sd0, N2);
-        s2B <= wrap(km2, new_w ? 5'sd0 : -5'sd1, N2);
+        sCA <= old_w ? kmc - 2'd1 : kmc;
+        sCB <= new_w ? kmc : kmc - 2'd1;
+        sCm <= k >= 10'd2 ? kmc - 2'd2 : kmc - k[1:0];
+        sCp <= {1'b0, k} + 11'd1 < {1'b0, nl} ? kmc + 2'd1 : kmc;
         s1W <= wrap(km1, ow, N1);
         s3W <= wrap(km3, ow, N3);
     end
@@ -336,17 +350,21 @@ module deint #(
     endfunction
 
     // ---- the rows' buffers ----
-    // one address for a field's buffers (the passes read its rows at one place), a write to one
-    reg  [8:0]  ra_c, ra_1, ra_2, ra_3;
-    wire [3:0]  f_we;                   // the fields' writers: C, P1, P2, P3
-    wire [39:0] f_wa;
-    wire [127:0] f_wd;
-    reg  [10:0] nrow [0:3];             // the next row to load
-    reg  [3:0]  wsl [0:3];              // ... and its buffer
+    // one address for a field's buffers (the passes read its rows at one place), a write to one;
+    // five writers: C, P1, P2, P3, and P2's luma alone (its rows further on: for the vectors; read
+    // at two places a clock: ra_la, ra_lb)
+    reg  [8:0]  ra_c, ra_1, ra_2, ra_3, ra_la, ra_lb;
+    wire [4:0]  f_we;
+    wire [49:0] f_wa;
+    wire [159:0] f_wd;
+    reg  [10:0] nrow [0:4];             // the next row to load
+    reg  [3:0]  wsl [0:4];              // ... and its buffer
     wire [31:0] qc [0:3];
     wire [31:0] q1 [0:N1-1];
-    wire [31:0] q2 [0:N2-1];
+    wire [31:0] q2 [0:3];
     wire [31:0] q3 [0:N3-1];
+    wire [15:0] qla [0:N2-1];           // {a word's two lumas}
+    wire [15:0] qlb [0:N2-1];
     genvar gi;
     generate
         for (gi = 0; gi < 4; gi = gi + 1) begin : g_c
@@ -357,50 +375,62 @@ module deint #(
             bram32 u (.clk(clk), .we(f_we[1] && (pgf ? {3'd0, f_wa[19]} : wsl[1]) == gi), .wa(f_wa[18:10]),
                       .wd(f_wd[63:32]), .ra(ra_1), .q(q1[gi]));
         end
-        for (gi = 0; gi < N2; gi = gi + 1) begin : g_2
-            bram32 u (.clk(clk), .we(f_we[2] && wsl[2] == gi), .wa(f_wa[28:20]), .wd(f_wd[95:64]), .ra(ra_2), .q(q2[gi]));
+        for (gi = 0; gi < 4; gi = gi + 1) begin : g_2
+            bram32 u (.clk(clk), .we(f_we[2] && wsl[2][1:0] == gi), .wa(f_wa[28:20]), .wd(f_wd[95:64]), .ra(ra_2), .q(q2[gi]));
         end
         for (gi = 0; gi < N3; gi = gi + 1) begin : g_3
             bram32 u (.clk(clk), .we(f_we[3] && wsl[3] == gi), .wa(f_wa[38:30]), .wd(f_wd[127:96]), .ra(ra_3), .q(q3[gi]));
         end
+        for (gi = 0; gi < N2; gi = gi + 1) begin : g_l
+            bram16d u (.clk(clk), .we(f_we[4] && wsl[4] == gi), .wa({1'b0, f_wa[48:40]}), .wd({f_wd[151:144], f_wd[135:128]}),
+                       .ra_a({1'b0, ra_la}), .ra_b({1'b0, ra_lb}), .qa(qla[gi]), .qb(qlb[gi]));
+        end
     endgenerate
 
     // ---- the load ----
-    reg  [3:0]  act = 4'd0;             // a row of the field is being loaded
-    reg  [9:0]  lrow [0:3];             // which
-    reg  [6:0]  giss [0:3];             // its next line to ask for
-    reg  [3:0]  f_start = 4'd0, f_asked = 4'd0, f_push = 4'd0;
-    wire [3:0]  f_room, f_done;
+    reg  [4:0]  act = 5'd0;             // a row of the field is being loaded
+    reg  [9:0]  lrow [0:4];             // which
+    reg  [6:0]  giss [0:4];             // its next line to ask for
+    reg  [4:0]  gdone = 5'd0;           // ... there is none: all asked for
+    reg  [6:0]  nlast;                  // (a row's last line's number)
+    reg  [4:0]  f_start = 5'd0, f_asked = 5'd0, f_push = 5'd0;
+    wire [4:0]  f_room, f_done;
     reg  [255:0] rdq, rdq2;
     reg         rdv = 1'b0;
     reg  [1:0]  pgd = 2'd0;             // (pg: the step's two rows are loaded)
     generate
-        for (gi = 0; gi < 4; gi = gi + 1) begin : g_f
+        for (gi = 0; gi < 5; gi = gi + 1) begin : g_f
             deint_fill u (.clk(clk), .start(f_start[gi]), .nw(nw), .asked(f_asked[gi]), .room(f_room[gi]),
                           .push(f_push[gi]), .d(rdq2), .we(f_we[gi]), .wa(f_wa[10 * gi +: 10]),
                           .wd(f_wd[32 * gi +: 32]), .done(f_done[gi]));
         end
     endgenerate
     // whose each line asked for is (they come back in the order asked)
-    reg  [31:0] tagq;
+    reg  [47:0] tagq;
     reg  [3:0]  twp = 4'd0, trp = 4'd0;
-    // a field wants a row loaded
-    wire [3:0]  need = pgf ? {2'b00, !pgd[1], !pgd[0]} :
-                       {nrow[3] <= h3, nrow[2] <= h2, nrow[1] <= h1, nrow[0] <= hC};
-    // a line to ask for: the fields in turn
-    reg  [1:0]  rr = 2'd0;
-    wire [3:0]  want = {act[3] && giss[3] != nchf && f_room[3], act[2] && giss[2] != nchf && f_room[2],
-                        act[1] && giss[1] != nchf && f_room[1], act[0] && giss[0] != nchf && f_room[0]};
-    wire [1:0]  r1n = rr + 2'd1, r2n = rr + 2'd2, r3n = rr + 2'd3;
-    wire [1:0]  pick = want[rr] ? rr : want[r1n] ? r1n : want[r2n] ? r2n : r3n;
-    wire [2:0]  pick_f = pick == 2'd0 ? fc : pick == 2'd1 ? f1 : pick == 2'd2 ? f2 : f3;
+    // a field wants a row loaded (P2's whole rows: as far as C's; its luma: with the vectors only)
+    wire [4:0]  need = pgf ? {3'b000, !pgd[1], !pgd[0]} :
+                       {mc_f && nrow[4] <= hL, nrow[3] <= h3, nrow[2] <= hC, nrow[1] <= h1, nrow[0] <= hC};
+    // a line to ask for: the first of the fields that wants one (a field has two lines on their way
+    // at most, and a line takes eight clocks to write: none waits long)
+    wire [4:0]  want = act & ~gdone & f_room;
+    wire [2:0]  pick = want[0] ? 3'd0 : want[1] ? 3'd1 : want[2] ? 3'd2 : want[3] ? 3'd3 : 3'd4;
+    wire [4:0]  glast = {giss[4] == nlast, giss[3] == nlast, giss[2] == nlast, giss[1] == nlast, giss[0] == nlast};
+    wire [2:0]  pick_f = pick == 3'd0 ? fc : pick == 3'd1 ? f1 : pick == 3'd3 ? f3 : f2;
 
-    // a row's ten pixels from its five words: pixel n's luma
+    // a row's ten pixels from its five words: pixel n's luma; and from the lumas alone
     function [7:0] pix(input [159:0] w, input [3:0] n);
         reg [31:0] t;
         begin
             t = w[32 * n[3:1] +: 32];
             pix = n[0] ? t[7:0] : t[23:16];
+        end
+    endfunction
+    function [7:0] pixl(input [79:0] w, input [3:0] n);
+        reg [15:0] t;
+        begin
+            t = w[16 * n[3:1] +: 16];
+            pixl = n[0] ? t[7:0] : t[15:8];
         end
     endfunction
 
@@ -416,13 +446,15 @@ module deint #(
             vec[vec_wa] <= vec_wd;
 
     // ---- the estimator's pass ----
-    // a block's six candidates in turn, five words of P2's four rows for each: the candidate
-    // (cdx, cdy; cok: it is one) is worked out the clock before its first word is asked for, from
+    // a block's six candidates in turn, five words of P2's four rows for each, two a clock (mi 0 to
+    // 2); C's four words of the block are read while the block before's last candidates are asked
+    // for (cnext), and taken (cblk) as the block's first candidate comes to the sums.  The
+    // candidate (cdx, cdy; cok: it is one) is worked out before its first word is asked for, from
     // the line above's vectors about the block (wm1, w0, wp1: the block before's, its own, the
     // next's)
     reg  [7:0]  mb;                     // the block
     reg  [2:0]  mcd;                    // the candidate
-    reg  [2:0]  mi;                     // the word of its five
+    reg  [2:0]  mi;                     // the clock of its three
     reg  [9:0]  wm1, w0, wp1;
     reg  [8:0]  hb;                     // 37 k + 101 b (mod 512)
     reg  [3:0]  ub;                     // 3 k + 5 b (mod 16)
@@ -493,21 +525,25 @@ module deint #(
     wire signed [12:0] m_x = $signed({2'b00, mb, 3'b000}) + cdx;
     wire signed [4:0]  cdy5 = {cdy[3], cdy};
     wire signed [11:0] m_r = $signed({2'b00, k}) + cdy;                 // new's row, moved
-    // d: the four rows of P2 and of C; the block's first four words of each kept
-    reg  [31:0] m2r [0:3], mcr [0:3];
-    reg  [127:0] ms2 [0:3], msw [0:3];
+    // d: the four rows of P2, two words of each; the candidate's first four words kept; C's rows'
+    // words, as they come (mca..mcd_: {valid, which of the block's four})
+    reg  [15:0] mla [0:3], mlb [0:3];
+    reg  [31:0] mcr [0:3];
+    reg  [63:0] ms2 [0:3];
+    reg  [2:0]  mca = 3'd0, mcb = 3'd0, mcc = 3'd0, mcq = 3'd0;
+    reg  [63:0] cnext [0:3], cblk [0:3];        // the block's eight pixels of C's four rows
     // e1: the block's pixels; e2: their differences; e3: the rows' sums; e4: the sum, with the
     // candidate's penalty; then the least
     reg  [22:0] me1 = 23'd0, me2 = 23'd0, me3 = 23'd0, me4 = 23'd0;    // {valid, candidate, block, dx, dyr, ok}
     reg  [3:0]  mk1, mk2;
-    reg  [63:0] mp2 [0:3], mcp [0:3], mad [0:3];
+    reg  [63:0] mp2 [0:3], mad [0:3];
     reg  [10:0] mrs [0:3];
     reg  [12:0] mct, bestc;
     reg         bestn = 1'b1, mfin = 1'b0;
     reg  [9:0]  bestv;
     reg  [7:0]  mfb;
     integer     mr, mj;
-    reg  [159:0] m_w;
+    reg  [79:0] m_w;
     always @(posedge clk) begin
         mtb <= mta;
         mtc <= mtb;
@@ -515,20 +551,26 @@ module deint #(
         msb <= msa;
         msc <= msb;
         {mkb, mkc, mkd} <= {mka, mkb, mkc};
+        mcb <= mca;
+        mcc <= mcb;
+        mcq <= mcc;
         for (mr = 0; mr < 4; mr = mr + 1) begin
-            m2r[mr] <= q2[msc[4 * mr +: 4]];
-            if (mtd[25] && mtd[24:22] != 3'd4) begin
-                ms2[mr][32 * mtd[23:22] +: 32] <= m2r[mr];
-                msw[mr][32 * mtd[23:22] +: 32] <= mcr[mr];
-            end
-            // e1 (the candidate's fifth word is here)
-            m_w = {m2r[mr], ms2[mr]};
+            mla[mr] <= qla[msc[4 * mr +: 4]];
+            mlb[mr] <= qlb[msc[4 * mr +: 4]];
+            if (mtd[25] && mtd[24:22] != 3'd2)
+                ms2[mr][32 * mtd[22] +: 32] <= {mlb[mr], mla[mr]};
+            // (C's word: its two pixels' luma)
+            if (mcq[2])
+                cnext[mr][16 * mcq[1:0] +: 16] <= {mcr[mr][7:0], mcr[mr][23:16]};
+            // e1 (the candidate's fifth word is here); a block's first candidate: C's pixels taken
+            m_w = {mla[mr], ms2[mr]};
             for (mj = 0; mj < 8; mj = mj + 1) begin
-                mp2[mr][8 * mj +: 8] <= pix(m_w, mj + mtd[5]);
-                mcp[mr][8 * mj +: 8] <= mj % 2 ? msw[mr][32 * (mj / 2) +: 8] : msw[mr][32 * (mj / 2) + 16 +: 8];
+                mp2[mr][8 * mj +: 8] <= pixl(m_w, mj + mtd[5]);
                 // e2
-                mad[mr][8 * mj +: 8] <= absd(mcp[mr][8 * mj +: 8], mp2[mr][8 * mj +: 8]);
+                mad[mr][8 * mj +: 8] <= absd(cblk[mr][8 * mj +: 8], mp2[mr][8 * mj +: 8]);
             end
+            if (mtd[25] && mtd[24:22] == 3'd2 && mtd[21:19] == 3'd0)
+                cblk[mr] <= cnext[mr];
             // e3 (a row outside the field: 512)
             mrs[mr] <= !mk2[mr] ? 11'd512 :
                        {3'd0, mad[mr][7:0]} + {3'd0, mad[mr][15:8]} + {3'd0, mad[mr][23:16]} + {3'd0, mad[mr][31:24]} +
@@ -538,7 +580,7 @@ module deint #(
         mcr[1] <= qc[sCA];
         mcr[2] <= qc[sCB];
         mcr[3] <= qc[sCp];
-        me1 <= {mtd[25] && mtd[24:22] == 3'd4, mtd[21:0]};
+        me1 <= {mtd[25] && mtd[24:22] == 3'd2, mtd[21:0]};
         mk1 <= mkd;
         me2 <= me1;
         mk2 <= mk1;
@@ -587,18 +629,21 @@ module deint #(
     // with it: {the vector is used, dx, the buffers of P2's row for new, for old, of P1's, of P3's,
     // and whether those rows are in the field}
     reg  [26:0] vxa, vxb, vxc, vxd;
+    reg  [38:0] vya, vyb, vyc, vyd;     // the block's first pixel moved: {P3's, P1's, P2's} (13 bits, signed)
     wire [10:0] vx0 = {vb, 3'b000};     // the block's first pixel
     wire signed [12:0] vt2 = $signed({2'b00, vx0}) + bdx;
     wire signed [12:0] vt1 = $signed({2'b00, vx0}) + bsh1;
     wire signed [12:0] vt3 = $signed({2'b00, vx0}) + bsh3;
     // the rows' words, chosen
-    reg  [31:0] d2n, d2o, d1v, d3v, dcn, dco;
-    reg  [127:0] s2n, s2o, s1v, s3v, scn, sco;     // the block's first four words of each
+    reg  [31:0] d1v, d3v, dcn, dco;
+    reg  [15:0] d2n, d2o;               // (P2's: the lumas alone)
+    reg  [127:0] s1v, s3v, scn, sco;    // the block's first four words of each
+    reg  [63:0] s2n, s2o;
     // the block's pixels: ten of each row, from its first word's first
-    wire [159:0] w2n = {d2n, s2n}, w2o = {d2o, s2o}, w1v = {d1v, s1v}, w3v = {d3v, s3v};
-    wire signed [5:0] ddx = vxd[25:20];
-    wire signed [5:0] dsh1 = ddx >>> 1;
-    wire signed [6:0] dsh3 = {ddx[5], ddx} + {dsh1[5], dsh1};
+    wire [79:0]  w2n = {d2n, s2n}, w2o = {d2o, s2o};
+    wire [159:0] w1v = {d1v, s1v}, w3v = {d3v, s3v};
+    wire signed [12:0] dt2 = vyd[12:0], dt1 = vyd[25:13], dt3 = vyd[38:26];
+    wire        dhalf = vxd[20];        // (dx odd: half a pixel)
     reg         x1v = 1'b0, x2v = 1'b0, x3v = 1'b0, x1u, x2u, x3u, x1h;
     reg  [7:0]  x1b, x2b, x3b;
     reg  [63:0] p2n, p2o, cnl, col, p1a, p1b, p3a, p3b, p1v, p3v, dnv, dov, p1x, mwv, mabv;
@@ -626,15 +671,18 @@ module deint #(
         vxb <= vxa;
         vxc <= vxb;
         vxd <= vxc;
-        d2n <= q2[vxc[19:16]];
-        d2o <= q2[vxc[15:12]];
+        vyb <= vya;
+        vyc <= vyb;
+        vyd <= vyc;
+        d2n <= qla[vxc[19:16]];
+        d2o <= qla[vxc[15:12]];
         d1v <= q1[vxc[11:8]];
         d3v <= q3[vxc[7:4]];
         dcn <= qc[sCB];
         dco <= qc[sCA];
         if (vtd[11] && vtd[10:8] != 3'd4) begin
-            s2n[32 * vtd[9:8] +: 32] <= d2n;
-            s2o[32 * vtd[9:8] +: 32] <= d2o;
+            s2n[16 * vtd[9:8] +: 16] <= d2n;
+            s2o[16 * vtd[9:8] +: 16] <= d2o;
             s1v[32 * vtd[9:8] +: 32] <= d1v;
             s3v[32 * vtd[9:8] +: 32] <= d3v;
             scn[32 * vtd[9:8] +: 32] <= dcn;
@@ -645,26 +693,26 @@ module deint #(
         x1v <= vtd[11] && vtd[10:8] == 3'd4;
         x1b <= vtd[7:0];
         x1u <= vxd[26];
-        x1h <= ddx[0];
+        x1h <= dhalf;
         for (xj = 0; xj < 8; xj = xj + 1) begin
-            x_n = xj + ddx[0];
-            p2n[8 * xj +: 8] <= pix(w2n, x_n);
-            p2o[8 * xj +: 8] <= pix(w2o, x_n);
-            x_n = xj + dsh1[0];
+            x_n = xj + dt2[0];
+            p2n[8 * xj +: 8] <= pixl(w2n, x_n);
+            p2o[8 * xj +: 8] <= pixl(w2o, x_n);
+            x_n = xj + dt1[0];
             p1a[8 * xj +: 8] <= pix(w1v, x_n);
             p1b[8 * xj +: 8] <= pix(w1v, x_n + 4'd1);
-            x_n = xj + dsh3[0];
+            x_n = xj + dt3[0];
             p3a[8 * xj +: 8] <= pix(w3v, x_n);
             p3b[8 * xj +: 8] <= pix(w3v, x_n + 4'd1);
             cnl[8 * xj +: 8] <= xj % 2 ? scn[32 * (xj / 2) +: 8] : scn[32 * (xj / 2) + 16 +: 8];
             col[8 * xj +: 8] <= xj % 2 ? sco[32 * (xj / 2) +: 8] : sco[32 * (xj / 2) + 16 +: 8];
-            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + ddx + xj;
+            x_t = dt2 + xj;
             k2n[xj] <= vxd[3] && x_t >= 13'sd0 && x_t < $signed({2'b00, wpix});
             k2o[xj] <= vxd[2] && x_t >= 13'sd0 && x_t < $signed({2'b00, wpix});
-            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + dsh1 + xj;
-            k1[xj] <= vxd[1] && x_t >= 13'sd0 && x_t + $signed({12'd0, ddx[0]}) < $signed({2'b00, wpix});
-            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + dsh3 + xj;
-            k3[xj] <= vxd[0] && x_t >= 13'sd0 && x_t + $signed({12'd0, ddx[0]}) < $signed({2'b00, wpix});
+            x_t = dt1 + xj + $signed({12'd0, dhalf});
+            k1[xj] <= vxd[1] && dt1 + xj >= 13'sd0 && x_t < $signed({2'b00, wpix});
+            x_t = dt3 + xj + $signed({12'd0, dhalf});
+            k3[xj] <= vxd[0] && dt3 + xj >= 13'sd0 && x_t < $signed({2'b00, wpix});
         end
         for (xq = 0; xq < 4; xq = xq + 1)       // (the chroma of the pair the first pixel moved lies in)
             vch[16 * xq +: 16] <= {s1v[32 * xq + 24 +: 8], s1v[32 * xq + 8 +: 8]};
@@ -785,12 +833,22 @@ module deint #(
     reg [4:0]   v_y0, v_y1, s1_v0, s1_v1, s1_vc, s2_ay0, s2_ay1, s2_ac;
     reg         s2_v = 1'b0;
     reg [9:0]   s2_wa;
-    // (the pan's pixel must lie near the pixels above and below: else the mean)
-    function near(input [7:0] v, input [7:0] a, input [7:0] b);
-        near = {1'b0, v} + 9'd12 >= {1'b0, a < b ? a : b} && {1'b0, v} <= {1'b0, a < b ? b : a} + 9'd12;
+    // (stage 1 again: the blends' multipliers are DSP blocks, which take the register before them
+    // inside, far from the logic: this one, not the edges' last stage)
+    reg         t1_v = 1'b0;
+    reg [9:0]   t1_wa;
+    reg [31:0]  t1_wv, t1_bob, t1_w, t1_d;
+    reg [4:0]   t1_v0, t1_v1, t1_vc, t1_ay0, t1_ay1, t1_ac;
+    // (the vector's pixel must lie near the pixels above and below, within 12: else the mean)
+    reg         nr0, nr1;               // (with stage 0's registers; its comparisons a clock before: nq0, nq1)
+    reg  [3:0]  nq0, nq1;
+    // v + 12 >= the lesser of a, b: it is that of one of them; v <= the greater + 12: the same
+    function [3:0] nearq(input [7:0] v, input [7:0] a, input [7:0] b);
+        nearq = {{1'b0, v} <= {1'b0, b} + 9'd12, {1'b0, v} <= {1'b0, a} + 9'd12,
+                 {1'b0, v} + 9'd12 >= {1'b0, b}, {1'b0, v} + 9'd12 >= {1'b0, a}};
     endfunction
-    wire [4:0]  v0g = near(wvp[23:16], wo[23:16], wn[23:16]) ? v_y0 : 5'd16;
-    wire [4:0]  v1g = near(wvp[7:0], wo[7:0], wn[7:0]) ? v_y1 : 5'd16;
+    wire [4:0]  v0g = nr0 ? v_y0 : 5'd16;
+    wire [4:0]  v1g = nr1 ? v_y1 : 5'd16;
 
     // ---- the edges' way (edi) ----
     // stage 0 (with wo, wn): luma i of 0 to 13 (the pair's two pixels: 6 and 7), chroma pair j of 0
@@ -912,8 +970,8 @@ module deint #(
         otd <= otc;
         xA <= qc[sCA];
         xB <= pgf ? qc[{1'b0, otc[9]}] : qc[sCB];
-        yA <= q2[s2A];
-        yB <= q2[s2B];
+        yA <= q2[sCA];
+        yB <= q2[sCB];
         xW <= pgf ? q1[{3'd0, otc[9]}] : q1[s1W];
         yW <= q3[s3W];
         vd <= vq;
@@ -1003,6 +1061,8 @@ module deint #(
         {cw1, cv1, ca1} <= {nWk, vwk, al0, al1, alv0, alv1};
         {cw2, cv2, ca2} <= {cw1, cv1, ca1};
         {cw3, cv3, ca3} <= {cw2, cv2, ca2};
+        nq0 <= nearq(cv2[23:16], WA[2][23:16], WB[2][23:16]);
+        nq1 <= nearq(cv2[7:0], WA[2][7:0], WB[2][7:0]);
         // stage 0: the pair (WA[3]: its word of old), the fourteen pixels and five pairs about it
         s0_v <= ot3[10];
         s0_wa <= ot3[9:0];
@@ -1010,6 +1070,8 @@ module deint #(
         wn <= WB[3];
         ww <= cw3;
         wvp <= cv3;
+        nr0 <= (nq0[0] || nq0[1]) && (nq0[2] || nq0[3]);
+        nr1 <= (nq1[0] || nq1[1]) && (nq1[2] || nq1[3]);
         {a_y0, a_y1, v_y0, v_y1} <= ca3;
         for (wi = 0; wi < 14; wi = wi + 1) begin
             wa[8 * wi +: 8] <= wi % 2 ? WA[6 - wi / 2][7:0] : WA[6 - wi / 2][23:16];
@@ -1029,13 +1091,17 @@ module deint #(
         s1_v <= pv[7];
         {s1_wv, s1_v0, s1_v1, s1_vc, s1_wa, s1_w, s1_d, s1_ay0, s1_ay1, s1_ac} <= pd[7];
         // (the pan's word against the mean, by its a; then P1's own against that, by a)
-        s2_v <= s1_v;
-        s2_wa <= s1_wa;
-        s2_w <= s1_w;
-        s2_d <= s1_d;
-        {s2_ay0, s2_ay1, s2_ac} <= {s1_ay0, s1_ay1, s1_ac};
-        s2_x <= {blend(s1_wv[31:24], s1_bob[31:24], s1_vc), blend(s1_wv[23:16], s1_bob[23:16], s1_v0),
-                 blend(s1_wv[15:8], s1_bob[15:8], s1_vc), blend(s1_wv[7:0], s1_bob[7:0], s1_v1)};
+        t1_v <= s1_v;
+        t1_wa <= s1_wa;
+        {t1_wv, t1_bob, t1_w, t1_d} <= {s1_wv, s1_bob, s1_w, s1_d};
+        {t1_v0, t1_v1, t1_vc, t1_ay0, t1_ay1, t1_ac} <= {s1_v0, s1_v1, s1_vc, s1_ay0, s1_ay1, s1_ac};
+        s2_v <= t1_v;
+        s2_wa <= t1_wa;
+        s2_w <= t1_w;
+        s2_d <= t1_d;
+        {s2_ay0, s2_ay1, s2_ac} <= {t1_ay0, t1_ay1, t1_ac};
+        s2_x <= {blend(t1_wv[31:24], t1_bob[31:24], t1_vc), blend(t1_wv[23:16], t1_bob[23:16], t1_v0),
+                 blend(t1_wv[15:8], t1_bob[15:8], t1_vc), blend(t1_wv[7:0], t1_bob[7:0], t1_v1)};
         r_we <= s2_v;
         r_wa <= s2_wa;
         r_slot_d <= line_d[2:0];
@@ -1051,35 +1117,36 @@ module deint #(
     always @(posedge clk) begin
         start_clr <= 1'b0;
         fstart <= 1'b0;
-        f_start <= 4'd0;
-        f_asked <= 4'd0;
+        f_start <= 5'd0;
+        f_asked <= 5'd0;
         rdv <= b_rvalid;
         rdq <= rd_data;
         rdq2 <= rdq;
         // a line read: whose it is
-        f_push <= 4'd0;
+        f_push <= 5'd0;
         if (rdv) begin
-            f_push[tagq[2 * trp +: 2]] <= 1'b1;
+            f_push[tagq[3 * trp +: 3]] <= 1'b1;
             trp <= trp + 4'd1;
         end
         // a row all written: the field's next
-        for (fi = 0; fi < 4; fi = fi + 1)
+        for (fi = 0; fi < 5; fi = fi + 1)
             if (f_done[fi]) begin
                 act[fi] <= 1'b0;
                 nrow[fi] <= nrow[fi] + 11'd1;
-                wsl[fi] <= wsl[fi] + 4'd1 == (fi == 0 ? 4 : fi == 1 ? N1 : fi == 2 ? N2 : N3) ? 4'd0 : wsl[fi] + 4'd1;
+                wsl[fi] <= wsl[fi] + 4'd1 == (fi == 0 || fi == 2 ? 4 : fi == 1 ? N1 : fi == 3 ? N3 : N2) ? 4'd0 : wsl[fi] + 4'd1;
                 if (fi < 2)
                     pgd[fi] <= 1'b1;
             end
         ota <= 11'd0;
         vta <= 12'd0;
         mta <= 26'd0;
-        if ((st == S_M && mi == 3'd2) || (st == S_MP && wt == 6'd2)) begin
+        mca <= 3'd0;
+        if ((st == S_M && mi == 3'd0) || (st == S_MP && wt == 6'd2)) begin
             pdx <= n_dx;
             pdy <= n_dy;
             pso <= n_cd != 3'd1 || n_side_ok;
         end
-        if ((st == S_M && mi == 3'd4) || (st == S_MP && wt == 6'd3)) begin
+        if ((st == S_M && mi == 3'd2) || (st == S_MP && wt == 6'd3)) begin
             mb <= n_b;
             mcd <= n_cd;
             hb <= n_hb;
@@ -1124,24 +1191,10 @@ module deint #(
                         hist <= hist_n;
                     end
                     nl <= flines;
-                    // (a top field's first step has no line to make: from the second)
-                    if (pg || (ll_now ? par[latest] == top_f : par[latest] != top_f)) begin
-                        k <= 10'd0;
-                        {km1, km2, km3} <= 12'd0;
-                        hk <= 9'd0;
-                        uk <= 4'd0;
-                    end else begin
-                        k <= 10'd1;
-                        {km1, km2, km3} <= {4'd1, 4'd1, 4'd1};
-                        hk <= 9'd37;
-                        uk <= 4'd3;
-                    end
+                    nlast <= nch - 7'd1;
                     emitted <= 10'd0;
-                    active <= nfields != 3'd0;
-                    for (fi = 0; fi < 4; fi = fi + 1) begin
-                        nrow[fi] <= 11'd0;
-                        wsl[fi] <= 4'd0;
-                    end
+                    active <= 1'b0;                 // (until the first step is worked out: below)
+                    st <= S_F1;
                     // (the vectors: with the fields' history, in the motion adaptive mode; the pan a
                     // candidate if it is within what the estimator may find)
                     mc_f <= mc && !pg && mode == 2'd0 && (ll_now || hist_n);
@@ -1149,7 +1202,9 @@ module deint #(
                     dxf <= mv[5:0];
                     dyf <= mv[9:6];
                     firstf <= first;
+                    skf <= skip;
                     vfirst <= 1'b1;
+                    actn <= nfields != 3'd0;
                 end else if (can && !start_clr && !fstart) begin
                     pgd <= 2'd0;
                     st <= S_LD;
@@ -1157,24 +1212,25 @@ module deint #(
             // the rows the step's windows still want: a row of a field begun, its lines asked for
             // (the fields' in turn), until none is wanted and none is on its way
             S_LD: begin
-                for (fi = 0; fi < 4; fi = fi + 1)
+                for (fi = 0; fi < 5; fi = fi + 1)
                     if (need[fi] && !act[fi] && !f_done[fi] && !f_start[fi]) begin
                         act[fi] <= 1'b1;
                         f_start[fi] <= 1'b1;
+                        gdone[fi] <= 1'b0;
                         giss[fi] <= 7'd0;
                         lrow[fi] <= pgf ? {k[8:0], fi == 0} : nrow[fi][9:0];
                     end
-                if ((!b_valid || b_ack) && want != 4'd0) begin
+                if ((!b_valid || b_ack) && want != 5'd0) begin
                     b_valid <= 1'b1;
                     b_line <= {pick_f, 5'd0, lrow[pick], giss[pick]};
                     giss[pick] <= giss[pick] + 7'd1;
+                    gdone[pick] <= glast[pick];
                     f_asked[pick] <= 1'b1;
-                    tagq[2 * twp +: 2] <= pick;
+                    tagq[3 * twp +: 3] <= pick;
                     twp <= twp + 4'd1;
-                    rr <= pick + 2'd1;
                 end else if (b_ack)
                     b_valid <= 1'b0;
-                if (need == 4'd0 && act == 4'd0 && f_done == 4'd0 && f_start == 4'd0 && !b_valid)
+                if (need == 5'd0 && act == 5'd0 && f_done == 5'd0 && f_start == 5'd0 && !b_valid)
                     st <= S_LDW;
             end
             S_LDW: begin                            // (the last word written is in its RAM)
@@ -1186,6 +1242,8 @@ module deint #(
             // next's place, as if a block before it had just been done
             S_MP: begin
                 wt <= wt + 6'd1;
+                mca <= {1'b1, wt[1:0]};             // (the first block's four words of C)
+                ra_c <= {7'd0, wt[1:0]};
                 if (wt == 6'd0)
                     vec_ra <= 8'd0;
                 else if (wt == 6'd1) begin
@@ -1206,9 +1264,14 @@ module deint #(
                 msa <= {wrap(km2, cdy5 + 5'sd1, N2), wrap(km2, cdy5, N2), wrap(km2, cdy5 - 5'sd1, N2), wrap(km2, cdy5 - 5'sd2, N2)};
                 mka <= {m_r + 12'sd1 >= 12'sd0 && m_r + 12'sd1 < nl_s, m_r >= 12'sd0 && m_r < nl_s,
                         m_r - 12'sd1 >= 12'sd0 && m_r - 12'sd1 < nl_s, m_r - 12'sd2 >= 12'sd0 && m_r - 12'sd2 < nl_s};
-                ra_2 <= m_x[9:1] + {6'd0, mi};
-                ra_c <= {mb[6:0], 2'b00} + {6'd0, mi};
-                if (mi == 3'd4) begin
+                ra_la <= m_x[9:1] + {5'd0, mi, 1'b0};
+                ra_lb <= m_x[9:1] + {5'd0, mi, 1'b1};
+                // (the next block's four words of C, with this block's last four clocks)
+                if ((mcd == 3'd4 && mi != 3'd0) || (mcd == 3'd5 && mi != 3'd2)) begin
+                    mca <= {1'b1, mcd == 3'd4 ? mi[1:0] - 2'd1 : mi[1:0] + 2'd2};
+                    ra_c <= {mb[6:0] + 7'd1, mcd == 3'd4 ? mi[1:0] - 2'd1 : mi[1:0] + 2'd2};
+                end
+                if (mi == 3'd2) begin
                     mi <= 3'd0;
                     if (adv && mb + 8'd1 == nblk) begin
                         wt <= 6'd0;
@@ -1242,10 +1305,11 @@ module deint #(
             end
             S_V: begin
                 vta <= {1'b1, vi, vb};
+                vya <= {vt3, vt1, vt2};
                 vxa <= {buse, bdx, wrap(km2, bdy5, N2), wrap(km2, bdy5 - 5'sd1, N2), wrap(km1, ow + bdyh5, N1),
                         wrap(km3, ow + bdyh5 + bdy5, N3), rn_w >= 12'sd0 && rn_w < nl_s, ro_w >= 12'sd0 && ro_w < nl_s,
                         r1_w >= 12'sd0 && r1_w < nl_s, r3_w >= 12'sd0 && r3_w < nl_s};
-                ra_2 <= vt2[9:1] + {6'd0, vi};
+                ra_la <= vt2[9:1] + {6'd0, vi};
                 ra_1 <= vt1[9:1] + {6'd0, vi};
                 ra_3 <= vt3[9:1] + {6'd0, vi};
                 ra_c <= {vb[6:0], 2'b00} + {6'd0, vi};
@@ -1283,11 +1347,51 @@ module deint #(
                 if (wt == 6'd31)
                     st <= S_NEXT;
             end
+            // a frame's first step: at the first line made (skip); a top field's first step has no
+            // line to make: from the second.  The rows loaded begin with the windows' first at that
+            // step, in the buffers from 0.
+            S_F1: begin
+                k <= {1'b0, sk[9:1]} + (pc ? 10'd0 : 10'd1);
+                emitted <= sk;
+                st <= S_F2;
+            end
+            S_F2: begin
+                kf <= {1'b0, firstf[9:1]} > k ? {1'b0, firstf[9:1]} : k;
+                hk <= {k[3:0], 5'd0} + {k[6:0], 2'd0} + k[8:0];
+                uk <= {k[2:0], 1'b0} + k[3:0];
+                st <= S_F2B;
+            end
+            S_F2B: begin
+                // (C's and P2's from two rows before the first step's; the vectors' rows only from
+                // what the first step with vectors (kf, or a step before it) reaches back to: the
+                // steps before it are wanted fast)
+                n0c <= k > 10'd2 ? k - 10'd2 : 10'd0;
+                n01 <= kf > 10'd3 && kf - 10'd3 < row_w ? kf - 10'd3 : kf > 10'd3 ? row_w : 10'd0;
+                n03 <= kf > 10'd7 && kf - 10'd7 < row_w ? kf - 10'd7 : kf > 10'd7 ? row_w : 10'd0;
+                n0l <= kf > 10'd6 ? kf - 10'd6 : 10'd0;
+                st <= S_F3;
+            end
+            S_F3: begin
+                nrow[0] <= {1'b0, n0c};
+                nrow[1] <= {1'b0, n01};
+                nrow[2] <= {1'b0, n0c};
+                nrow[3] <= {1'b0, n03};
+                nrow[4] <= {1'b0, n0l};
+                for (fi = 0; fi < 5; fi = fi + 1)
+                    wsl[fi] <= 4'd0;
+                kmc <= k[1:0] - n0c[1:0];
+                km1 <= k[3:0] - n01[3:0];
+                km2 <= km2_d[4] ? km2_d[3:0] + N2 : km2_d[3:0];
+                km3 <= k[3:0] - n03[3:0];
+                active <= actn;
+                st <= S_GAP;                        // (the step's lines settle)
+            end
             S_NEXT: begin
                 k <= k + 10'd1;
                 km1 <= km1 + 4'd1 == N1 ? 4'd0 : km1 + 4'd1;
                 km2 <= km2 + 4'd1 == N2 ? 4'd0 : km2 + 4'd1;
                 km3 <= km3 + 4'd1 == N3 ? 4'd0 : km3 + 4'd1;
+                kmc <= kmc + 2'd1;
                 hk <= hk + 9'd37;
                 uk <= uk + 4'd3;
                 emitted <= emitted + 10'd2;
@@ -1296,10 +1400,12 @@ module deint #(
             S_GAP:
                 st <= S_GAP2;
             S_GAP2:
+                st <= S_GAP3;
+            S_GAP3:
                 st <= S_IDLE;
             default:
                 st <= S_IDLE;
         endcase
-        state_o <= {active, hist, pc, ll_used, st};
+        state_o <= {active, hist, pc, ll_used, st[3:0]};
     end
 endmodule

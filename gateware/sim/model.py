@@ -398,22 +398,26 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False, edi=False, mv=None, mc=False, first=0):
+              prog=False, edi=False, mv=None, mc=False, first=0, skip=0):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
     in is progressive (each of fields a whole frame): the newest as it is"""
     lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first)
+    # (skip: the lines before it are not made: what follows takes the rest as the whole picture;
+    # here they are black)
+    lines = lines[skip:]
     if smaa_thr is not None:
         import smaa
         lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
-    return [upsample(line) for line in lines]
+    return [[(16, 128, 128)] * (2 * len(lines[0]))] * skip + [upsample(line) for line in lines]
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0):
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip)
     w, h = len(pix[0]), len(pix)
-    out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
+    ana = [[(0, 0, 0)] * w] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], w, h - skip)
+    out = fsr.rcas(fsr.scale_hw(pix, ana, w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2
     return [[(0, 0, 0)] * side + [rgb(*p) for p in row] + [(0, 0, 0)] * side for row in out]

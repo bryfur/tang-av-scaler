@@ -49,7 +49,7 @@ stretched the plain way, then the scaler's output; the corner says which.
 | | |
 |---|---|
 | Input | 480i component (YPbPr) through an ADV7181D, sampled line-locked at 13.5 MHz; stereo analogue audio through a PCM1808. The decoder's sampling phase can be set, or tuned to the console's pixels (every phase tried on a still picture, the sharpest kept). |
-| Deinterlacing | Motion adaptive from the last four fields, kept in the SOM's DDR3: a field's lines as they are, the lines between from the field before where nothing moves and from their neighbours where something does. Bob and weave can be chosen instead. |
+| Deinterlacing | Motion adaptive from the last four fields, kept in the SOM's DDR3: a field's lines as they are, the lines between from the field before where nothing moves and from their neighbours where something does. Two more steps can be switched on. Motion compensated: each block of 8 pixels of each line has its own motion vector, found in the FPGA line by line (six candidates a block, scored against the field two before); where the picture moves that way the line between is the field before's, moved, so a pan or a moving object keeps its full detail. Along edges: the lines taken from the neighbours follow the picture's edges instead of going straight down. Bob and weave can be chosen instead. |
 | Noise | Where the picture is still, each sample is averaged with the same one a frame earlier (off, or three strengths). |
 | Anti-aliasing | SMAA 1x on the 480-line picture: luma edges, the orthogonal and the diagonal patterns, corners kept. A view that paints what it finds (edges, blends) in the picture's place, for tuning. |
 | Scaling | FSR 1's edge adaptive upsampling (EASU) to 1440 x 1080 (4:3) or 1920 x 1080 (16:9, for a game's widescreen mode). Any part of the source can be shown: the black border round a game's picture is measured and left out, so the picture fills the screen (or the part is set by hand). |
@@ -105,7 +105,7 @@ The pictures themselves, in [`docs/compare/`](docs/compare/):
   JTAG to load bitstreams. It talks to the CPU over SPI in small messages, keeps the settings for
   when the power is off, and carries the CPU's program.
 
-The design uses 19 % of the FPGA's logic, 76 % of its block RAM and 16 % of its multipliers.
+The design uses 24 % of the FPGA's logic, 81 % of its block RAM and 18 % of its multipliers.
 
 ## Measured on the board
 

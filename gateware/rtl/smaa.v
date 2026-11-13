@@ -57,11 +57,11 @@ endmodule
 
 module smaa #(
     parameter W = 720,
-    parameter H = 480,
     parameter N = 15,                   // the searches' reach up and down (the lines kept) ...
     parameter NH = 15                   // ... and along a line (15; 31: a table of 16384, sim/smaa.py NH)
 ) (
     input             clk,
+    input      [9:0]  h,                // the picture's lines (480, or fewer: lstream.v's skip)
     input             en,
     input      [7:0]  thr,
     input             dbg,
@@ -147,7 +147,7 @@ module smaa #(
         // (and the edges' line, ee = e1_j - 1: 1 or more, 2 or more, H - 2 or less)
         ee_ge1 <= e0_j != 10'd1;
         ee_ge2 <= e0_j != 10'd1 && e0_j != 10'd2;
-        ee_leh2 <= e0_j != 10'd0 && e0_j <= H - 1;
+        ee_leh2 <= e0_j != 10'd0 && e0_j <= h - 10'd1;
         {e1_j, e0_j} <= {e0_j, t_j};
         {e1_y, e0_y} <= {e0_y, t_y};
         if (e1_v && !e1_b)
@@ -186,7 +186,7 @@ module smaa #(
             e2_v <= e1_x != 11'd0 && e1_j != 10'd0;
             e2_x <= xc;
             e2_e <= ee;
-            e2_z <= xc_out || ee >= H || !en;
+            e2_z <= xc_out || ee >= h || !en;
             dl <= xc_first ? 8'd0 : absd(n1_c, n2_c);
             dt <= absd(n1_c, n1_t);
             dr <= xc_last ? 8'd0 : absd(n1_c, cC);
@@ -568,7 +568,7 @@ module smaa #(
             v_ab <= b1_wu;
             v_ly <= v_ctr[15:8];
             // the pixel before this column's: which neighbour, how much
-            n_v <= b1_x != 11'd0 && b1_x <= W && b1_r != 10'd0 && b1_r <= H + 1;
+            n_v <= b1_x != 11'd0 && b1_x <= W && b1_r != 10'd0 && b1_r <= h + 10'd1;
             n_x <= b1_x - 11'd1;
             n_b <= b1_r - 10'd1;
             n_w <= best;

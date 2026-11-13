@@ -65,6 +65,7 @@ extern int8_t pan_dx, pan_dy;
 extern bool pan_ok;
 extern uint32_t pan_us;
 void pan_service(int latest, int lines, bool on);     /* a field has come in */
+uint32_t pan_first(void);
 
 /* osd.c */
 void osd_init(void);

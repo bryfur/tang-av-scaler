@@ -22,6 +22,8 @@ struct link_status st;
 static uint32_t now;
 uint32_t cycles(void) { return now += 1000; }
 void audio_service(void) { }
+bool board_ed(void) { return false; }
+bool board_hd(void) { return false; }
 static uint32_t rnd(uint32_t a) { a ^= a >> 16; a *= 0x7feb352du; a ^= a >> 15; a *= 0x846ca68bu; return a ^ a >> 16; }
 /* the picture: smooth lumps of several sizes (kind 1: none down the picture), 0 to 255 */
 static int tex(int kind, int x, int y)

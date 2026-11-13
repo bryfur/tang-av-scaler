@@ -80,6 +80,16 @@ static int sums(uint32_t *s, bool down, int latest, int older, int lines, int dx
     return at;
 }
 
+/* MV's upper part: where the frame's lines begin.  17:11: the first line made, in eights: the part
+ * shown's first line less 24 or more (the anti-aliasing and the scaler look that far up); 27:18: the
+ * first line that wants vectors: 4 above the part shown (the lines between are made the quick way:
+ * they are wanted fast at a frame's start and are not seen). */
+uint32_t pan_first(void)
+{
+    uint32_t y = board_ed() || board_hd() ? 0 : st.show_y;     /* (480i and 576i only) */
+    return (y > 4 ? (y - 4) & 0x3FEu : 0) << 18 | (y >= 24 ? (y - 24) >> 3 : 0) << 11;
+}
+
 /* a field has come in: the pan from it and the one two before */
 void pan_service(int latest, int lines, bool on)
 {
@@ -88,8 +98,8 @@ void pan_service(int latest, int lines, bool on)
     int older = (latest - 2) & 7, dx, dy;
 
     if (!on || mem_state != MEM_GOOD || lines < 200) {
-        if (pan_ok || REG(R_MV))
-            REG(R_MV) = 0;
+        if (REG(R_MV) != pan_first())
+            REG(R_MV) = pan_first();
         pan_ok = false;
         st.pan = 0;
         return;
@@ -116,8 +126,5 @@ void pan_service(int latest, int lines, bool on)
     st.pan = pan_ok, st.pan_dx = dx, st.pan_dy = dy;
     pan_us = (cycles() - t0) / (core_hz / 1000000);
     st.pan_ms10 = pan_us / 100 > 255 ? 255 : pan_us / 100;
-    /* (25:16: the first line that wants vectors: the part shown's first, less 4: the lines above are
-     * wanted fast at a frame's start, and are not seen) */
-    REG(R_MV) = (uint32_t)((st.show_y > 4 ? st.show_y - 4 : 0) & 0x3FE) << 16 | (pan_ok ? 0x400u : 0) | ((uint32_t)dy & 15) << 6 |
-                ((uint32_t)dx & 63);
+    REG(R_MV) = pan_first() | (pan_ok ? 0x400u : 0) | ((uint32_t)dy & 15) << 6 | ((uint32_t)dx & 63);
 }

@@ -96,8 +96,9 @@
 //   54-57  AUD, AUDL, AUDR, AUDO  the sound through the CPU: audio_fifo.v
 //   53 RW  MV        for the motion compensation (deint.v mv, first; sw/pan.c): the picture's pan: 5:0 dx
 //                    (signed: what is at x in a field is at x + dx in the field two before), 9:6 dyr
-//                    (signed: lines of the field), 10 it is known; 25:16 the first line that wants
-//                    vectors (the part shown's first, less some)
+//                    (signed: lines of the field), 10 it is known; 17:11 the frame's first line made, in
+//                    eights (deint.v, lstream.v skip: the lines above the part shown, less some, are
+//                    not made); 27:18 the first line that wants vectors (deint.v first)
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
 //                    sample's upper 16 bits)
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
@@ -639,9 +640,9 @@ module top (
     reg  [31:0]  dcfg = 32'h140D0620;
     // the picture's pan, as the CPU found it (MV): to the DDR3's clock whole (the same twice)
     reg  [31:0]  mv_r = 32'd0;
-    reg  [20:0]  mv_p0 = 21'd0, mv_p1 = 21'd0, mv_p = 21'd0;
+    reg  [27:0]  mv_p0 = 28'd0, mv_p1 = 28'd0, mv_p = 28'd0;
     always @(posedge pclk) begin
-        mv_p0 <= {mv_r[25:16], mv_r[10:0]};
+        mv_p0 <= mv_r[27:0];
         mv_p1 <= mv_p0;
         if (mv_p0 == mv_p1)
             mv_p <= mv_p1;
@@ -730,13 +731,13 @@ module top (
     assign d_hold = hd_p ? pt_hold : ls_hold;
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mv(mv_p[10:0]), .first(mv_p[20:11]), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
                    .state_o(d_state));
-    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .hold(ls_hold), .r_we(r_we),
+    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .skip(pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .hold(ls_hold), .r_we(r_we),
                   .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),
                   .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));

@@ -62,6 +62,8 @@ def main():
     mc = "mc" in args or mvs is not None
     mv = None if mvs is None or ("mc" in args and len(mvs) < 4) else mvs[2:4] if len(mvs) == 4 else mvs[:2]
     mcfirst = (max(0, crop[2] - 4) & ~1) if crop else 0
+    # (the lines above the part shown are not made, but for 24 to 31 of them: rtl/deint.v skip)
+    skip = (max(0, crop[2] - 24) & ~7) if crop and not prog else 0
     fields = [(0, model.frame(t)) for t in range(nf)] if prog else [(t & 1, model.field(t)) for t in range(nf)]
     if pic:
         fields = [(t & 1, f) for t, f in enumerate(model.picture_fields(pic, nf))]
@@ -121,11 +123,11 @@ module tb;
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
     deint u_deint (.clk(pclk), .nch(7'd45), .pg(1'b%(pg)d), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
-                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .edi(1'b%(edi)d), .mc(1'b%(mc)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
+                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .edi(1'b%(edi)d), .mc(1'b%(mc)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .skip(10'd%(skip)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
-    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .hold(hold), .aa_en(1'b%(aa_en)d), .aa_dbg(1'b%(aa_dbg)d), .aa_diag(1'b%(aa_diag)d), .aa_corner(1'b%(aa_corner)d),
+    lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .skip(10'd%(skip)d), .hold(hold), .aa_en(1'b%(aa_en)d), .aa_dbg(1'b%(aa_dbg)d), .aa_diag(1'b%(aa_diag)d), .aa_corner(1'b%(aa_corner)d),
                   .aa_thr(8'd%(aa_thr)d), .r_we(r_we), .r_slot_d(sd[1:0]),
                   .r_slot_i(si[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
                   .w_x(w_x), .w_d(w_d));
@@ -198,7 +200,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
@@ -230,12 +232,12 @@ endmodule
     # (the dump begins at the end of the frame before: its last row is still coming out)
     first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
     start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst)
-    ana = fsr.analysis([[p[0] for p in row] for row in pix], 720, 480)
-    line, prev, rb = -1, None, 0
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip)
+    ana = [None] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], 720, 480 - skip)
+    line, prev, rb = skip - 1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):
         slot, x, d = t.split()
         slot, x, d = int(slot), int(x), int(d, 16)
