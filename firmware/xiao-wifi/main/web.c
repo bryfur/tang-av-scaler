@@ -529,7 +529,7 @@ static esp_err_t post_video(httpd_req_t *req)
 #define NUM(name, dst, max) if (field(body, name, f, sizeof f)) { int x = atoi(f); dst = x < 0 ? 0 : x > (max) ? (max) : x; }
     NUM("on", v.on, 1)
     NUM("ntsc", v.ntsc, 1)
-    NUM("mode", v.mode, 2)
+    NUM("mode", v.mode, 5)
     NUM("thr", v.thr, 255)
     NUM("aa", v.aa, 1)
     NUM("aa_thr", v.aa_thr, 255)

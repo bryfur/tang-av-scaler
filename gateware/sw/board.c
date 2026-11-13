@@ -178,7 +178,8 @@ static void picture(void)
     const struct link_settings *s = &set;
     REG(R_DEINT) = (uint32_t)s->aa_thr << 24 | (s->aa_corner ? 1u : 0) << 19 | (s->aa_diag ? 1u : 0) << 18 |
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
-                   (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
+                   (s->mode & 4 ? 1u : 0) << 7 | (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) |
+                   (s->mode & 3);
     bool no_mem = REG(R_DDR) & 2;       /* (the memory's calibration failed: the test picture and the text say so) */
     REG(R_OSD) = s->osd || !st.in_ok || no_mem ? 1 : 0;
     /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */

@@ -36,7 +36,8 @@ enum {
 struct link_settings {
     uint8_t on;             /* the scaler is run (else left alone) */
     uint8_t ntsc;           /* the picture rate 60/1.001 Hz */
-    uint8_t mode;           /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave */
+    uint8_t mode;           /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave; + 4: the lines made where the
+                             * picture moves go along its edges (rtl/deint.v edi) */
     uint8_t thr;            /* its motion threshold */
     uint8_t aa;             /* SMAA */
     uint8_t aa_thr;         /* its edge threshold */

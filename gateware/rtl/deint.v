@@ -30,6 +30,14 @@
 // everywhere; bob too until four fields of alternating parity are there (hist).  top_f: the F of
 // the top field.
 //
+// edi: the mean of old and new (bob) is taken along the picture's edges instead of straight down
+// (sim/model.py edge_line(): for each pixel the offset d of -4 to 4 for which old at x + d and new
+// at x - d are most alike, by a sum over five columns; used only where it clearly beats straight
+// down and its own two pixels are alike enough; the result held between the pixels straight above
+// and below; the chroma goes the way of its pair's first pixel, half as far).  A pixel's search
+// reaches six pixels each way: the sixteen pixels of a step are made when the sixteen after them
+// are in too.
+//
 // pg: what comes in is progressive: each field in the memory is a whole frame, and the frame made
 // is the newest one's lines as they are, two a step (line 2k + 1 read as C's, line 2k in P1's
 // place and taken as it is: weave, no noise reduction); with ll, the one coming in.
@@ -62,6 +70,7 @@ module deint (
     input      [1:0]   mode,
     input      [7:0]   thr,
     input      [1:0]   nr,              // temporal noise reduction: 0 none, 1 to 3
+    input              edi,             // bob along the edges
     input              ll,
     input      [7:0]   ll_min,
     input      [9:0]   prog,
@@ -101,8 +110,8 @@ module deint (
     end
 
     localparam S_IDLE = 0, S_RQ = 1, S_WAIT = 2, S_C1 = 3, S_C2 = 4, S_W = 5, S_NEXT = 6, S_C1B = 7, S_C2B = 8,
-               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13, S_C2A = 14;
-    reg [3:0]  st = S_IDLE;
+               S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13, S_C2A = 14, S_E0 = 15, S_SH = 16, S_FL = 17, S_SH2 = 18;
+    reg [4:0]  st = S_IDLE;
     reg        active = 1'b0, pc, hist, ll_used = 1'b0;
     // (pg and nch as they were when the frame was begun: a change of them in the middle of a step
     // must not leave it waiting for lines it did not ask for: seen on the board, 2026-11-12)
@@ -224,6 +233,8 @@ module deint (
     reg [9:0]   s1_wa;
     reg [31:0]  s1_bob, s1_w, s1_d;
     reg [4:0]   s1_ay0, s1_ay1, s1_ac;
+    reg [3:0]   pv = 4'd0;
+    reg [88:0]  pd0, pd1, pd2, pd3;
     function [7:0] mean(input [7:0] a, input [7:0] b);
         reg [8:0] t;
         begin
@@ -239,21 +250,144 @@ module deint (
         end
     endfunction
 
+    // ---- the edges' way (edi) ----
+    // three sixteens side by side, old and new as they are used: [0] the ones before the ones made,
+    // [1] the ones made, [2] the ones after; P1's words and the a of the ones made
+    reg [255:0] eO0, eO1, eO2, eN0, eN1, eN2, eW;
+    reg [79:0]  eAL;
+    reg [6:0]   ec;
+    reg         elast = 1'b0;
+    wire [255:0] o_used, n_used;
+    assign o_used = old_ok ? old_c : nrc;
+    assign n_used = new_ok ? nrc : old_c;
+    // their luma, a pixel 8 bits (pixel i of sixteen g at 8 (16 g + i)); their chroma, a pair's
+    // {Cb, Cr} 16 bits (pair q of sixteen g at 16 (8 g + q))
+    wire [383:0] la, lb, ka, kb;
+    genvar gg;
+    generate
+        for (gg = 0; gg < 16; gg = gg + 1) begin : g_la
+            assign la[8 * gg +: 8] = luma(eO0, gg);
+            assign la[8 * (16 + gg) +: 8] = luma(eO1, gg);
+            assign la[8 * (32 + gg) +: 8] = luma(eO2, gg);
+            assign lb[8 * gg +: 8] = luma(eN0, gg);
+            assign lb[8 * (16 + gg) +: 8] = luma(eN1, gg);
+            assign lb[8 * (32 + gg) +: 8] = luma(eN2, gg);
+        end
+        for (gg = 0; gg < 8; gg = gg + 1) begin : g_ka
+            assign ka[16 * gg +: 16] = {eO0[32 * gg + 24 +: 8], eO0[32 * gg + 8 +: 8]};
+            assign ka[16 * (8 + gg) +: 16] = {eO1[32 * gg + 24 +: 8], eO1[32 * gg + 8 +: 8]};
+            assign ka[16 * (16 + gg) +: 16] = {eO2[32 * gg + 24 +: 8], eO2[32 * gg + 8 +: 8]};
+            assign kb[16 * gg +: 16] = {eN0[32 * gg + 24 +: 8], eN0[32 * gg + 8 +: 8]};
+            assign kb[16 * (8 + gg) +: 16] = {eN1[32 * gg + 24 +: 8], eN1[32 * gg + 8 +: 8]};
+            assign kb[16 * (16 + gg) +: 16] = {eN2[32 * gg + 24 +: 8], eN2[32 * gg + 8 +: 8]};
+        end
+    endgenerate
+    // stage 0 (with wo, wn): the pair's surroundings: luma i of 0 to 13 (the pair's two pixels: 6
+    // and 7), chroma pair j of 0 to 4 (the pair's own: 2)
+    reg [111:0] wa, wb, wa1, wb1, wa2, wb2, wa3, wb3, wa4, wb4;
+    reg [79:0]  ca, cn, ca1, cn1, ca2, cn2, ca3, cn3, ca4, cn4;
+    reg         s0_side, side1, side2, side3;
+    // stage 1: |old(i + d) - new(i - d)| for d of -4 to 4, the columns i of 4 to 9: at 8 (6 (d + 4) + i - 4)
+    reg [431:0] ad;
+    // stage 2: each pixel's sums (t 0, 1; 11 bits at 11 (9 t + d + 4)) and its candidates' own
+    // |old - new| (8 bits at 8 (9 t + d + 4))
+    reg [197:0] sm;
+    reg [143:0] adc;
+    // a candidate: {its sum, its place in the order tried, its own |old - new|}: the least by the
+    // first two is the first of the least sums (straight down, then -1, 1, -2, 2, ...)
+    function [3:0] ord(input integer d);
+        ord = d == 0 ? 4'd0 : d < 0 ? 4'd2 * (-d) - 4'd1 : 4'd2 * d;
+    endfunction
+    function signed [3:0] dof(input [3:0] o);
+        dof = o == 4'd0 ? 4'sd0 : o[0] ? -$signed({1'b0, o[3:1]} + 4'd1) : $signed({1'b0, o[3:1]});
+    endfunction
+    function [22:0] least(input [22:0] x, input [22:0] y);
+        least = y[22:8] < x[22:8] ? y : x;
+    endfunction
+    // stage 3: the least of three and three and three; straight down's own sum and |old - new|
+    reg [68:0]  c3 [0:1];
+    reg [10:0]  s0s [0:1];
+    reg [7:0]   a0s [0:1];
+    // stage 4: the offsets
+    reg signed [3:0] ed [0:1];
+    // stage 5: the word: s1_bob (with the pair's other things in s1_*)
+    integer     ei, ej, et;
+    reg [22:0]  e_c [0:8];
+    reg [22:0]  e_b;
+    reg [12:0]  e_3b;
+    reg [7:0]   e_pa, e_pb, e_xa, e_xb, e_v, e_lo, e_hi;
+    reg signed [3:0] e_d, e_dq;
+    reg [7:0]   e_y [0:1];
+    reg [7:0]   e_cc [0:1];
+    function signed [3:0] half(input signed [3:0] d);
+        half = d == -4'sd4 ? -4'sd2 : d <= -4'sd2 ? -4'sd1 : d == 4'sd4 ? 4'sd2 : d >= 4'sd2 ? 4'sd1 : 4'sd0;
+    endfunction
+    function [7:0] hold8(input [7:0] v, input [7:0] a, input [7:0] b);
+        hold8 = v < (a < b ? a : b) ? (a < b ? a : b) : v > (a < b ? b : a) ? (a < b ? b : a) : v;
+    endfunction
+    always @(posedge clk) begin
+        // 1
+        for (ej = -4; ej <= 4; ej = ej + 1)
+            for (ei = 4; ei <= 9; ei = ei + 1)
+                ad[8 * (6 * (ej + 4) + ei - 4) +: 8] <= absd(wa[8 * (ei + ej) +: 8], wb[8 * (ei - ej) +: 8]);
+        {wa1, wb1, ca1, cn1, side1} <= {wa, wb, ca, cn, s0_side};
+        // 2
+        for (et = 0; et < 2; et = et + 1)
+            for (ej = -4; ej <= 4; ej = ej + 1) begin
+                sm[11 * (9 * et + ej + 4) +: 11] <= {3'd0, ad[8 * (6 * (ej + 4) + et) +: 8]} + {3'd0, ad[8 * (6 * (ej + 4) + et + 1) +: 8]} +
+                                                      {3'd0, ad[8 * (6 * (ej + 4) + et + 2) +: 8]} + {3'd0, ad[8 * (6 * (ej + 4) + et + 3) +: 8]} +
+                                                      {3'd0, ad[8 * (6 * (ej + 4) + et + 4) +: 8]} + (ej < 0 ? -2 * ej : 2 * ej);
+                adc[8 * (9 * et + ej + 4) +: 8] <= ad[8 * (6 * (ej + 4) + et + 2) +: 8];
+            end
+        {wa2, wb2, ca2, cn2, side2} <= {wa1, wb1, ca1, cn1, side1};
+        // 3
+        for (et = 0; et < 2; et = et + 1) begin
+            for (ej = -4; ej <= 4; ej = ej + 1)
+                e_c[ord(ej)] = {sm[11 * (9 * et + ej + 4) +: 11], ord(ej), adc[8 * (9 * et + ej + 4) +: 8]};
+            c3[et] <= {least(least(e_c[6], e_c[7]), e_c[8]), least(least(e_c[3], e_c[4]), e_c[5]), least(least(e_c[0], e_c[1]), e_c[2])};
+            s0s[et] <= sm[11 * (9 * et + 4) +: 11];
+            a0s[et] <= adc[8 * (9 * et + 4) +: 8];
+        end
+        {wa3, wb3, ca3, cn3, side3} <= {wa2, wb2, ca2, cn2, side2};
+        // 4: the least of all; used where it is clearly under straight down's and its own two pixels
+        // are no less alike than those; not at the picture's sides; not without edi
+        for (et = 0; et < 2; et = et + 1) begin
+            e_b = least(least(c3[et][22:0], c3[et][45:23]), c3[et][68:46]);
+            e_3b = {2'd0, e_b[22:12]} + {1'b0, e_b[22:12], 1'b0};
+            ed[et] <= edi && !side3 && e_3b < {1'b0, s0s[et], 1'b0} && e_b[7:0] <= a0s[et] ? dof(e_b[11:8]) : 4'sd0;
+        end
+        {wa4, wb4, ca4, cn4} <= {wa3, wb3, ca3, cn3};
+        // 5: the two pixels, the pair's chroma
+        for (et = 0; et < 2; et = et + 1) begin
+            e_d = ed[et];
+            e_pa = wa4[8 * (6 + et + e_d) +: 8];
+            e_pb = wb4[8 * (6 + et - e_d) +: 8];
+            e_xa = wa4[8 * (6 + et) +: 8];
+            e_xb = wb4[8 * (6 + et) +: 8];
+            e_y[et] = hold8(mean(e_pa, e_pb), e_xa, e_xb);
+        end
+        e_dq = half(ed[0]);                     // (towards straight down)
+        for (et = 0; et < 2; et = et + 1)       // (0: Cb, the pairs' upper byte; 1: Cr)
+            e_cc[et] = hold8(mean(ca4[16 * (2 + e_dq) + 8 * (1 - et) +: 8], cn4[16 * (2 - e_dq) + 8 * (1 - et) +: 8]),
+                             ca4[16 * 2 + 8 * (1 - et) +: 8], cn4[16 * 2 + 8 * (1 - et) +: 8]);
+        s1_bob <= {e_cc[0], e_y[0], e_cc[1], e_y[1]};
+    end
+
     always @(posedge clk) begin
         start_clr <= 1'b0;
         fstart <= 1'b0;
         buf_we <= 1'b0;
         s0_v <= 1'b0;
-        s1_v <= s0_v;
+        // (what goes with the pair through the edges' four stages: its place, P1's word, the word
+        // that is as it is, the three a)
+        pv <= {pv[2:0], s0_v};
+        pd0 <= {s0_wa, ww, pc ? wn : wo, a_y0, a_y1, a_c};
+        pd1 <= pd0;
+        pd2 <= pd1;
+        pd3 <= pd2;
+        s1_v <= pv[3];
         r_we <= s1_v;
-        s1_wa <= s0_wa;
-        s1_bob <= {mean(wo[31:24], wn[31:24]), mean(wo[23:16], wn[23:16]),
-                   mean(wo[15:8], wn[15:8]), mean(wo[7:0], wn[7:0])};
-        s1_w <= ww;
-        s1_d <= pc ? wn : wo;
-        s1_ay0 <= a_y0;
-        s1_ay1 <= a_y1;
-        s1_ac <= a_c;
+        {s1_wa, s1_w, s1_d, s1_ay0, s1_ay1, s1_ac} <= pd3;
         rdv <= b_rvalid;
         rdq <= rd_data;
         if (rdv)
@@ -354,7 +488,39 @@ module deint (
                                       t_d > 8'd16 ? 5'd16 : t_d[4:0];
                 end
                 p <= 4'd0;
-                st <= emit ? S_W : S_NEXT;
+                st <= S_E0;
+            end
+            // (the sixteen pixels just read are the ones after the sixteen now made: old and new
+            // as they are used; then the ones made, if there are some: not at a line's first)
+            S_E0: begin
+                eO2 <= o_used;
+                eN2 <= n_used;
+                elast <= 1'b0;
+                st <= emit && c != 7'd0 ? S_W : S_SH;
+            end
+            // (on by sixteen; a line's last sixteen are made here, with none after them)
+            S_SH: begin
+                eO0 <= eO1;
+                eO1 <= eO2;
+                eN0 <= eN1;
+                eN1 <= eN2;
+                eW <= nrw;
+                eAL <= al;
+                ec <= c;
+                p <= 4'd0;
+                if (emit && c == nchf - 7'd1 && !elast) begin
+                    elast <= 1'b1;
+                    st <= S_SH2;
+                end else
+                    st <= S_NEXT;
+            end
+            S_SH2:
+                st <= S_W;
+            // (a line's last words through the stages below before the line counts as made)
+            S_FL: begin
+                p <= p + 4'd1;
+                if (p == 4'd13)
+                    st <= S_NEXT;
             end
             S_GAP:
                 st <= S_GAP2;
@@ -362,15 +528,22 @@ module deint (
                 st <= S_IDLE;
             S_W: begin
                 s0_v <= 1'b1;
-                s0_wa <= {c, p[2:0]};
-                wo <= old_ok ? old_c[32 * p[2:0] +: 32] : nrc[32 * p[2:0] +: 32];
-                wn <= new_ok ? nrc[32 * p[2:0] +: 32] : old_c[32 * p[2:0] +: 32];
-                ww <= nrw[32 * p[2:0] +: 32];
-                a_y0 <= al[5 * {p[2:0], 1'b0} +: 5];
-                a_y1 <= al[5 * {p[2:0], 1'b1} +: 5];
+                s0_wa <= {ec, p[2:0]};
+                wo <= eO1[32 * p[2:0] +: 32];
+                wn <= eN1[32 * p[2:0] +: 32];
+                ww <= eW[32 * p[2:0] +: 32];
+                a_y0 <= eAL[5 * {p[2:0], 1'b0} +: 5];
+                a_y1 <= eAL[5 * {p[2:0], 1'b1} +: 5];
+                // (the pair's surroundings: the luma of fourteen pixels, six before its first to six
+                // after its second, and the chroma of five pairs, two each side)
+                wa <= la[8 * (10 + 2 * p[2:0]) +: 112];
+                wb <= lb[8 * (10 + 2 * p[2:0]) +: 112];
+                ca <= ka[16 * (6 + p[2:0]) +: 80];
+                cn <= kb[16 * (6 + p[2:0]) +: 80];
+                s0_side <= (ec == 7'd0 && p[2:0] < 3'd3) || (ec == nchf - 7'd1 && p[2:0] > 3'd4);
                 p <= p + 4'd1;
                 if (p == 4'd7)
-                    st <= S_NEXT;
+                    st <= elast ? S_FL : S_SH;
             end
             S_NEXT: begin
                 buf_we <= new_ok;                   // new's line and differences kept for the next step
@@ -414,6 +587,6 @@ module deint (
         r_wd_d <= s1_d;
         r_wd_i <= {blend(s1_w[31:24], s1_bob[31:24], s1_ac), blend(s1_w[23:16], s1_bob[23:16], s1_ay0),
                    blend(s1_w[15:8], s1_bob[15:8], s1_ac), blend(s1_w[7:0], s1_bob[7:0], s1_ay1)};
-        state_o <= {active, hist, pc, ll_used, st};
+        state_o <= {active, hist, pc, ll_used, st[3:0]};
     end
 endmodule

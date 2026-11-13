@@ -140,8 +140,10 @@ void osd_update(void)
 
     line(3);
     str("DEINT ");
-    str(board_ed() ? "none (progressive)" : s->mode == 1 ? "bob" : s->mode == 2 ? "weave" : st.hist ? "motion adaptive" :
-        "bob (no history)");
+    str(board_ed() ? "none (progressive)" : (s->mode & 3) == 1 ? "bob" : (s->mode & 3) == 2 ? "weave" :
+        st.hist ? "motion adaptive" : "bob (no history)");
+    if (!board_ed() && (s->mode & 4) && (s->mode & 3) != 2)
+        str(" + edges");
     str("   NOISE ");
     str(noise[s->nr & 3]);
 

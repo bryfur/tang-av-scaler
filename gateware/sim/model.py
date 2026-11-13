@@ -125,7 +125,47 @@ def tnr(cur, oth, nr):
     return cur + c if d > 0 else cur - c
 
 
-def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0):
+EDI_D, EDI_PEN, EDI_SIDE = 4, 2, 6
+
+
+def edge_line(o, n):
+    """the line between o (above) and n (below) made along the picture's edges (rtl/deint.v edi): for
+    each pixel the offset d of -4 to 4 for which the pixels above at x + d and below at x - d are
+    most alike, by the sum over the five columns x - 2 to x + 2 of |above(x + k + d) - below(x + k - d)|
+    and 2 |d| more (the nearer to straight down first among equals); used only where that sum is
+    under two thirds of straight down's, and its own two pixels are no less alike than the two
+    straight above and below; the six pixels at each side: straight down.  The pixel: the mean of
+    the two, held between the pixels straight above and below.  The chroma goes the way of its
+    pair's first pixel, half as far (towards straight down).  -> the line's words"""
+    A, B = luma(o), luma(n)
+    w = len(A)
+    ds = []
+    for x in range(w):
+        d = 0
+        if EDI_SIDE <= x <= w - 1 - EDI_SIDE:
+            cost = lambda dd: sum(abs(A[x + k + dd] - B[x + k - dd]) for k in range(-2, 3)) + EDI_PEN * abs(dd)
+            c0 = best = cost(0)
+            for dd in (-1, 1, -2, 2, -3, 3, -4, 4):
+                c = cost(dd)
+                if c < best:
+                    best, d = c, dd
+            if not (3 * best < 2 * c0 and abs(A[x + d] - B[x - d]) <= abs(A[x] - B[x])):
+                d = 0
+        ds.append(d)
+    hold = lambda v, a, b: min(max(v, min(a, b)), max(a, b))
+    out = []
+    for q in range(w // 2):
+        d0, d1 = ds[2 * q], ds[2 * q + 1]
+        dq = int(d0 / 2)                    # (towards 0)
+        y0 = hold(mean(A[2 * q + d0], B[2 * q - d0]), A[2 * q], B[2 * q])
+        y1 = hold(mean(A[2 * q + 1 + d1], B[2 * q + 1 - d1]), A[2 * q + 1], B[2 * q + 1])
+        cb = hold(mean(o[q + dq][0], n[q - dq][0]), o[q][0], n[q][0])
+        cr = hold(mean(o[q + dq][2], n[q - dq][2]), o[q][2], n[q][2])
+        out.append((cb, y0, cr, y1))
+    return out
+
+
+def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False):
     """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines; nr: the
     temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity"""
     c, p1 = fields[-1], fields[-2]
@@ -165,12 +205,13 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0):
             else:
                 al.append(min(16, max(0, md - thr)))
         line = []
+        bob = edge_line(c[old], c[new]) if edi else None
         for q in range(PAIRS):
             o, n_, ww = c[old][q], c[new][q], p1[w][q]
             a0, a1 = al[2 * q], al[2 * q + 1]
             ac = max(a0, a1)
-            line.append((blend(ww[0], mean(o[0], n_[0]), ac), blend(ww[1], mean(o[1], n_[1]), a0),
-                         blend(ww[2], mean(o[2], n_[2]), ac), blend(ww[3], mean(o[3], n_[3]), a1)))
+            b = bob[q] if edi else (mean(o[0], n_[0]), mean(o[1], n_[1]), mean(o[2], n_[2]), mean(o[3], n_[3]))
+            line.append((blend(ww[0], b[0], ac), blend(ww[1], b[1], a0), blend(ww[2], b[2], ac), blend(ww[3], b[3], a1)))
         out[line_i] = line
     return out
 
@@ -212,10 +253,10 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False):
+              prog=False, edi=False):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
     in is progressive (each of fields a whole frame): the newest as it is"""
-    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr)
+    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi)
     if smaa_thr is not None:
         import smaa
         lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
@@ -223,10 +264,10 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False):
+               crop=(), nr=0, dn=False, prog=False, edi=False):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi)
     w, h = len(pix[0]), len(pix)
     out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2
