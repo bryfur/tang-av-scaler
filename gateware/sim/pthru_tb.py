@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""pthru_tb.py [ll=N]: a 1280 x 720 progressive picture through the DDR3 and out as it came (Verilator): a
+"""pthru_tb.py [ll=N] [switch]: a 1280 x 720 progressive picture through the DDR3 and out as it came (Verilator): a
 frame into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then a frame out of deint.v
 (pg) and pthru.v beside pattern.v's 1280 x 720 timing (a pixel every other clock); every pixel
 against the frame put in (4:4:4 and R'G'B' as pthru.v makes them).
 
-ll=N: the frame shown is made from the one coming in, begun when N of its lines are in."""
+ll=N: the frame shown is made from the one coming in, begun when N of its lines are in.
+switch: pg is taken from deint.v in the middle of a step and given back: frames go on being made."""
 import os
 import subprocess
 import sys
@@ -67,7 +68,8 @@ def expect(t):
 def main():
     os.makedirs(WORK, exist_ok=True)
     ll = int(next((a[3:] for a in sys.argv[1:] if a.startswith("ll=")), 0))
-    tag = "pt%s" % ("_ll%d" % ll if ll else "")
+    sw = "switch" in sys.argv[1:]
+    tag = "pt%s%s" % ("_ll%d" % ll if ll else "", "_sw" if sw else "")
     # (the first frame in is not counted: cap_ddr.v takes none it has not seen begin)
     frames = [0, 1, 2] if ll else [0, 1]
     data = stream(frames)
@@ -111,7 +113,7 @@ module tb;
     wire ev, ev_first, r_we, fstart, hold; wire [9:0] goal, emitted, r_wa;
     wire [2:0] sd, si; wire [31:0] wd_d, wd_i;
     wire [15:0] frames; wire [7:0] dstate;
-    deint u_deint (.clk(pclk), .nch(7'd80), .pg(1'b1), .ev(ev), .ev_first(ev_first), .goal(goal), .hold(hold),
+    deint u_deint (.clk(pclk), .nch(7'd80), .pg(pg_r), .ev(ev), .ev_first(ev_first), .goal(goal), .hold(hold),
                    .latest(latest), .par(par), .nfields(fn), .flines(flines), .mode(2'd0), .thr(8'd6), .nr(2'd2),
                    .ll(1'b%(ll_on)d), .ll_min(8'd%(ll)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
@@ -129,6 +131,8 @@ module tb;
     wire de_d = de_s[%(lat)d - 1];
     integer f, i, j;
     reg llbit = 0;
+    reg pg_r = 1;
+    integer fr0;
     initial begin
         $readmemh("%(work)s/%(tag)s_in.hex", mem);
         for (i = 0; i <= %(first_n)d; i = i + 1) begin
@@ -148,6 +152,16 @@ module tb;
         end
         @(posedge ev_first);
         if (%(ll_on)d) $display("as the frame begins: %%0d lines of the frame in slot %%0d are in (latest %%0d)", f_prog, f_pslot, latest);
+        if (%(sw)d) begin
+            // pg taken away in the middle of a step, and given back: frames must go on being made
+            #(3000000); @(posedge pclk); while (dstate[3:0] != 4'd2) @(posedge pclk);
+            pg_r = 0; fr0 = frames;
+            #(40000000); $display("switch: without pg %%0d frames more, state %%h", frames - fr0, dstate);
+            @(posedge pclk); while (dstate[3:0] != 4'd2) @(posedge pclk);
+            pg_r = 1; fr0 = frames;
+            #(40000000); $display("switch: with pg again %%0d frames more, state %%h", frames - fr0, dstate);
+            $finish;
+        end
         f = $fopen("%(work)s/%(tag)s_out.bin", "wb");
         for (i = 0; i < %(n_out)d; i = i + 1) begin
             @(posedge clk); #0.1;
@@ -161,9 +175,11 @@ module tb;
     end
 endmodule
 ''' % dict(last=len(data) - 1, first_n=first_n, ll_on=1 if ll else 0, ll=ll, ll_wait=ll_wait, lat=LAT,
-           work=WORK, tag=tag, n_out=2 * (1650 * 750 + 1650 * 10))
+           sw=1 if sw else 0, work=WORK, tag=tag, n_out=2 * (1650 * 750 + 1650 * 10))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "deint.v", "pthru.v", "pattern.v")]
+    if os.environ.get("PT_DEINT"):      # (another deint.v: does the test catch what it is for)
+        rtl[3] = os.environ["PT_DEINT"]
     mdir = os.path.join(WORK, "vl_" + tag)
     subprocess.check_call(["verilator", "--binary", "--timing", "-j", "16", "-Wno-fatal", "-Wno-WIDTH", "-Wno-UNUSED",
                            "-Wno-DECLFILENAME", "-Wno-STMTDLY", "-Wno-INITIALDLY", "-Wno-MULTIDRIVEN", "-Wno-TIMESCALEMOD",
@@ -172,6 +188,10 @@ endmodule
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     log = subprocess.check_output([os.path.join(mdir, tag)]).decode().strip()
     print(log)
+    if sw:
+        n = [int(l.split()[l.split().index("frames") - 1]) for l in log.splitlines() if l.startswith("switch:")]
+        print("switch: %s" % ("frames go on" if len(n) == 2 and min(n) >= 2 else "STUCK"))
+        return 0 if len(n) == 2 and min(n) >= 2 else 1
     s = open(os.path.join(WORK, tag + "_out.bin"), "rb").read()
     px = [s[4 * k + 1:4 * k + 4] for k in range(len(s) // 4) if s[4 * k] == 66]
     want = expect(frames[-1])

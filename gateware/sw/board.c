@@ -223,6 +223,10 @@ static void input_detect(void)
     ok = std <= LINK_IN_480I || std == LINK_IN_OTHER || std == LINK_IN_720P;
     st.in_lines = std == LINK_IN_NONE ? 0 : n;
     st.in_hz100 = twice ? (uint16_t)(line * 200 / twice) : 0;
+    /* (hd: by the decoder's clock, which has the picture: 1650 x 750 samples a frame; STDI's line
+     * time is coarse) */
+    if (hd && std == LINK_IN_720P && st.llc_hz > 74000000 && st.llc_hz < 74400000)
+        st.in_hz100 = (uint16_t)(st.llc_hz / 12375);
     if (std != st.in_std || ok != (st.in_ok != 0)) {
         st.in_std = std;
         st.in_ok = ok;
@@ -482,6 +486,22 @@ void board_second(void)
     st.frames_s = ((dstat >> 16) - frames_was) & 0xFFFF;
     fields_was = fields;
     frames_was = dstat >> 16;
+    /* The picture's reader stuck: fields come in and no frame is made, two seconds running.  Seen
+     * after 720p gave way to 480i in the middle of a step (a design from before deint.v kept pg for
+     * the frame: it waits for lines it did not ask for): pg the other way for a moment lets it go on. */
+    {
+        static uint8_t stuck;
+        if (set.on && !st.host && st.fields_s >= 45 && st.frames_s == 0 && !(REG(R_VID) >> 1 & 1) && REG(R_SRC) != 0) {
+            if (++stuck >= 2) {
+                uint32_t v = REG(R_SRC);
+                REG(R_SRC) = v ^ 1;
+                wait_ms(2);
+                REG(R_SRC) = v;
+                stuck = 0;
+            }
+        } else
+            stuck = 0;
+    }
     st.hist = dstat >> 14 & 1;
     st.hpd = REG(R_STAT) >> 2 & 1;
     st.pll = REG(R_GT_STAT) >> 13 & 1;

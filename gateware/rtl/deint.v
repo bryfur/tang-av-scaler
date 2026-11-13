@@ -104,6 +104,10 @@ module deint (
                S_GO = 9, S_C1C = 10, S_GAP = 11, S_GAP2 = 12, S_C1D = 13, S_C2A = 14;
     reg [3:0]  st = S_IDLE;
     reg        active = 1'b0, pc, hist, ll_used = 1'b0;
+    // (pg and nch as they were when the frame was begun: a change of them in the middle of a step
+    // must not leave it waiting for lines it did not ask for: seen on the board, 2026-11-12)
+    reg        pgf = 1'b0;
+    reg [6:0]  nchf = 7'd45;
     // (a frame from the field coming in: four fields before it in order, and enough of it there)
     wire [2:0] nxt = latest + 3'd1;
     wire       ll_now = pg ? ll && nfields != 3'd0 && prog_slot == nxt && prog >= {2'd0, ll_min} :
@@ -121,18 +125,18 @@ module deint (
 
     // the step's lines (registered: k changes between steps only, a clock at least before they
     // are used)
-    wire [9:0] kmax = pg ? {1'b0, nl[9:1]} - 10'd1 : pc ? nl - 10'd1 : nl;
+    wire [9:0] kmax = pgf ? {1'b0, nl[9:1]} - 10'd1 : pc ? nl - 10'd1 : nl;
     reg        new_ok, old_ok, emit;
     reg [9:0]  row_new, row_w, line_i, line_d;
     reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
     always @(posedge clk) begin
-        line_ok <= !ll_used || latest == fc || (prog_slot == fc && (pg ? {k[8:0], 1'b1} : k) < prog) || (!pg && k >= nl);
+        line_ok <= !ll_used || latest == fc || (prog_slot == fc && (pgf ? {k[8:0], 1'b1} : k) < prog) || (!pgf && k >= nl);
         can <= active && !hold && k <= kmax && emitted <= goal && line_ok;
-        new_ok <= pg || k < nl;
+        new_ok <= pgf || k < nl;
         old_ok <= k != 10'd0;
         emit <= pc ? 1'b1 : k != 10'd0;
-        row_new <= pg ? {k[8:0], 1'b1} : k < nl ? k : nl - 10'd1;
-        row_w <= pg ? {k[8:0], 1'b0} : pc ? k : (k != 10'd0 ? k - 10'd1 : 10'd0);
+        row_new <= pgf ? {k[8:0], 1'b1} : k < nl ? k : nl - 10'd1;
+        row_w <= pgf ? {k[8:0], 1'b0} : pc ? k : (k != 10'd0 ? k - 10'd1 : 10'd0);
         line_i <= pc ? {k[8:0], 1'b0} : {k[8:0] - 9'd1, 1'b1};
         line_d <= pc ? {k[8:0], 1'b1} : {k[8:0] - 9'd1, 1'b0};
     end
@@ -254,9 +258,9 @@ module deint (
         rdq <= rd_data;
         if (rdv)
             rx <= rx + 3'd1;
-        // (pg: the two lines of the one frame, in turn the one first and the other: the memory's row
+        // (pgf: the two lines of the one frame, in turn the one first and the other: the memory's row
         // changes once for sixteen pixels, not twice)
-        rde <= rdv ? 4'd1 << (pg ? {rx[0] ^ c[0], 1'b0} : rx[1:0]) : 4'd0;
+        rde <= rdv ? 4'd1 << (pgf ? {rx[0] ^ c[0], 1'b0} : rx[1:0]) : 4'd0;
         rdq2 <= rdq;
         if (rde[0])
             d0 <= rdq2;
@@ -273,6 +277,8 @@ module deint (
                     fstart <= 1'b1;
                     frames <= frames + 16'd1;
                     ll_used <= ll_now;
+                    pgf <= pg;
+                    nchf <= nch;
                     if (pg) begin
                         fc <= ll_now ? nxt : latest;
                         f1 <= ll_now ? nxt : latest;
@@ -316,12 +322,12 @@ module deint (
                 end else if (!b_valid || b_ack) begin
                     b_valid <= 1'b1;
                     b_line <= {i == 3'd0 ? fc : i == 3'd1 ? f2 : i == 3'd2 ? f1 : f3, 5'd0,
-                               (pg ? i[1] ^ c[0] : i[1]) ? row_w : row_new, c};
-                    i <= i + (pg ? 3'd2 : 3'd1);        // (pg: the two lines of the one frame)
+                               (pgf ? i[1] ^ c[0] : i[1]) ? row_w : row_new, c};
+                    i <= i + (pgf ? 3'd2 : 3'd1);        // (pgf: the two lines of the one frame)
                 end
             end
             S_WAIT:
-                if (rx == (pg ? 3'd2 : 3'd4))
+                if (rx == (pgf ? 3'd2 : 3'd4))
                     st <= S_C1;
             // (the differences, the greatest of them and those with the pixels beside are worked out
             // below, a clock each, from the lines read and the buffers: both stay as they are until
@@ -344,7 +350,7 @@ module deint (
                 for (n = 0; n < 16; n = n + 1) begin
                     t_m = md[8 * n +: 8];
                     t_d = t_m > thr ? t_m - thr : 8'd0;
-                    al[5 * n +: 5] <= pg ? 5'd0 : mode == 2'd1 || (!hist && mode != 2'd2) ? 5'd16 : mode == 2'd2 ? 5'd0 :
+                    al[5 * n +: 5] <= pgf ? 5'd0 : mode == 2'd1 || (!hist && mode != 2'd2) ? 5'd16 : mode == 2'd2 ? 5'd0 :
                                       t_d > 8'd16 ? 5'd16 : t_d[4:0];
                 end
                 p <= 4'd0;
@@ -371,7 +377,7 @@ module deint (
                 buf_a <= c;
                 buf_c <= nrc;
                 buf_m <= dn;
-                if (c == nch - 7'd1) begin
+                if (c == nchf - 7'd1) begin
                     k <= k + 10'd1;
                     if (emit)
                         emitted <= emitted + 10'd2;
