@@ -22,11 +22,14 @@ display and a capture device. The table below is what it does now, on the board.
 has been run with is a PlayStation 2; an Xbox or a GameCube with its component cable puts out the
 same signal (480i, YPbPr, 59.94 Hz) and has not been tried yet.
 
-![The board, rev C-B, rendered from its design](hardware/av-board/rev-cb/img/av-board-cb-3d.png)
+<p>
+<img src="hardware/av-board/rev-cb/img/av-board-cb-3d.png" width="49%" alt="The board, rev C-B, rendered from its design">
+<img src="hardware/av-board/rev-cb/img/av-board-cb-top.png" width="49%" alt="The same from above">
+</p>
 
 ![The board, rev C-B](hardware/av-board/rev-cb/img/av-board-cb-photo.jpg)
 
-The board, rev C-B ([hardware/av-board/](hardware/av-board/README.md)), as designed and as built:
+The board, rev C-B ([hardware/av-board/](hardware/av-board/README.md)), as designed (rendered, and from above) and as built:
 the SOM under its heat sink, the XIAO and its antenna at the right; along the back edge the HDMI
 output, the two audio jacks, power (USB-C) and the three component video jacks.
 
