@@ -122,8 +122,9 @@ The design uses 16 % of the FPGA's logic, 75 % of its block RAM and 15 % of its 
 - Consoles other than the PlayStation 2 have not been tried. The Xbox and the GameCube put out the
   same 480i over their component cables; the Dreamcast has no component output (its VGA and RGB
   would come in at the board's inputs that are not used yet).
-- Inputs other than 480i and 720p (which goes out as it came, 720p): 480p, 576i and 1080i need the
-  decoder's settings and the capture's timing for each.
+- Inputs: 480i is the one in use; 720p goes out as it came, 720p; 480p is taken as the progressive
+  picture it is and scaled like the rest, but only in simulation so far (not yet tried from a
+  console); 576i and 1080i need the decoder's settings and the capture's timing for each.
 - The surround decoding runs on the board (the CPU keeps up, nothing lost), but has not been
   heard through a receiver yet: off unless switched on.
 - 4K output: a 2160p30 test picture is clean on a display; at 2160p60 the link runs and the display

@@ -559,6 +559,9 @@ void board_second(void)
         grabbing = false;
         picture();
     }
+    /* (for a host: the thousandths of the core's time the sound took this second) */
+    REG(R_CPUM + 3) = audio_dsp_cycles / (core_hz / 1000) << 16 | audio_cycles / (core_hz / 1000);
+    audio_cycles = audio_dsp_cycles = 0;
     /* the data memory: tested once, when its controller is calibrated (a few tries: it may not be yet) */
     if (mem_state == MEM_NONE && mem_tries < 5 && st.up_s >= 2) {
         mem_tries++;

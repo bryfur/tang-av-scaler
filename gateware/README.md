@@ -22,6 +22,16 @@ State on the board (2026-11-12):
 
     tools/flash.sh <GW_OUT>/avb/impl/pnr/avb.fs     # into the SOM's flash: the board starts by itself
 
+A build is the same build every time: its number (register 01) is not the time it was made but
+`gowin/build.stamp`'s, which belongs to the logic's sources by their checksum, with the place and
+route options that close the timing for them. (The number is a constant in the logic: with
+another one the synthesis gives another netlist and the place and route another result. With the
+build's time for it, a design that had closed missed its clocks a minute later; with the same
+number the result is the same to the last digit, on either build machine.) A new CPU program
+alone changes nothing. After a change to the logic: build the pairs GW_PLACE, GW_ROUTE = (2, 1),
+(2, 2), (3, 1), (3, 2) (four at once on each machine), with GW_BUILD a second on for more tries
+if none closes, and copy the closing build's `build.stamp` (in its GW_OUT) to `gowin/`.
+
 With the bitstream in the flash and the Wi-Fi link's firmware in the XIAO (`firmware/xiao-wifi`),
 the board needs power, a source and a display, and nothing else: the FPGA loads from the flash
 (some 20 s), its CPU brings the clock chip, the HDMI redriver, the decoder and the lanes up (under

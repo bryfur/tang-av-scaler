@@ -81,9 +81,18 @@ module cpu #(
     reg  [31:0] rom_hrdata;
     reg  [31:0] mem [0:WORDS - 1];
     initial $readmemh(HEX, mem);
-    always @(posedge clk)
-        if (pm_we)
-            mem[pm_wa[AW - 1:0]] <= pm_wd;
+    // (a word written a clock after the bus says so: the bus's master is chosen in the same clock,
+    // and the memory's sixteen blocks are all over the chip: the system clock's longest path)
+    reg         pw_we = 1'b0;
+    reg [12:0]  pw_wa;
+    reg [31:0]  pw_wd;
+    always @(posedge clk) begin
+        pw_we <= pm_we;
+        pw_wa <= pm_wa;
+        pw_wd <= pm_wd;
+        if (pw_we)
+            mem[pw_wa[AW - 1:0]] <= pw_wd;
+    end
     always @(posedge rom_hclk)
         if (rom_htrans[1])
             rom_hrdata <= mem[rom_haddr[AW + 1:2]];

@@ -61,7 +61,8 @@ module tb;
                           .stall(stall), .busy(busy));
     cpu #(.HEX("%(work)s/cpu_tb_rom.hex"), .WORDS(16)) dut (.clk(clk), .core_clk(1'b0), .rst_n(1'b1), .pm_we(1'b0), .pm_wa(13'd0),
         .pm_wd(32'd0), .stall(c_stall), .mon_busy(busy), .other(s_own), .c_own(c_own), .c_we(c_we), .c_addr(c_addr), .c_wdata(c_wdata),
-        .rdata(rdata), .txd(), .rxd(1'b1), .wfi());
+        .rdata(rdata), .txd(), .rxd(1'b1), .wfi(), .pclk(clk), .d_ok(1'b0), .d_valid(), .d_wr(), .d_line(), .d_data(),
+        .d_mask(), .d_ack(1'b0), .d_rvalid(1'b0), .d_rdata(256'd0), .d_nrd(), .d_nwr(), .d_dead(), .d_first());
     integer k;
     initial for (k = 0; k < 8; k = k + 1) r[k] = 0;
     always @(posedge clk) begin
@@ -199,7 +200,7 @@ def main():
     os.makedirs(WORK, exist_ok=True)
     open(os.path.join(WORK, "cpu_tb.v"), "w").write(TB % dict(work=WORK))
     open(os.path.join(WORK, "cpu_tb_rom.hex"), "w").write("00000013\n" * 16)
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("cpu.v", "mon.v", "uart.v", "spis.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("cpu.v", "cpu_ddr.v", "mon.v", "uart.v", "spis.v")]
     subprocess.check_call(["iverilog", "-g2005", "-o", os.path.join(WORK, "cpu_tb.vvp"), os.path.join(WORK, "cpu_tb.v")] + rtl)
     out = subprocess.check_output(["vvp", os.path.join(WORK, "cpu_tb.vvp")]).decode()
     print("\n".join(out.strip().splitlines()[-8:]))

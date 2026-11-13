@@ -50,6 +50,8 @@ void board_lock(void);              /* ten times a second: the output's clock tr
 void audio_set(bool want);
 bool audio_on(void);
 void audio_service(void);          /* the pairs of samples that wait, each made six channels */
+extern uint32_t audio_cycles;       /* the core's clocks it has taken (board.c: thousandths of the core's time, register 67) */
+extern uint32_t audio_dsp_cycles;   /* ... the decoder's part (register 67's upper half) */
 
 /* mem.c: the data memory (the DDR3) */
 enum { MEM_NONE, MEM_GOOD, MEM_BAD, MEM_DEAD };     /* not there (or not calibrated), tested good, wrong, no answer */
