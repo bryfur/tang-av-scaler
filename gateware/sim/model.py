@@ -75,6 +75,27 @@ def pan_field(t, dx, dyr):
     return out
 
 
+def poly_field(t):
+    """field t of a picture of hard-edged bars at low angles on a plain ground (a console's polygons:
+    no anti-aliasing), each moving across: what the edge search is for"""
+    bars = [(40, 60, 8, 200, 3), (120, 300, -6, 30, -2), (200, 100, 3, 220, 4), (260, 420, -12, 180, 1), (330, 250, 2, 25, -3),
+            (380, 500, 16, 210, 2), (60, 480, -4, 190, -4), (430, 80, 5, 40, 3)]
+    out = []
+    for n in range(LINES):
+        yf = 2 * n + (t & 1)
+        ys = []
+        for x in range(2 * PAIRS):
+            v = 90 + (x // 64 + yf // 48) % 2 * 12
+            for y0, x0, run, lum, speed in bars:        # a bar: 14 lines thick, a line down every |run| pixels across
+                xs = x - x0 - speed * t
+                top = y0 + (xs // run if run > 0 else -(xs // -run))
+                if 0 <= xs < 420 and top <= yf < top + 14:
+                    v = lum
+            ys.append(v)
+        out.append([(110 + (q // 9) % 30, ys[2 * q], 120 + (yf // 7) % 40, ys[2 * q + 1]) for q in range(PAIRS)])
+    return out
+
+
 def noisy(fields, amp):
     """the fields with noise of +-amp added to every sample (the same each run), within 16 to 235"""
     import random
@@ -151,36 +172,64 @@ def tnr(cur, oth, nr):
     return cur + c if d > 0 else cur - c
 
 
-EDI_D, EDI_PEN, EDI_SIDE = 4, 2, 6
+EDI_D, EDI_T1, EDI_E, EDI_SIDE = 8, 24, 60, 26
+EDI_ORDER = [d for k in range(1, EDI_D + 1) for d in (-k, k)]      # the offsets, as they are tried
 
 
-def edge_line(o, n):
-    """the line between o (above) and n (below) made along the picture's edges (rtl/deint.v edi): for
-    each pixel the offset d of -4 to 4 for which the pixels above at x + d and below at x - d are
-    most alike, by the sum over the five columns x - 2 to x + 2 of |above(x + k + d) - below(x + k - d)|
-    and 2 |d| more (the nearer to straight down first among equals); used only where that sum is
-    under two thirds of straight down's, and its own two pixels are no less alike than the two
-    straight above and below; the six pixels at each side: straight down.  The pixel: the mean of
-    the two, held between the pixels straight above and below.  The chroma goes the way of its
-    pair's first pixel, half as far (towards straight down).  -> the line's words"""
-    A, B = luma(o), luma(n)
+def edge_dirs(A, B, A2, B2):
+    """each made pixel's direction (rtl/deint_edi.v): d of -8 to 8: the line above (A) at x + d and
+    the line below (B) at x - d are the two ends of an edge through the pixel.  A direction is one
+    only where
+      - there is a step to bridge: |A[x] - B[x]| >= EDI_T1
+      - its two ends are alike over five columns: c = the sum over k of -2 to 2 of
+        |A[x + k + d] - B[x + k - d]| is under a third of straight down's (the same sum at d = 0)
+      - the edge goes on through the field's next lines out (A2 above A, B2 below B):
+        e = the sum over the five columns of |A2[x + k + 3 d] - A[x + k + d]| +
+        |B2[x + k - 3 d] - B[x + k - d]| is under EDI_E
+      - its own two pixels differ by a quarter of the step at most
+    The least 2 c + e + 2 |d| wins (the first of equals, in the order -1, 1, -2, 2, ...); none: 0.
+    Then the pixels beside must agree: a direction more than 1 from the median of the five about it
+    is dropped.  The EDI_SIDE pixels at each side: 0 (the search reaches that far)."""
     w = len(A)
-    ds = []
+    ds = [0] * w
+    for x in range(EDI_SIDE, w - EDI_SIDE):
+        v = abs(A[x] - B[x])
+        if v < EDI_T1:
+            continue
+        c0 = sum(abs(A[x + k] - B[x + k]) for k in range(-2, 3))
+        best = None
+        for d in EDI_ORDER:
+            if 4 * abs(A[x + d] - B[x - d]) > v:
+                continue
+            c = sum(abs(A[x + k + d] - B[x + k - d]) for k in range(-2, 3))
+            if 3 * c >= c0:
+                continue
+            e = sum(abs(A2[x + k + 3 * d] - A[x + k + d]) + abs(B2[x + k - 3 * d] - B[x + k - d]) for k in range(-2, 3))
+            if e >= EDI_E:
+                continue
+            sc = 2 * c + e + 2 * abs(d)
+            if best is None or sc < best[0]:
+                best = (sc, d)
+        if best:
+            ds[x] = best[1]
+    out = []
     for x in range(w):
-        d = 0
-        if EDI_SIDE <= x <= w - 1 - EDI_SIDE:
-            cost = lambda dd: sum(abs(A[x + k + dd] - B[x + k - dd]) for k in range(-2, 3)) + EDI_PEN * abs(dd)
-            c0 = best = cost(0)
-            for dd in (-1, 1, -2, 2, -3, 3, -4, 4):
-                c = cost(dd)
-                if c < best:
-                    best, d = c, dd
-            if not (3 * best < 2 * c0 and abs(A[x + d] - B[x - d]) <= abs(A[x] - B[x])):
-                d = 0
-        ds.append(d)
+        med = sorted(ds[min(max(x + j, 0), w - 1)] for j in (-2, -1, 0, 1, 2))[2]
+        out.append(ds[x] if abs(ds[x] - med) <= 1 else 0)
+    return out
+
+
+def edge_line(o, n, o2=None, n2=None):
+    """the line between o (above) and n (below) made along the picture's edges (rtl/deint.v edi;
+    o2, n2: the field's next lines out, above o and below n: without one, the nearer line itself):
+    each pixel the mean of the line above at x + d and the line below at x - d (edge_dirs()), held
+    between the pixels straight above and below.  The chroma goes the way of its pair's first
+    pixel, half as far (towards straight down).  -> the line's words"""
+    A, B = luma(o), luma(n)
+    ds = edge_dirs(A, B, luma(o2 if o2 is not None else o), luma(n2 if n2 is not None else n))
     hold = lambda v, a, b: min(max(v, min(a, b)), max(a, b))
     out = []
-    for q in range(w // 2):
+    for q in range(len(A) // 2):
         d0, d1 = ds[2 * q], ds[2 * q + 1]
         dq = int(d0 / 2)                    # (towards 0)
         y0 = hold(mean(A[2 * q + d0], B[2 * q - d0]), A[2 * q], B[2 * q])
@@ -298,7 +347,7 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
             else:
                 al.append(min(16, max(0, md - thr)))
         line = []
-        bob = edge_line(c[old], c[new]) if edi else None
+        bob = edge_line(c[old], c[new], c[old - 1] if old >= 1 else None, c[new + 1] if new + 1 < nl else None) if edi else None
         # the vectors' way: how far the picture is from itself two fields ago moved by the block's
         # (dx, dyr) (on old, on new, and the field before against the one three before, at the line
         # itself moved by half of it): as m; 255 (no use of it) where a line or a pixel of it is

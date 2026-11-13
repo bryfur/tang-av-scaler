@@ -30,10 +30,11 @@
 // the top field.
 //
 // edi: the mean of old and new (bob) is taken along the picture's edges instead of straight down
-// (sim/model.py edge_line(): for each pixel the offset d of -4 to 4 for which old at x + d and new
-// at x - d are most alike, by a sum over five columns; used only where it clearly beats straight
-// down and its own two pixels are alike enough; the result held between the pixels straight above
-// and below; the chroma goes the way of its pair's first pixel, half as far).
+// (deint_edi.v; sim/model.py edge_line()): for each pixel the offset d of -8 to 8 for which old at
+// x + d and new at x - d are the two ends of an edge through it: where there is a step to bridge,
+// the ends are alike over five columns, the edge goes on through the field's next lines out (the
+// line above old, the line below new) and the pixels beside agree; the result held between the
+// pixels straight above and below; the chroma half as far.
 //
 // mc: motion compensation.  Each block of eight pixels of each line made has a vector (dx, dyr):
 // what is at (x, row) of a field is at (x + dx, row + dyr) of the field two before (the same
@@ -216,7 +217,7 @@ module deint #(
     output reg         fstart = 1'b0,
     output reg [15:0]  frames = 16'd0,  // (for the host: frames begun, and the last one's state)
     output reg [7:0]   state_o
-);
+) /* synthesis syn_srlstyle = "registers" */;     // (no block RAM for what only moves on)
     // the output's events
     reg        e0, e1, e2, start = 1'b0;
     reg        start_clr;
@@ -255,10 +256,19 @@ module deint #(
                         par[latest - 3'd1] != par[latest] && par[latest - 3'd2] == par[latest];
     wire       hist_n = nfields >= 3'd4 && par[latest - 3'd1] != par[latest] &&
                         par[latest - 3'd2] == par[latest] && par[latest - 3'd3] != par[latest];
+    // (as registers: a frame is begun from what was so the clock before)
+    reg        ll_now_r = 1'b0, hist_n_r = 1'b0;
+    always @(posedge clk) begin
+        ll_now_r <= ll_now;
+        hist_n_r <= hist_n;
+    end
     reg        line_ok = 1'b1;          // (C's lines of this step are in the memory)
     reg [2:0]  fc, f1, f2, f3;          // the fields' slots
     reg [9:0]  nl;                      // a field's lines
     reg [9:0]  k;                       // the step
+    // (the same again, beside what uses it: the step's own registers; the estimator's and the vectors' rows)
+    reg [9:0]  ks /* synthesis syn_preserve = 1 */;
+    reg [9:0]  kv /* synthesis syn_preserve = 1 */;
     reg [3:0]  km1, km2, km3;           // k's place in the rings of N1, N2, N3 buffers (from the first row loaded)
     reg [1:0]  kmc;                     // ... of C's four
 
@@ -299,37 +309,39 @@ module deint #(
 
     // the step's lines (registered: k changes between steps only, clocks before they are used)
     wire [9:0] kmax = pgf ? {1'b0, nl[9:1]} - 10'd1 : pc ? nl - 10'd1 : nl;
-    wire [9:0] row_w = pc ? k : k - 10'd1;
-    wire       new_w = pgf || k < nl, old_w = k != 10'd0;
-    wire [9:0] line_i_w = pc ? {k[8:0], 1'b0} : {k[8:0] - 9'd1, 1'b1};
+    wire [9:0] row_w = pc ? ks : ks - 10'd1;
+    wire       new_w = pgf || ks < nl, old_w = ks != 10'd0;
+    wire [9:0] line_i_w = pc ? {ks[8:0], 1'b0} : {ks[8:0] - 9'd1, 1'b1};
     reg        new_ok, old_ok;
     reg        mc_s = 1'b0;             // the step has vectors
     reg [9:0]  line_i, line_d;
     reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
+    reg [9:0]  goal_r = 10'd0;          // (the goal, beside it)
     reg [10:0] hC, h1, hL, h3;          // the windows' last rows (hL: P2's luma's)
     reg [1:0]  sCA, sCB;                // the rows' buffers: C's old and new,
     reg [1:0]  sCm, sCp;                // the one before old and the one after new (the nearest in the field),
     reg [3:0]  s1W, s3W;                // P1's and P3's own (P2's: as C's)
-    reg [8:0]  hk;                      // 37 k (mod 512) and 3 k (mod 16): the estimator's turns
+    reg [8:0]  hk;                      // 37 ks (mod 512) and 3 ks (mod 16): the estimator's turns
     reg [3:0]  uk;
     wire signed [11:0] nl_s = $signed({2'b00, nl});
     always @(posedge clk) begin
-        // (from the head as registered: three clocks from k to can: S_GAP to S_GAP3)
-        line_ok <= !ll_used || latest == fc || (prog_slot == fc && (pgf ? {k[8:0], 1'b1} : hC[9:0]) < prog);
-        can <= active && !hold && k <= kmax && emitted <= goal && line_ok;
+        // (from the head as registered: three clocks from ks to can: S_GAP to S_GAP3)
+        line_ok <= !ll_used || latest == fc || (prog_slot == fc && (pgf ? {ks[8:0], 1'b1} : hC[9:0]) < prog);
+        goal_r <= goal;
+        can <= active && !hold && ks <= kmax && emitted <= goal_r && line_ok;
         new_ok <= new_w;
         old_ok <= old_w;
         mc_s <= mc_f && new_w && old_w && line_i_w >= firstf;
         line_i <= line_i_w;
-        line_d <= pc ? {k[8:0], 1'b1} : {k[8:0] - 9'd1, 1'b0};
-        hC <= head({1'b0, k} + 11'd1, nl);
-        hL <= head({1'b0, k} + 11'd5, nl);
+        line_d <= pc ? {ks[8:0], 1'b1} : {ks[8:0] - 9'd1, 1'b0};
+        hC <= head({1'b0, ks} + 11'd1, nl);
+        hL <= head({1'b0, ks} + 11'd5, nl);
         h1 <= head({1'b0, row_w} + 11'd2, nl);
         h3 <= head({1'b0, row_w} + 11'd6, nl);
         sCA <= old_w ? kmc - 2'd1 : kmc;
         sCB <= new_w ? kmc : kmc - 2'd1;
-        sCm <= k >= 10'd2 ? kmc - 2'd2 : kmc - k[1:0];
-        sCp <= {1'b0, k} + 11'd1 < {1'b0, nl} ? kmc + 2'd1 : kmc;
+        sCm <= ks >= 10'd2 ? kmc - 2'd2 : kmc - ks[1:0];
+        sCp <= {1'b0, ks} + 11'd1 < {1'b0, nl} ? kmc + 2'd1 : new_w ? kmc : kmc - 2'd1;
         s1W <= wrap(km1, ow, N1);
         s3W <= wrap(km3, ow, N3);
     end
@@ -464,6 +476,7 @@ module deint #(
     // the line above's vectors about the block (wm1, w0, wp1: the block before's, its own, the
     // next's)
     reg  [7:0]  mb;                     // the block
+    reg         mlast;                  // ... is the line's last
     reg  [2:0]  mcd;                    // the candidate
     reg  [2:0]  mi;                     // the clock of its three
     reg  [9:0]  wm1, w0, wp1;
@@ -535,7 +548,7 @@ module deint #(
     reg  [3:0]  mka, mkb, mkc, mkd;
     wire signed [12:0] m_x = $signed({2'b00, mb, 3'b000}) + cdx;
     wire signed [4:0]  cdy5 = {cdy[3], cdy};
-    wire signed [11:0] m_r = $signed({2'b00, k}) + cdy;                 // new's row, moved
+    wire signed [11:0] m_r = $signed({2'b00, kv}) + cdy;                 // new's row, moved
     // d: the four rows of P2, two words of each; the candidate's first four words kept; C's rows'
     // words, as they come (mca..mcd_: {valid, which of the block's four})
     reg  [15:0] mla [0:3], mlb [0:3];
@@ -632,10 +645,11 @@ module deint #(
     wire signed [3:0]  bdyh = bdy >>> 1;
     wire signed [4:0]  bdy5 = {bdy[3], bdy}, bdyh5 = {bdyh[3], bdyh};
     wire        buse = !bdy[0] && vvec != 10'd0;                // (dyr even, and the block moves)
-    wire signed [11:0] rn_w = $signed({2'b00, k}) + bdy;
-    wire signed [11:0] ro_w = $signed({2'b00, k}) - 12'sd1 + bdy;
-    wire signed [11:0] r1_w = $signed({2'b00, row_w}) + bdyh;
-    wire signed [11:0] r3_w = $signed({2'b00, row_w}) + bdyh + bdy;
+    wire signed [11:0] rn_w = $signed({2'b00, kv}) + bdy;
+    wire signed [11:0] ro_w = $signed({2'b00, kv}) - 12'sd1 + bdy;
+    wire [9:0] row_v = pc ? kv : kv - 10'd1;
+    wire signed [11:0] r1_w = $signed({2'b00, row_v}) + bdyh;
+    wire signed [11:0] r3_w = $signed({2'b00, row_v}) + bdyh + bdy;
     reg  [11:0] vta = 12'd0, vtb = 12'd0, vtc = 12'd0, vtd = 12'd0;   // {valid, word, block}
     // with it: {the vector is used, dx, the buffers of P2's row for new, for old, of P1's, of P3's,
     // and whether those rows are in the field}
@@ -807,14 +821,18 @@ module deint #(
     function [8:0] tnr_a(input [7:0] cur, input [7:0] oth);
         tnr_a = {oth < cur, oth > cur ? oth - cur : cur - oth};
     endfunction
-    reg [5:0]   nrq /* synthesis syn_preserve = 1 */;   // nr (none without the fields' history): copies
+    reg [9:0]   nrq /* synthesis syn_preserve = 1 */;   // nr (none without the fields' history): copies
     // the token: {valid, the word's place}
     reg         o_run = 1'b0;
     reg  [9:0]  oq;
     reg  [10:0] ota = 11'd0, otb = 11'd0, otc = 11'd0, otd = 11'd0, ote = 11'd0, otf = 11'd0, otg = 11'd0, oth = 11'd0,
-                oti = 11'd0, otj = 11'd0, otk = 11'd0, ot1 = 11'd0, ot2 = 11'd0, ot3 = 11'd0;
+                oti = 11'd0, otj = 11'd0, otk = 11'd0;
     // d: the rows' words, chosen: C's old and new, P2's, P1's and P3's own; the pan's word
     reg  [31:0] xA, xB, yA, yB, xW, yW;
+    reg  [31:0] xA2, xB2, yA2, yB2;     // (the lines beyond old and new, for the edges: C's and P2's)
+    reg  [35:0] tA2, tB2;
+    reg  [19:0] cA2, cB2;
+    reg  [31:0] xA2e, xB2e, xA2f, xB2f, nA2, nB2, nA2h, nB2h, nA2i, nB2i, nA2j, nB2j;
     reg  [47:0] vd;
     // e, f, g: the noise reduction's three clocks, and the differences' greatest
     reg  [35:0] tA, tB, tW;
@@ -828,12 +846,14 @@ module deint #(
     reg  [4:0]  al0, al1, alv0, alv1;
     reg  [31:0] nAh, nBh, nWh, nAi, nBi, nWi, nAj, nBj, nWj, nWk;
     reg  [31:0] vwh, vwi, vwj, vwk;
-    // the window for the edges: the words of old and new around the pair made (the pair: three words
-    // behind the newest); what goes with it, three clocks on
-    reg  [31:0] WA [0:6] /* synthesis syn_srlstyle = "registers" */;      // ([0]: stage k's own words, below)
-    reg  [31:0] WB [0:6] /* synthesis syn_srlstyle = "registers" */;
-    reg  [31:0] cw1, cw2, cw3, cv1, cv2, cv3;
-    reg  [19:0] ca1, ca2, ca3;          // {a of its two pixels, the pan's a of them}
+    // stage k's words of old and new (and of the lines beyond them: for the edges), and what goes
+    // with the pair through the edges' search (deint_edi.v: its word made EDL clocks after stage k):
+    // {the token, old's word, new's, P1's, the vector's word, the four a}: 159 bits, CDN clocks'
+    // worth in a plain vector (the newest at the top); taken at its end
+    localparam EDL = 29, CDN = 27;
+    reg  [31:0] nAk, nBk, nA2k, nB2k;
+    reg  [159 * CDN - 1:0] cdl /* synthesis syn_srlstyle = "registers" */;
+    wire [158:0] cd25 = cdl[159 +: 159], cd26 = cdl[0 +: 159];      // (CDN - 1 and CDN clocks after stage k)
     integer     wi;
     function [4:0] a_of(input [7:0] md);
         reg [7:0] d;
@@ -852,11 +872,9 @@ module deint #(
     wire [4:0]  a_c = a_y0 > a_y1 ? a_y0 : a_y1;
     reg         s1_v = 1'b0;
     reg [9:0]   s1_wa;
-    reg [31:0]  s1_bob, s1_w, s1_d;
+    wire [31:0] s1_bob;                 // (the edges' word: deint_edi.v's, with stage 1)
+    reg [31:0]  s1_w, s1_d;
     reg [4:0]   s1_ay0, s1_ay1, s1_ac;
-    reg [7:0]   pv = 8'd0;
-    // (registers, all of these that move on: a block RAM as a shift register costs room and a long wire)
-    reg [135:0] pd [0:7] /* synthesis syn_srlstyle = "registers" */;
     reg [31:0]  wvp, s1_wv, s2_x, s2_w, s2_d;
     reg [4:0]   v_y0, v_y1, s1_v0, s1_v1, s1_vc, s2_ay0, s2_ay1, s2_ac;
     reg         s2_v = 1'b0;
@@ -878,128 +896,23 @@ module deint #(
     wire [4:0]  v0g = nr0 ? v_y0 : 5'd16;
     wire [4:0]  v1g = nr1 ? v_y1 : 5'd16;
 
-    // ---- the edges' way (edi) ----
-    // stage 0 (with wo, wn): luma i of 0 to 13 (the pair's two pixels: 6 and 7), chroma pair j of 0
-    // to 4 (the pair's own: 2); and these through the stages to where the pixel is taken (8)
-    reg [111:0] wa, wb;
-    reg [79:0]  ca, cn;
-    reg [111:0] wad [1:7] /* synthesis syn_srlstyle = "registers" */;
-    reg [111:0] wbd [1:7] /* synthesis syn_srlstyle = "registers" */;
-    reg [79:0]  cad [1:7] /* synthesis syn_srlstyle = "registers" */;
-    reg [79:0]  cnd [1:7] /* synthesis syn_srlstyle = "registers" */;
-    reg         s0_side;
-    reg [6:0]   sided;
-    // stage 1: |old(i + d) - new(i - d)| for d of -4 to 4, the columns i of 4 to 9: at 8 (6 (d + 4) + i - 4)
-    reg [431:0] ad;
-    // stage 2: each pixel's sums (t 0, 1; 11 bits at 11 (9 t + d + 4)) and its candidates' own
-    // |old - new| (8 bits at 8 (9 t + d + 4))
-    reg [197:0] sm;
-    reg [143:0] adc;
-    // a candidate: {its sum, its place in the order tried, its own |old - new|}: the least by the
-    // first two is the first of the least sums (straight down, then -1, 1, -2, 2, ...)
-    function [3:0] ord(input integer d);
-        ord = d == 0 ? 4'd0 : d < 0 ? 4'd2 * (-d) - 4'd1 : 4'd2 * d;
-    endfunction
-    function signed [3:0] dof(input [3:0] o);
-        dof = o == 4'd0 ? 4'sd0 : o[0] ? -$signed({1'b0, o[3:1]} + 4'd1) : $signed({1'b0, o[3:1]});
-    endfunction
-    function [22:0] least(input [22:0] x, input [22:0] y);
-        least = y[22:8] < x[22:8] ? y : x;
-    endfunction
-    // stages 3 to 6: the least of nine, a comparison a stage: in each three the first two (3), then
-    // the third (4); the threes' first two (5), then the third (6); straight down's own sum and
-    // |old - new| beside them
-    // (the pair's two pixels side by side in plain vectors: as arrays of two, written by parts in
-    // the loops below, GowinSynthesis 1.9.12 built these wrongly: the netlist did not do what the
-    // source does, and the board's picture was not the model's: sim/edi_synth_tb.py)
-    reg [137:0] m1a, m1c, m2;
-    reg [91:0]  m3;
-    reg [45:0]  m4;
-    reg [37:0]  z3, z4, z5, z6;                             // {its sum, its |old - new|}
-    // stage 7: the offsets
-    reg signed [3:0] ed [0:1];
-    // stage 8: the pixels taken (old's and new's along the offset, and straight above and below),
-    // the chroma pairs; stage 9: the word: s1_bob (with the pair's other things in s1_*)
-    reg [31:0]  ey [0:1];
-    reg [31:0]  ec8 [0:1];
-    integer     ei, ej, et, eg;
-    reg [22:0]  e_c [0:8];
-    reg [12:0]  e_3b;
-    reg signed [3:0] e_d, e_dq;
-    function signed [3:0] half(input signed [3:0] d);
-        half = d == -4'sd4 ? -4'sd2 : d <= -4'sd2 ? -4'sd1 : d == 4'sd4 ? 4'sd2 : d >= 4'sd2 ? 4'sd1 : 4'sd0;
-    endfunction
-    function [7:0] hold8(input [7:0] v, input [7:0] a, input [7:0] b);
-        hold8 = v < (a < b ? a : b) ? (a < b ? a : b) : v > (a < b ? b : a) ? (a < b ? b : a) : v;
-    endfunction
-    always @(posedge clk) begin
-        // 1
-        for (ej = -4; ej <= 4; ej = ej + 1)
-            for (ei = 4; ei <= 9; ei = ei + 1)
-                ad[8 * (6 * (ej + 4) + ei - 4) +: 8] <= absd(wa[8 * (ei + ej) +: 8], wb[8 * (ei - ej) +: 8]);
-        wad[1] <= wa;
-        wbd[1] <= wb;
-        cad[1] <= ca;
-        cnd[1] <= cn;
-        for (ei = 2; ei <= 7; ei = ei + 1) begin
-            wad[ei] <= wad[ei - 1];
-            wbd[ei] <= wbd[ei - 1];
-            cad[ei] <= cad[ei - 1];
-            cnd[ei] <= cnd[ei - 1];
-        end
-        sided <= {sided[5:0], s0_side};
-        // 2
-        for (et = 0; et < 2; et = et + 1)
-            for (ej = -4; ej <= 4; ej = ej + 1) begin
-                sm[11 * (9 * et + ej + 4) +: 11] <= {3'd0, ad[8 * (6 * (ej + 4) + et) +: 8]} + {3'd0, ad[8 * (6 * (ej + 4) + et + 1) +: 8]} +
-                                                      {3'd0, ad[8 * (6 * (ej + 4) + et + 2) +: 8]} + {3'd0, ad[8 * (6 * (ej + 4) + et + 3) +: 8]} +
-                                                      {3'd0, ad[8 * (6 * (ej + 4) + et + 4) +: 8]} + (ej < 0 ? -2 * ej : 2 * ej);
-                adc[8 * (9 * et + ej + 4) +: 8] <= ad[8 * (6 * (ej + 4) + et + 2) +: 8];
-            end
-        for (et = 0; et < 2; et = et + 1) begin
-            // 3, 4
-            for (ej = -4; ej <= 4; ej = ej + 1)
-                e_c[ord(ej)] = {sm[11 * (9 * et + ej + 4) +: 11], ord(ej), adc[8 * (9 * et + ej + 4) +: 8]};
-            for (eg = 0; eg < 3; eg = eg + 1) begin
-                m1a[69 * et + 23 * eg +: 23] <= least(e_c[3 * eg], e_c[3 * eg + 1]);
-                m1c[69 * et + 23 * eg +: 23] <= e_c[3 * eg + 2];
-                m2[69 * et + 23 * eg +: 23] <= least(m1a[69 * et + 23 * eg +: 23], m1c[69 * et + 23 * eg +: 23]);
-            end
-            z3[19 * et +: 19] <= {sm[11 * (9 * et + 4) +: 11], adc[8 * (9 * et + 4) +: 8]};
-            z4[19 * et +: 19] <= z3[19 * et +: 19];
-            // 5, 6
-            m3[46 * et +: 46] <= {m2[69 * et + 46 +: 23], least(m2[69 * et +: 23], m2[69 * et + 23 +: 23])};
-            z5[19 * et +: 19] <= z4[19 * et +: 19];
-            m4[23 * et +: 23] <= least(m3[46 * et +: 23], m3[46 * et + 23 +: 23]);
-            z6[19 * et +: 19] <= z5[19 * et +: 19];
-            // 7: used where it is clearly under straight down's and its own two pixels are no less
-            // alike than those; not at the picture's sides; not without edi
-            e_3b = {2'd0, m4[23 * et + 12 +: 11]} + {1'b0, m4[23 * et + 12 +: 11], 1'b0};
-            ed[et] <= edi && !sided[5] && e_3b < {1'b0, z6[19 * et + 8 +: 11], 1'b0} && m4[23 * et +: 8] <= z6[19 * et +: 8] ? dof(m4[23 * et + 8 +: 4]) : 4'sd0;
-            // 8
-            e_d = ed[et];
-            ey[et] <= {wad[7][8 * (6 + et + e_d) +: 8], wbd[7][8 * (6 + et - e_d) +: 8], wad[7][8 * (6 + et) +: 8], wbd[7][8 * (6 + et) +: 8]};
-        end
-        e_dq = half(ed[0]);                     // (towards straight down)
-        for (et = 0; et < 2; et = et + 1)       // (0: Cb, the pairs' upper byte; 1: Cr)
-            ec8[et] <= {cad[7][16 * (2 + e_dq) + 8 * (1 - et) +: 8], cnd[7][16 * (2 - e_dq) + 8 * (1 - et) +: 8],
-                        cad[7][16 * 2 + 8 * (1 - et) +: 8], cnd[7][16 * 2 + 8 * (1 - et) +: 8]};
-        // 9
-        s1_bob <= {hold8(mean(ec8[0][31:24], ec8[0][23:16]), ec8[0][15:8], ec8[0][7:0]),
-                   hold8(mean(ey[0][31:24], ey[0][23:16]), ey[0][15:8], ey[0][7:0]),
-                   hold8(mean(ec8[1][31:24], ec8[1][23:16]), ec8[1][15:8], ec8[1][7:0]),
-                   hold8(mean(ey[1][31:24], ey[1][23:16]), ey[1][15:8], ey[1][7:0])};
-    end
+    // ---- the edges' way (edi): deint_edi.v ----
+    deint_edi u_edi (.clk(clk), .en(edi), .nw(nw), .v_i(otk[10]), .q_i(otk[9:0]), .a2_i(nA2k), .a_i(nAk), .b_i(nBk), .b2_i(nB2k),
+                     .bob(s1_bob));
 
     // the output's pass: its stages (not held by the state: the token says what is in them)
     always @(posedge clk) begin
-        nrq <= {3{hist ? nr : 2'd0}};
+        nrq <= {5{hist ? nr : 2'd0}};
         // a: the address (below); b, c: the RAMs; d: the rows chosen (pg: the frame's two lines, a row
         // of more than 512 words in two buffers)
         otb <= ota;
         otc <= otb;
         otd <= otc;
         xA <= qc[sCA];
+        xA2 <= qc[sCm];
+        xB2 <= qc[sCp];
+        yA2 <= q2[sCm];
+        yB2 <= q2[sCp];
         xB <= pgf ? qc[{1'b0, otc[9]}] : qc[sCB];
         yA <= q2[sCA];
         yB <= q2[sCB];
@@ -1012,6 +925,8 @@ module deint #(
             tA[9 * nb +: 9] <= tnr_a(xA[8 * nb +: 8], yA[8 * nb +: 8]);
             tB[9 * nb +: 9] <= tnr_a(xB[8 * nb +: 8], yB[8 * nb +: 8]);
             tW[9 * nb +: 9] <= tnr_a(xW[8 * nb +: 8], yW[8 * nb +: 8]);
+            tA2[9 * nb +: 9] <= tnr_a(xA2[8 * nb +: 8], yA2[8 * nb +: 8]);
+            tB2[9 * nb +: 9] <= tnr_a(xB2[8 * nb +: 8], yB2[8 * nb +: 8]);
         end
         dA0 <= absd(xA[23:16], yA[23:16]);
         dA1 <= absd(xA[7:0], yA[7:0]);
@@ -1022,6 +937,8 @@ module deint #(
         xAe <= xA;
         xBe <= xB;
         xWe <= xW;
+        xA2e <= xA2;
+        xB2e <= xB2;
         ve <= vd;
         // f: the part of it taken
         otf <= ote;
@@ -1029,6 +946,8 @@ module deint #(
             cA[5 * nb +: 5] <= {tA[9 * nb + 8], |tA[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[1:0], tA[9 * nb +: 4]}]};
             cB[5 * nb +: 5] <= {tB[9 * nb + 8], |tB[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[3:2], tB[9 * nb +: 4]}]};
             cW[5 * nb +: 5] <= {tW[9 * nb + 8], |tW[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[5:4], tW[9 * nb +: 4]}]};
+            cA2[5 * nb +: 5] <= {tA2[9 * nb + 8], |tA2[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[7:6], tA2[9 * nb +: 4]}]};
+            cB2[5 * nb +: 5] <= {tB2[9 * nb + 8], |tB2[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[9:8], tB2[9 * nb +: 4]}]};
         end
         mab0 <= max2(dA0, dB0);
         mab1 <= max2(dA1, dB1);
@@ -1037,6 +956,8 @@ module deint #(
         xAf <= xAe;
         xBf <= xBe;
         xWf <= xWe;
+        xA2f <= xA2e;
+        xB2f <= xB2e;
         vf <= ve;
         // g: the samples; the differences' greatest (none past the line's ends)
         otg <= otf;
@@ -1044,6 +965,8 @@ module deint #(
             nA[8 * nb +: 8] <= cA[5 * nb + 4] ? xAf[8 * nb +: 8] - {4'd0, cA[5 * nb +: 4]} : xAf[8 * nb +: 8] + {4'd0, cA[5 * nb +: 4]};
             nB[8 * nb +: 8] <= cB[5 * nb + 4] ? xBf[8 * nb +: 8] - {4'd0, cB[5 * nb +: 4]} : xBf[8 * nb +: 8] + {4'd0, cB[5 * nb +: 4]};
             nW[8 * nb +: 8] <= cW[5 * nb + 4] ? xWf[8 * nb +: 8] - {4'd0, cW[5 * nb +: 4]} : xWf[8 * nb +: 8] + {4'd0, cW[5 * nb +: 4]};
+            nA2[8 * nb +: 8] <= cA2[5 * nb + 4] ? xA2f[8 * nb +: 8] - {4'd0, cA2[5 * nb +: 4]} : xA2f[8 * nb +: 8] + {4'd0, cA2[5 * nb +: 4]};
+            nB2[8 * nb +: 8] <= cB2[5 * nb + 4] ? xB2f[8 * nb +: 8] - {4'd0, cB2[5 * nb +: 4]} : xB2f[8 * nb +: 8] + {4'd0, cB2[5 * nb +: 4]};
         end
         m0 <= otf[10] ? max2(mab0, dwf0) : 8'd0;
         m1 <= otf[10] ? max2(mab1, dwf1) : 8'd0;
@@ -1054,6 +977,7 @@ module deint #(
         oth <= otg;
         {hm0, hm1, hv0, hv1} <= {m0, m1, mv0, mv1};
         {nAh, nBh, nWh, vwh} <= {nA, nB, nW, vg[31:0]};
+        {nA2h, nB2h} <= {nA2, nB2};
         // i: with the pixel before, and the pixel after
         oti <= oth;
         im1 <= hm1;
@@ -1067,6 +991,7 @@ module deint #(
         rv0 <= hv1;
         rv1 <= mv0;
         {nAi, nBi, nWi, vwi} <= {nAh, nBh, nWh, vwh};
+        {nA2i, nB2i} <= {nA2h, nB2h};
         // j
         otj <= oti;
         md0 <= max2(l0, r0);
@@ -1074,53 +999,34 @@ module deint #(
         mdv0 <= max2(lv0, rv0);
         mdv1 <= max2(lv1, rv1);
         {nAj, nBj, nWj, vwj} <= {nAi, nBi, nWi, vwi};
+        {nA2j, nB2j} <= {nA2i, nB2i};
         // k: a (the pan's a the same way from its differences; 16 without it: the mean)
         otk <= otj;
         al0 <= pgf ? 5'd0 : mode == 2'd1 || (!hist && mode != 2'd2) ? 5'd16 : mode == 2'd2 ? 5'd0 : a_of(md0);
         al1 <= pgf ? 5'd0 : mode == 2'd1 || (!hist && mode != 2'd2) ? 5'd16 : mode == 2'd2 ? 5'd0 : a_of(md1);
         alv0 <= mc_s ? a_of(mdv0) : 5'd16;
         alv1 <= mc_s ? a_of(mdv1) : 5'd16;
-        {WA[0], WB[0], nWk, vwk} <= {nAj, nBj, nWj, vwj};
-        // the window: old's and new's words move on; the pair made is three words behind
-        for (wi = 1; wi <= 6; wi = wi + 1) begin
-            WA[wi] <= WA[wi - 1];
-            WB[wi] <= WB[wi - 1];
-        end
-        ot1 <= otk;
-        ot2 <= ot1;
-        ot3 <= ot2;
-        {cw1, cv1, ca1} <= {nWk, vwk, al0, al1, alv0, alv1};
-        {cw2, cv2, ca2} <= {cw1, cv1, ca1};
-        {cw3, cv3, ca3} <= {cw2, cv2, ca2};
-        nq0 <= nearq(cv2[23:16], WA[2][23:16], WB[2][23:16]);
-        nq1 <= nearq(cv2[7:0], WA[2][7:0], WB[2][7:0]);
-        // stage 0: the pair (WA[3]: its word of old), the fourteen pixels and five pairs about it
-        s0_v <= ot3[10];
-        s0_wa <= ot3[9:0];
-        wo <= WA[3];
-        wn <= WB[3];
-        ww <= cw3;
-        wvp <= cv3;
+        {nAk, nBk, nWk, vwk} <= {nAj, nBj, nWj, vwj};
+        {nA2k, nB2k} <= {nA2j, nB2j};
+        // what goes with the pair, through the edges' search's clocks
+        cdl <= {otk, nAk, nBk, nWk, vwk, al0, al1, alv0, alv1, cdl[159 * CDN - 1:159]};
+        // (the guard's comparisons, a clock before stage 0)
+        nq0 <= nearq(cd25[43:36], cd25[139:132], cd25[107:100]);
+        nq1 <= nearq(cd25[27:20], cd25[123:116], cd25[91:84]);
+        // stage 0: the pair, EDL - 1 clocks after stage k
+        s0_v <= cd26[158];
+        s0_wa <= cd26[157:148];
+        wo <= cd26[147:116];
+        wn <= cd26[115:84];
+        ww <= cd26[83:52];
+        wvp <= cd26[51:20];
+        {a_y0, a_y1, v_y0, v_y1} <= cd26[19:0];
         nr0 <= (nq0[0] || nq0[1]) && (nq0[2] || nq0[3]);
         nr1 <= (nq1[0] || nq1[1]) && (nq1[2] || nq1[3]);
-        {a_y0, a_y1, v_y0, v_y1} <= ca3;
-        for (wi = 0; wi < 14; wi = wi + 1) begin
-            wa[8 * wi +: 8] <= wi % 2 ? WA[6 - wi / 2][7:0] : WA[6 - wi / 2][23:16];
-            wb[8 * wi +: 8] <= wi % 2 ? WB[6 - wi / 2][7:0] : WB[6 - wi / 2][23:16];
-        end
-        for (wi = 0; wi < 5; wi = wi + 1) begin
-            ca[16 * wi +: 16] <= {WA[5 - wi][31:24], WA[5 - wi][15:8]};
-            cn[16 * wi +: 16] <= {WB[5 - wi][31:24], WB[5 - wi][15:8]};
-        end
-        s0_side <= ot3[9:0] < 10'd3 || ot3[9:0] + 10'd3 >= nw;
-        // (what goes with the pair through the edges' stages: its place, P1's word, the word
-        // that is as it is, the three a)
-        pv <= {pv[6:0], s0_v};
-        pd[0] <= {wvp, v0g, v1g, v0g > v1g ? v0g : v1g, s0_wa, ww, pc ? wn : wo, a_y0, a_y1, a_c};
-        for (wi = 1; wi < 8; wi = wi + 1)
-            pd[wi] <= pd[wi - 1];
-        s1_v <= pv[7];
-        {s1_wv, s1_v0, s1_v1, s1_vc, s1_wa, s1_w, s1_d, s1_ay0, s1_ay1, s1_ac} <= pd[7];
+        // stage 1: with the edges' word
+        s1_v <= s0_v;
+        {s1_wv, s1_v0, s1_v1, s1_vc, s1_wa, s1_w, s1_d, s1_ay0, s1_ay1, s1_ac} <=
+            {wvp, v0g, v1g, v0g > v1g ? v0g : v1g, s0_wa, ww, pc ? wn : wo, a_y0, a_y1, a_c};
         // (the pan's word against the mean, by its a; then P1's own against that, by a)
         t1_v <= s1_v;
         t1_wa <= s1_wa;
@@ -1179,6 +1085,7 @@ module deint #(
         end
         if ((st == S_M && mi == 3'd2) || (st == S_MP && wt == 6'd3)) begin
             mb <= n_b;
+            mlast <= n_b + 8'd1 == nblk;
             mcd <= n_cd;
             hb <= n_hb;
             ub <= n_ub;
@@ -1198,15 +1105,15 @@ module deint #(
                     start_clr <= 1'b1;
                     fstart <= 1'b1;
                     frames <= frames + 16'd1;
-                    ll_used <= ll_now;
+                    ll_used <= ll_now_r;
                     pgf <= pg;
                     nchf <= nch;
                     if (pg) begin
-                        fc <= ll_now ? nxt : latest;
-                        f1 <= ll_now ? nxt : latest;
+                        fc <= ll_now_r ? nxt : latest;
+                        f1 <= ll_now_r ? nxt : latest;
                         pc <= 1'b1;
                         hist <= 1'b0;
-                    end else if (ll_now) begin
+                    end else if (ll_now_r) begin
                         fc <= nxt;
                         f1 <= latest;
                         f2 <= latest - 3'd1;
@@ -1219,7 +1126,7 @@ module deint #(
                         f2 <= latest - 3'd2;
                         f3 <= latest - 3'd3;
                         pc <= par[latest] != top_f;
-                        hist <= hist_n;
+                        hist <= hist_n_r;
                     end
                     nl <= flines;
                     nlast <= nch - 7'd1;
@@ -1228,7 +1135,7 @@ module deint #(
                     st <= S_F1;
                     // (the vectors: with the fields' history, in the motion adaptive mode; the pan a
                     // candidate if it is within what the estimator may find)
-                    mc_f <= mc && !pg && mode == 2'd0 && (ll_now || hist_n);
+                    mc_f <= mc && !pg && mode == 2'd0 && (ll_now_r || hist_n_r);
                     pan_k <= mv[10] && mv[5:0] != 6'b100000 && $signed(mv[9:6]) >= -4'sd4 && $signed(mv[9:6]) <= 4'sd4;
                     dxf <= mv[5:0];
                     dyf <= mv[9:6];
@@ -1302,7 +1209,7 @@ module deint #(
                 end
                 if (mi == 3'd2) begin
                     mi <= 3'd0;
-                    if (adv && mb + 8'd1 == nblk) begin
+                    if (adv && mlast) begin
                         wt <= 6'd0;
                         st <= S_MW;
                     end
@@ -1372,7 +1279,7 @@ module deint #(
             end
             S_OW: begin                             // (its last words through the stages)
                 wt <= wt + 6'd1;
-                if (wt == 6'd31)
+                if (wt == 6'd47)
                     st <= S_NEXT;
             end
             // a frame's first step: at the first line made (skip); a top field's first step has no
@@ -1381,6 +1288,8 @@ module deint #(
             S_F1: begin
                 pgd <= 2'd0;
                 k <= {1'b0, sk[9:1]} + (pc ? 10'd0 : 10'd1);
+                ks <= {1'b0, sk[9:1]} + (pc ? 10'd0 : 10'd1);
+                kv <= {1'b0, sk[9:1]} + (pc ? 10'd0 : 10'd1);
                 emitted <= sk;
                 st <= S_F2;
             end
@@ -1418,6 +1327,8 @@ module deint #(
             S_NEXT: begin
                 pgd <= 2'd0;                        // (pg: the next step's two rows are wanted: well before its load, need being a clock behind)
                 k <= k + 10'd1;
+                ks <= ks + 10'd1;
+                kv <= kv + 10'd1;
                 km1 <= km1 + 4'd1 == N1 ? 4'd0 : km1 + 4'd1;
                 km2 <= km2 + 4'd1 == N2 ? 4'd0 : km2 + 4'd1;
                 km3 <= km3 + 4'd1 == N3 ? 4'd0 : km3 + 4'd1;

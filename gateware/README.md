@@ -62,6 +62,7 @@ openFPGALoader 1.1.1 cannot parse a compressed one. `tools/load.sh` puts it in t
 | `rtl/border.v` | where the fields have picture (the first and last lit pixel pair and line since asked): for the part shown |
 | `rtl/focus.v` | how sharp a field is across its lines: for the decoder's sampling phase (`tools/video.py phase sweep`) |
 | `rtl/deint.v`, `lstream.v` | the deinterlacer (a line when the output wants it): the fields' rows read from the DDR3 into line buffers, then passes through them a pixel pair a clock: motion adaptive; along edges (`edi`); motion compensated (`mc`: a vector for each block of 8 pixels, estimated line by line: `sim/model.py` `me_line()` is the same bit for bit); the lines above the part shown are not made (`skip`). Its lines made a 4:4:4 stream, each pixel with its part of the scaler's edge analysis |
+| `rtl/deint_edi.v` | the deinterlacer's edge search: 16 directions a pixel, four lines, its guards (`sim/model.py` `edge_line()`; `sim/edi_tb.py` tests the source and, with `synth`, what the synthesis makes of it) |
 | `rtl/bram.v` | memories put into block RAM by hand: 512 x 32 in one block (the tools would use two), and one read at two places at once |
 | `sw/pan.c` | the picture's pan, from six rows of two fields read through the CPU's port to the DDR3: a candidate for the blocks' vectors and what a frame begins with; and where a frame's lines begin |
 | `rtl/smaa.v` | the anti-aliasing: SMAA's edges, searches (15 pixels each way, 8 along the diagonals), area tables and mixing on the 480-line stream (`sim/smaa.py`) |
