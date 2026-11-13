@@ -218,9 +218,11 @@ def weights(e, w, h, n=N, diag=False, corner=False, nh=NH, y=None, thr=T):
     along it: each layer's steps cross the next one's edge):
     - y (the lumas) given: an end where edges cross both ways, up and down, is taken for the way the
       pixels go on: the turn across which the two pixels diagonally over the crossing are alike
-      (within thr); both or neither alike: no turn, as before.
+      (within thr); both or neither alike: SMAA's own rule (ends()).  (Until 2026-11-12 such an end
+      was no turn at all, short of SMAA's own: a fifth of a picture's edge pixels, half smoothed.)
     - corner: an end is a corner (the weight less) only where the crossing edge goes on a pixel
-      further with nothing crossing it there: the same edge, not the next layer's."""
+      further with nothing crossing it there: the same edge.  SMAA's rule (wherever it goes on) took
+      a third of all the blending from a captured picture: its edges are soft, a step two rows tall."""
     E = lambda x, r: e[r][x] if 0 <= x < w and 0 <= r < h else (0, 0)
     L = lambda x, r: y[min(max(r, 0), h - 1)][min(max(x, 0), w - 1)]
     alike = lambda a, b: abs(a - b) < thr
@@ -231,6 +233,15 @@ def weights(e, w, h, n=N, diag=False, corner=False, nh=NH, y=None, thr=T):
         if up and down and y is not None and up_ok() != down_ok():
             return 1 if up_ok() else 2
         return up | down << 1
+
+    def ends(p1, p2):
+        """SMAA's own for what is left crossing both ways: with one turn at the other end it is that
+        turn's opposite: the line a Z from end to end [AreaTex.py areaortho: patterns 7, 11, 13, 14]"""
+        if p1 == 3 and p2 in (1, 2):
+            p1 = 3 - p2
+        elif p2 == 3 and p1 in (1, 2):
+            p2 = 3 - p1
+        return p1 | p2 << 2
     # the crossing edge at (x, r) goes on with nothing across it: a left edge from the row above
     # (the top edges of its row), from the row below; a top edge from the column before, the one after
     on_v = lambda x, r: int(E(x, r)[0] and not (E(x, r)[1] or E(x - 1, r)[1]))
@@ -262,7 +273,7 @@ def weights(e, w, h, n=N, diag=False, corner=False, nh=NH, y=None, thr=T):
                 d2 = i
                 c = x + i + 1
                 pr = turn(E(c, r - 1)[0], E(c, r)[0], lambda: alike(L(c - 1, r), L(c, r - 1)), lambda: alike(L(c, r), L(c - 1, r - 1)))
-                above, below = lookup(pl | pr << 2, d1, d2)
+                above, below = lookup(ends(pl, pr), d1, d2)
                 wt, wu = below, above
                 if corner:
                     wt = corner_round(wt, d1, d2, on_v(x - d1, r + 1), on_v(x + d2 + 1, r + 1))
@@ -280,7 +291,7 @@ def weights(e, w, h, n=N, diag=False, corner=False, nh=NH, y=None, thr=T):
                 d2 = i
                 c = r + i + 1
                 pd = turn(E(x - 1, c)[1], E(x, c)[1], lambda: alike(L(x - 1, c), L(x, c - 1)), lambda: alike(L(x, c), L(x - 1, c - 1)))
-                other, own = lookup(pu | pd << 2, d1, d2)
+                other, own = lookup(ends(pu, pd), d1, d2)
                 wl, wo = own, other
                 if corner:
                     wl = corner_round(wl, d1, d2, on_h(x + 1, r - d1), on_h(x + 1, r + d2 + 1))

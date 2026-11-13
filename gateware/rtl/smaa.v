@@ -401,14 +401,19 @@ module smaa #(
     smaa_rom #(.FILE(`SMAA_DHEX)) u_db (.clk(clk), .a(fdb), .q(adb));
     reg [8:0]  dwr, dwg;
     wire [15:0] ah, av;                 // {above, below} of the top edge; {other side, own} of the left
+    // (an end still crossing both ways with one turn at the other end: that turn's opposite, the
+    // line a Z from end to end: SMAA's own, AreaTex.py areaortho 7, 11, 13, 14)
+    function [3:0] zends(input [1:0] t2, input [1:0] t1);
+        zends = {t2 == 2'b11 && ^t1 ? ~t1 : t2, t1 == 2'b11 && ^t2 ? ~t2 : t1};
+    endfunction
     generate
         if (NH > 15) begin : g_h31
-            smaa_rom #(.FILE(`SMAA_HHEX), .AW(14)) u_ah (.clk(clk), .a({fr[6:5], fl[6:5], fl[4:0], fr[4:0]}), .q(ah));
+            smaa_rom #(.FILE(`SMAA_HHEX), .AW(14)) u_ah (.clk(clk), .a({zends(fr[6:5], fl[6:5]), fl[4:0], fr[4:0]}), .q(ah));
         end else begin : g_h15
-            smaa_rom #(.FILE(`SMAA_HEX)) u_ah (.clk(clk), .a({fr[6:5], fl[6:5], fl[3:0], fr[3:0]}), .q(ah));
+            smaa_rom #(.FILE(`SMAA_HEX)) u_ah (.clk(clk), .a({zends(fr[6:5], fl[6:5]), fl[3:0], fr[3:0]}), .q(ah));
         end
     endgenerate
-    smaa_rom #(.FILE(`SMAA_HEX)) u_av (.clk(clk), .a({fd[5:4], fu[5:4], fu[3:0], fd[3:0]}), .q(av));
+    smaa_rom #(.FILE(`SMAA_HEX)) u_av (.clk(clk), .a({zends(fd[5:4], fu[5:4]), fu[3:0], fd[3:0]}), .q(av));
     reg        k_v = 1'b0;
     reg [10:0] k_x;
     reg [9:0]  k_r;
