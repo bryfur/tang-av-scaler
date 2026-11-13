@@ -16,9 +16,10 @@
 // 16:9, VIC 16), line 4 the audio InfoFrame (two channels, the rest as the stream says), every 32nd
 // line N and CTS, else the samples waiting (two at most in a packet).
 //
-// The sound: fs is the pixel clock / 3072 (audio_in.v: both from the MS5351M's one PLL), so
-// 128 fs = pixel clock x N / CTS with N = 6144, CTS = 147456 exactly, whatever the picture rate.
-// The channel status says 48 kHz, 24 bits (fs is 48.34 kHz at 148.5 MHz).
+// The sound: fs is 48 kHz, its clock from the PLL the pixel clock comes from (audio_in.v; the CPU
+// sets the MS5351M's dividers: sw/board.c), so 128 fs = pixel clock x N / CTS holds exactly with
+// N = 6144 and CTS = 148352 at 148.5 / 1.001 MHz, or 148500 at 148.5 MHz (cts_alt).  The channel
+// status says 48 kHz, 24 bits.
 //
 // s_tick changes with each new pair s_l, s_r (the 24-bit samples; from another clock: they stay
 // as they are for a sample's time).
@@ -28,6 +29,7 @@ module hdmi_audio (
     input             en,
     input             hs,
     input             vs,
+    input             cts_alt,
     input             s_tick,
     input      [23:0] s_l,
     input      [23:0] s_r,
@@ -37,7 +39,8 @@ module hdmi_audio (
     output reg [9:0]  k1,
     output reg [9:0]  k2
 );
-    localparam [19:0] N = 20'd6144, CTS = 20'd147456;
+    localparam [19:0] N = 20'd6144;
+    wire [19:0] CTS = cts_alt ? 20'd148500 : 20'd148352;
     // the channel status [IEC 60958-3]: consumer, PCM, copying allowed; 48 kHz; 24 bits
     localparam [39:0] CS = 40'h0B_02_00_00_04;
     // the InfoFrames' bytes [CEA-861-D]: PB0 the checksum (the header's and the bytes' sum zero)

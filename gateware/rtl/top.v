@@ -28,7 +28,8 @@
 //   24 R   GT_AST    the lanes' ASTAT, six bits each
 //   26 RW  HDMI      0 characters scrambled [HDMI 2.0], 1 the video preamble and guard band sent (else
 //                    DVI's plain blanking), 2 data islands: the sound and the InfoFrames
-//                    (hdmi_audio.v: with bit 1; 1080p60 only), 7:4 the scrambler's open choices
+//                    (hdmi_audio.v: with bit 1; 1080p60 only), 3 the sound's CTS for 148.5 MHz (else
+//                    for 148.5 / 1.001), 7:4 the scrambler's open choices
 //                    (hdmi_scr.v opt); 0 and 7:4 set before the lanes are started
 //   27 R   LAT      11:0 how old the newest field was when the frame now shown was begun (from the
 //                    field's last line), in 10 us; 25:16 how many lines of the field coming in were
@@ -693,7 +694,7 @@ module top (
     audio_in u_au (.clk(pll_clk2), .scki(in_scki), .bck(in_bck), .lrck(in_lrck), .dout(in_dout), .l(au_l), .r(au_r),
                    .tick(au_tick));
     // (to HDMI: the samples as they come, the word clock's side taking them by the tick)
-    hdmi_audio u_ha (.clk(tx_clk), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]), .s_tick(au_tick), .s_l(au_l[30:7]),
+    hdmi_audio u_ha (.clk(tx_clk), .en(hd[2] && hd[1]), .hs(v_hs[0]), .vs(v_vs[0]), .cts_alt(hd[3]), .s_tick(au_tick), .s_l(au_l[30:7]),
                      .s_r(au_r[30:7]), .pre(a_pre), .act(a_act), .k0(a_k0), .k1(a_k1), .k2(a_k2));
     reg         au_t0, au_t1, au_t2;
     reg  [31:0] au_ls, au_rs;

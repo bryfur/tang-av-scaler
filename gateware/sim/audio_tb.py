@@ -44,7 +44,7 @@ module tb;
         if (c == 3071) begin sl <= sl + 24'd1; sr <= sr - 24'd3; tick <= !tick; end
     end
     wire a_pre, a_act; wire [9:0] k0, k1, k2;
-    hdmi_audio u (.clk(clk), .en(1'b1), .hs(hs), .vs(vs), .s_tick(tick), .s_l(sl), .s_r(sr), .pre(a_pre), .act(a_act),
+    hdmi_audio u (.clk(clk), .en(1'b1), .hs(hs), .vs(vs), .cts_alt(1'b0), .s_tick(tick), .s_l(sl), .s_r(sr), .pre(a_pre), .act(a_act),
                   .k0(k0), .k1(k1), .k2(k2));
     integer f, i;
     initial begin
@@ -132,7 +132,7 @@ endmodule
         elif hb[0] == 0x01:
             for sb in subs:
                 cts, nn = sb[1] << 16 | sb[2] << 8 | sb[3], sb[4] << 16 | sb[5] << 8 | sb[6]
-                if (nn, cts) != (6144, 147456):
+                if (nn, cts) != (6144, 148352):
                     bad("N %d CTS %d" % (nn, cts))
         elif hb[0] == 0x02:
             for q in range(4):

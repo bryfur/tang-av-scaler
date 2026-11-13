@@ -64,15 +64,25 @@ static bool pll_trim(int32_t trim)
     return ok;
 }
 
+static bool audio48;                    /* the design samples the sound at 48 kHz from CLK2 */
+
 static bool clkgen(bool ntsc)
 {
-    uint8_t pll[8], msd[8];
+    uint8_t pll[8], msd[8], snd[8];
     bool ok = true;
     pll_b0 = ntsc ? 604396 : 640000;
     pll_regs(pll, 0);
     for (int k = 0; k < 8; k++)
         pll_now[k] = pll[k];
     reg8(msd, 128 * 6 - 512, 0, 1);
+    /* CLK2, the sound's clock: 512 x 48 kHz, as the pixel clock x 512 x 6144 / (128 x CTS): the PLL
+     * / 36 7/32 (CTS 148352), or / 36 261/1024 (CTS 148500: rtl/hdmi_audio.v's cts_alt).  A design
+     * from before 2026-11-12 divides CLK2 by 3072 for its sound: the pixel clock's twin as it was */
+    audio48 = REG(R_BUILD) >= 1794533900u;
+    if (audio48 && ntsc)
+        reg8(snd, 128 * 36 + 28 - 512, 0, 32);
+    else if (audio48)
+        reg8(snd, 128 * 36 + 32 - 512, 128 * 261 - 1024 * 32, 1024);
     ok &= i2c_sure(BUS_PLL, 0x60, 3, 0xFF);                 /* outputs off */
     for (int k = 0; k < 8; k++)
         ok &= i2c_sure(BUS_PLL, 0x60, 16 + k, 0x80);        /* all powered down */
@@ -82,12 +92,12 @@ static bool clkgen(bool ntsc)
         ok &= i2c_sure(BUS_PLL, 0x60, 26 + k, pll[k]);
     for (int m = 0; m < 3; m++)
         for (int k = 0; k < 8; k++)
-            ok &= i2c_sure(BUS_PLL, 0x60, 42 + 8 * m + k, msd[k]);
+            ok &= i2c_sure(BUS_PLL, 0x60, 42 + 8 * m + k, m == 2 && audio48 ? snd[k] : msd[k]);
     for (int k = 0; k < 3; k++)
         ok &= i2c_sure(BUS_PLL, 0x60, 165 + k, 0);
     ok &= i2c_sure(BUS_PLL, 0x60, 16, 0x4F);                /* whole-number mode, PLL A, 8 mA */
     ok &= i2c_sure(BUS_PLL, 0x60, 17, 0x5F);                /* CLK1 inverted */
-    ok &= i2c_sure(BUS_PLL, 0x60, 18, 0x4F);
+    ok &= i2c_sure(BUS_PLL, 0x60, 18, audio48 ? 0x0F : 0x4F);   /* (CLK2's divider has a fraction) */
     i2c_set(BUS_PLL, 0x60, 177, 0xA0);                      /* reset both PLLs */
     ok &= i2c_sure(BUS_PLL, 0x60, 3, 0xF8);                 /* CLK0-2 on */
     return ok;
@@ -134,7 +144,8 @@ static void picture(void)
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
                    (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 | (s->top1 ? 4 : 0) | (s->mode & 3);
     REG(R_OSD) = s->osd ? 1 : 0;
-    REG(R_HDMI) = s->audio ? 6 : 0;     /* the video guard band and the data islands, or DVI's blanking */
+    /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */
+    REG(R_HDMI) = s->audio ? (audio48 && !s->ntsc ? 14 : 6) : 0;
     REG(R_VID) = (uint32_t)(s->sharp > 16 ? 16 : s->sharp) << 16 | (s->dn ? 16 : 0) | (s->swap ? 8 : 0) | 4 |
                  (s->pattern ? 0 : 1) | (s->freeze || grabbing ? 2 : 0);
 }
