@@ -1,8 +1,8 @@
 # The AV board (rev C-B)
 
-The scaler's hardware: a Sipeed Tang Mega 138K SOM (Gowin GW5AST-138, with its DDR3 and
-configuration flash) on a carrier of its own, 100 x 100 mm, four layers, about 290 parts. Built
-(JLCPCB) and running the scaler since 2026-11.
+The scaler's hardware, for the sixth generation of game consoles: a Sipeed Tang Mega 138K SOM (Gowin
+GW5AST-138, with its DDR3 and configuration flash) on a carrier of its own, 100 x 100 mm, four
+layers, about 290 parts. Built (JLCPCB) and running the scaler since 2026-11.
 
 ![Rev C-B, 3D](rev-cb/img/av-board-cb-3d.png)
 

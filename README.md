@@ -1,9 +1,10 @@
 # tang-av-scaler
 
-An FPGA video scaler for a PS2-class console: 480i component video and stereo sound in, 1080p60
-HDMI out, about 2 ms behind the console. A Sipeed Tang Mega 138K SOM (Gowin GW5AST-138) on a
-carrier board of its own, with a Seeed XIAO ESP32-C5 for Wi-Fi. The board, the FPGA design, the
-software for the FPGA's CPU and the ESP32's firmware are all here.
+An FPGA video scaler for the sixth generation of game consoles (PlayStation 2, Xbox, GameCube):
+480i component video and stereo sound in, 1080p60 HDMI out, about 2 ms behind the console. A Sipeed
+Tang Mega 138K SOM (Gowin GW5AST-138) on a carrier board of its own, with a Seeed XIAO ESP32-C5 for
+Wi-Fi. The board, the FPGA design, the software for the FPGA's CPU and the ESP32's firmware are all
+here.
 
 ```
 console: component video (YPbPr, 480i) + stereo audio
@@ -16,8 +17,10 @@ console: component video (YPbPr, 480i) + stereo audio
   XIAO ESP32-C5: Wi-Fi, web page, updates, JTAG; talks to the CPU over SPI
 ```
 
-Status (2026-11-12): the board (rev C-B) is built and runs a PS2's picture and sound to a display
-and a capture device. The table below is what it does now, on the board.
+Status (2026-11-12): the board (rev C-B) is built and runs a console's picture and sound to a
+display and a capture device. The table below is what it does now, on the board. The console it
+has been run with is a PlayStation 2; an Xbox or a GameCube with its component cable puts out the
+same signal (480i, YPbPr, 59.94 Hz) and has not been tried yet.
 
 ![The board, rev C-B](hardware/av-board/rev-cb/img/av-board-cb-3d.png)
 
@@ -122,6 +125,9 @@ The design uses 16 % of the FPGA's logic, 75 % of its block RAM and 15 % of its 
 
 ## What is not done
 
+- Consoles other than the PlayStation 2 have not been tried. The Xbox and the GameCube put out the
+  same 480i over their component cables; the Dreamcast has no component output (its VGA and RGB
+  would come in at the board's inputs that are not used yet).
 - Inputs other than 480i: 480p, 576i, 720p and 1080i need the decoder's settings and the capture's
   timing for each.
 - 4K output: a 2160p30 test picture is clean on a display; at 2160p60 the link runs and the display
