@@ -49,6 +49,32 @@ def frame(t):
     return out
 
 
+def pan_field(t, dx, dyr):
+    """field t of a picture that pans: what is at (x, row) in a field is at (x + dx, row + dyr) in the
+    field two before (dx pixels, dyr rows of the field: dyr of the picture's lines a field); a box
+    in it stands still"""
+    out = []
+    for n in range(LINES):
+        yf = 2 * n + (t & 1)
+        line = []
+        for q in range(PAIRS):
+            ys = []
+            for x in (2 * q, 2 * q + 1):
+                if 300 <= x < 420 and 200 <= yf < 280:
+                    ys.append(30 + (x * 5 + yf * 9) % 190)
+                else:
+                    u, v = 2 * x + dx * t, yf + dyr * t         # (half pixels across: dx / 2 a field)
+                    ys.append(20 + ((u * u // 16 + v * 7 + (u // 2) * (v // 3)) % 200))
+            if 150 <= q < 210 and 200 <= yf < 280:
+                cb, cr = 90 + (q * 3) % 60, 100 + (yf * 2) % 70
+            else:
+                u, v = 4 * q + dx * t, yf + dyr * t
+                cb, cr = 60 + (u // 4 * 5 + v * 2) % 120, 70 + (u // 4 * 3 + v * 7) % 110
+            line.append((cb, ys[0], cr, ys[1]))
+        out.append(line)
+    return out
+
+
 def noisy(fields, amp):
     """the fields with noise of +-amp added to every sample (the same each run), within 16 to 235"""
     import random
@@ -165,9 +191,15 @@ def edge_line(o, n):
     return out
 
 
-def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False):
+MC_HOLD = 12
+
+
+def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
     """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines; nr: the
-    temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity"""
+    temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity; mv:
+    the picture's pan (dx, dyr): what is at (x, row) in a field is at (x + dx, row + dyr) in the
+    field two before (rtl/deint.v mv; dyr even): where the picture is that, the line made is the
+    field before's, moved by half of it"""
     c, p1 = fields[-1], fields[-2]
     hist = (len(fields) >= 4 and pars[-2] != pars[-1] and pars[-3] == pars[-1] and pars[-4] != pars[-1])
     p2 = fields[-3] if len(fields) >= 3 else c
@@ -206,11 +238,55 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False):
                 al.append(min(16, max(0, md - thr)))
         line = []
         bob = edge_line(c[old], c[new]) if edi else None
+        # the pan's way: how far the picture is from itself two fields ago moved by (dx, dyr) (on old,
+        # on new, and the field before against the one three before, at the line itself moved by
+        # half of it): as m; 255 where a line or a pixel of it is outside the field, and at the
+        # picture's first and last lines
+        av, wv = [16] * (2 * PAIRS), [None] * PAIRS
+        if mv and mv[1] % 2 == 0 and hist and mode == 0:    # (an odd dyr: the field before has no line there)
+            dx, dyr = mv
+            s1, half = dx // 2, dx & 1
+            s3 = dx + s1
+            W = 2 * PAIRS
+            edge = k < 1 or k >= nl
+            lum = lambda f, row: luma(f[row]) if 0 <= row < nl else None
+            r1 = w + dyr // 2
+            l2n, l2o, l1, l3 = lum(p2, new + dyr), lum(p2, old + dyr), lum(raw_p1, r1), lum(p3, r1 + dyr)
+            cn_, co_ = luma(raw_c[new]), luma(raw_c[old])
+
+            def disp(L, x, s, hf):
+                if L is None or x + s < 0 or x + s + hf > W - 1:
+                    return None
+                return mean(L[x + s], L[x + s + 1]) if hf else L[x + s]
+            mm, wy = [], []
+            for x in range(W):
+                pn, po = disp(l2n, x, dx, 0), disp(l2o, x, dx, 0)
+                e, f = disp(l1, x, s1, half), disp(l3, x, s3, half)
+                part = lambda a_, b_: 255 if a_ is None or b_ is None else abs(a_ - b_)
+                mm.append(255 if edge else max(part(co_[x], po), part(cn_[x], pn), part(e, f)))
+                wy.append(e)
+            lo_, ln_ = luma(c[old]), luma(c[new])
+            for i in range(W):
+                left = (mm[i - 1] if i % 16 else (mm[i - 1] if i else 0))
+                right = mm[i] if i % 16 == 15 else mm[i + 1]
+                a_ = min(16, max(0, max(left, mm[i], right) - thr))
+                # (and the pixel it would put there must lie near the lines above and below)
+                if wy[i] is None or not (min(lo_[i], ln_[i]) - MC_HOLD <= wy[i] <= max(lo_[i], ln_[i]) + MC_HOLD):
+                    a_ = 16
+                av[i] = a_
+            for q in range(PAIRS):
+                if wy[2 * q] is not None and wy[2 * q + 1] is not None:
+                    qc = (2 * q + s1) >> 1
+                    wv[q] = (raw_p1[r1][qc][0], wy[2 * q], raw_p1[r1][qc][2], wy[2 * q + 1])
         for q in range(PAIRS):
             o, n_, ww = c[old][q], c[new][q], p1[w][q]
             a0, a1 = al[2 * q], al[2 * q + 1]
             ac = max(a0, a1)
             b = bob[q] if edi else (mean(o[0], n_[0]), mean(o[1], n_[1]), mean(o[2], n_[2]), mean(o[3], n_[3]))
+            v0, v1 = av[2 * q], av[2 * q + 1]
+            vc = max(v0, v1)
+            if wv[q] is not None:
+                b = (blend(wv[q][0], b[0], vc), blend(wv[q][1], b[1], v0), blend(wv[q][2], b[2], vc), blend(wv[q][3], b[3], v1))
             line.append((blend(ww[0], b[0], ac), blend(ww[1], b[1], a0), blend(ww[2], b[2], ac), blend(ww[3], b[3], a1)))
         out[line_i] = line
     return out
@@ -253,10 +329,10 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False, edi=False):
+              prog=False, edi=False, mv=None):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
     in is progressive (each of fields a whole frame): the newest as it is"""
-    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi)
+    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv)
     if smaa_thr is not None:
         import smaa
         lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
@@ -264,10 +340,10 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False):
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv)
     w, h = len(pix[0]), len(pix)
     out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2

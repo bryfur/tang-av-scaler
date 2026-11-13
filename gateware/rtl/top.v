@@ -93,6 +93,10 @@
 //   50-51 R AUD      the PCM1808's last left and right words as they came (audio_in.v: 32 bits; the
 //                    24-bit sample at 30:7)
 //   54-57  AUD, AUDL, AUDR, AUDO  the sound through the CPU: audio_fifo.v
+//   53 RW  MV        the picture's pan, for the deinterlacer (deint.v mv; sw/pan.c): 5:0 dx (signed: what is at
+//                    x in a field is at x + dx in the field two before), 9:6 dyr (signed: lines of the
+//                    field), 10 it is known (0: none used); the rest the program's notes for a host
+//                    (31:16 the time finding it took, in 10 us)
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
 //                    sample's upper 16 bits)
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
@@ -622,6 +626,15 @@ module top (
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
     // lineview.v's ring
     reg  [31:0]  dcfg = 32'h140D0620;
+    // the picture's pan, as the CPU found it (MV): to the DDR3's clock whole (the same twice)
+    reg  [31:0]  mv_r = 32'd0;
+    reg  [10:0]  mv_p0 = 11'd0, mv_p1 = 11'd0, mv_p = 11'd0;
+    always @(posedge pclk) begin
+        mv_p0 <= mv_r[10:0];
+        mv_p1 <= mv_p0;
+        if (mv_p0 == mv_p1)
+            mv_p <= mv_p1;
+    end
     reg  [7:0]   ll_min = 8'd16;
     // what comes in and how it goes out (SRC: set while nothing depends on it); on the DDR3's clock
     reg  [28:0]  src = {10'd244, 10'd360, 7'd45, 1'b0, 1'b0};
@@ -643,6 +656,8 @@ module top (
     always @(posedge clk) begin
         if (we && addr == 8'h35)
             dcfg <= wdata;
+        if (we && addr == 8'h53)
+            mv_r <= wdata;
         if (we && addr == 8'h2B)
             ll_min <= wdata[7:0];
         if (we && addr == 8'h3A)
@@ -704,7 +719,7 @@ module top (
     assign d_hold = hd_p ? pt_hold : ls_hold;
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mv(mv_p), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
@@ -875,6 +890,7 @@ module top (
             8'h32: rdata <= {16'd0, cap_s[38:23]};
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
+            8'h53: rdata <= mv_r;
             8'h27: rdata <= {6'd0, lat_s[21:12], 4'd0, lat_s[11:0]};
             8'h2B: rdata <= {24'd0, ll_min};
             8'h2C: rdata <= {3'd0, src};
