@@ -25,7 +25,13 @@ same signal (480i, YPbPr, 59.94 Hz) and has not been tried yet.
 ![A frame of the scaler's 1080p output, its on-screen display on](docs/compare/game-osd.png)
 
 A frame as it leaves for the display, the on-screen display on (read back from the FPGA: no camera,
-no capture device). The board itself: [hardware/av-board/](hardware/av-board/README.md).
+no capture device).
+
+![The board, rev C-B](hardware/av-board/rev-cb/img/av-board-cb-photo.jpg)
+
+The board, rev C-B ([hardware/av-board/](hardware/av-board/README.md)): the SOM under its heat sink,
+the XIAO and its antenna at the right; along the back edge the HDMI output, the two audio jacks, power
+(USB-C) and the three component video jacks.
 
 ## What it does
 
