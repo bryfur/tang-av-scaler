@@ -38,10 +38,11 @@ output, the two audio jacks, power (USB-C) and the three component video jacks.
 A frame as it leaves for the display, the on-screen display on (read back from the FPGA: no camera,
 no capture device).
 
-![Tales of the Abyss: the left half the plain way, the right half the scaler's](docs/compare/abyss-split.png)
+![Tales of the Abyss, one frozen frame: the plain way and the scaler's, two seconds each](docs/compare/abyss-swap.png)
 
-Tales of the Abyss, one frozen frame: the left half as a plain stretch of the console's 480i shows
-it, the right half as the scaler puts it out. [Drag the line yourself](https://bryfur.github.io/tang-av-scaler/compare/?frame=abyss).
+Tales of the Abyss, one frozen frame, shown two ways in turn (two seconds each): the console's 480i
+stretched the plain way, then the scaler's output; the corner says which.
+[Drag a line between them yourself](https://bryfur.github.io/tang-av-scaler/compare/?frame=abyss).
 
 ## What it does
 
