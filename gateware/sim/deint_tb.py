@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
@@ -69,10 +69,20 @@ def main():
         fields = [(t & 1, f) for t, f in enumerate(model.picture_fields(pic, nf))]
     if mvs:
         fields = [(t & 1, model.pan_field(t, mvs[0], mvs[1])) for t in range(nf)]
+    # real=FILE.json: fields read out of the board's memory (tools/fields.py): the newest NFIELDS of them
+    real = next((a[5:] for a in args if a.startswith("real=")), None)
+    if real:
+        import json
+        rd = json.load(open(real))
+        fields = [(f, [[tuple(w) for w in row] for row in ws]) for f, ws in zip(rd["pars"], rd["fields"])][-nf:]
+        # (the capture here begins with a field of F 0: one more before them, if they do not)
+        if fields[0][0]:
+            fields = [(0, fields[1][1])] + fields
+            nf += 1
     if noise:
         fields = [(f, w) for (f, _), w in zip(fields, model.noisy([w for _, w in fields], noise))]
     data = stream(fields)
-    tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, ("p" if pic else "") + ("pg" if prog else "") + ("e" if edi else "") + ("c" if "mc" in args else "") + ("" if mvs is None else "_mv" + "_".join(str(v).replace("-", "m") for v in mvs)), ("_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "") + ("_ll%d" % ll if ll else ""), "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
+    tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, ("p" if pic else "") + ("r" if real else "") + ("pg" if prog else "") + ("e" if edi else "") + ("c" if "mc" in args else "") + ("" if mvs is None else "_mv" + "_".join(str(v).replace("-", "m") for v in mvs)), ("_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "") + ("_ll%d" % ll if ll else ""), "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     import fsr
