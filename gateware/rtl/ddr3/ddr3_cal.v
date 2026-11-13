@@ -69,7 +69,7 @@ module ddr3_cal #(
     output wire [255:0] wr_data,
     output reg         rd_go = 1'b0,
     output reg         rd_raw = 1'b1,     // (ddr3_dp.v: no lines until the last reads)
-    input  wire [255:0] r_data,
+    input  wire [255:0] r_data,           // (ddr3_dp.v's: a register after the deserializers)
     input  wire [LANES-1:0] r_valid,
     input  wire        rd_valid,
     input  wire [255:0] rd_data,
@@ -95,7 +95,7 @@ module ddr3_cal #(
     // strobe delays left at the DLL's code, [10] no HOLD and [11] no
     // strobe edge before a position's reads; 16'h0020 as a rule: slot 0)
     input  wire [15:0] opt,
-    output reg  [135:0] snap = 136'd0     // {RVALID from 5 cycles on, the lane's line 8 cycles on, 7}
+    output reg  [135:0] snap = 136'd0     // {RVALID from 7 cycles on, the lane's line 10 cycles on, 9}
 );
 
 // (the pattern's line at column 0, its complement's at column 8: every
@@ -113,7 +113,7 @@ localparam [16:0] T_XPR  = PCLK_KHZ / 3000;
 localparam [16:0] T_RFC  = PCLK_KHZ / 3500 + 1;
 localparam [11:0] T_REFI = PCLK_KHZ * 6 / 1000;
 localparam [5:0]  QMIN = 6'd16, QMAX = 6'd55;
-localparam [3:0]  LMIN = 4'd5, LMAX = 4'd10;
+localparam [3:0]  LMIN = 4'd7, LMAX = 4'd12;      // (the cycles a lane's line may come in, after the read's)
 
 localparam S_RST0 = 0, S_RST1 = 1, S_CKE = 2, S_MRS = 3, S_ZQ = 4, S_SLIP = 5, S_PREC = 6,
            S_ACT = 7, S_WR = 8, S_G0 = 9, S_FL0 = 10, S_FL1 = 11, S_FL2 = 12, S_FL3 = 13,
@@ -333,7 +333,7 @@ always @(posedge clk) begin
         rd_go <= 1'b1;
         rd_t <= 4'd0;                     // (0 as the command reaches the PHY)
         hit <= 1'b0;
-        wait_n <= 17'd13;
+        wait_n <= 17'd15;
         st <= S_RDE;
     end
     S_RDE: begin
@@ -544,7 +544,7 @@ always @(posedge clk) begin
             inv <= vn[0];
             rd_go <= 1'b1;
             rd_t <= 4'd0;
-            wait_n <= 17'd13;
+            wait_n <= 17'd15;
             st <= S_VRDE;
         end
     end
@@ -573,11 +573,11 @@ always @(posedge clk) begin
 
     // (bring-up: what lane 0's first read at the position asked gave)
     if (st == S_RDE && lane == 0 && q == opt[5:0] && n == 0 && !fix_lat && set_cfg) begin
-        if (rd_t == 4'd7) snap[63:0] <= {rd_data[231:224], rd_data[199:192], rd_data[167:160], rd_data[135:128],
+        if (rd_t == 4'd9) snap[63:0] <= {rd_data[231:224], rd_data[199:192], rd_data[167:160], rd_data[135:128],
                                          rd_data[103:96], rd_data[71:64], rd_data[39:32], rd_data[7:0]};
-        if (rd_t == 4'd8) snap[127:64] <= {rd_data[231:224], rd_data[199:192], rd_data[167:160], rd_data[135:128],
+        if (rd_t == 4'd10) snap[127:64] <= {rd_data[231:224], rd_data[199:192], rd_data[167:160], rd_data[135:128],
                                            rd_data[103:96], rd_data[71:64], rd_data[39:32], rd_data[7:0]};
-        if (rd_t >= 4'd5 && rd_t <= 4'd12) snap[128 + rd_t - 4'd5] <= r_valid[0];
+        if (rd_t >= 4'd7 && rd_t <= 4'd14) snap[128 + rd_t - 4'd7] <= r_valid[0];
     end
 
     // (the last reads: every lane's line in the cycle found)

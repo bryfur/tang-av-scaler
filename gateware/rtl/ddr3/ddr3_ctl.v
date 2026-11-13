@@ -169,8 +169,6 @@ always @(posedge clk) begin
                 o_a <= {5'd0, rq_a[9:0]};
                 wr_go <= rq_wr;
                 rd_go <= !rq_wr;
-                o_wdata <= rq_d;
-                o_wmask <= rq_m;
                 if (rq_wr) begin
                     t_rd <= atleast(t_rd, C_WR_RD - 1);
                     t_pre <= atleast(t_pre, C_WR_PRE - 1);
@@ -204,6 +202,17 @@ always @(posedge clk) begin
     end
 
     // ---- the requests ----
+    // (the data's registers on enables that are registers themselves: the one behind takes what
+    // comes whenever it is empty, the pins' side the waiting write's whenever there is one: a
+    // write's line and mask count only with its wr_go)
+    if (rq_v && rq_wr) begin
+        o_wdata <= rq_d;
+        o_wmask <= rq_m;
+    end
+    if (!sk_v) begin
+        sk_d <= wr_data;
+        sk_m <= wr_mask;
+    end
     if (take || !rq_v) begin
         rq_hit <= in_hit;
         if (sk_v) begin
@@ -214,7 +223,7 @@ always @(posedge clk) begin
             rq_wr <= cmd_wr; rq_a <= addr; rq_d <= wr_data; rq_m <= wr_mask;
         end
     end else if (cmd_en) begin
-        sk_v <= 1'b1; sk_wr <= cmd_wr; sk_a <= addr; sk_d <= wr_data; sk_m <= wr_mask;
+        sk_v <= 1'b1; sk_wr <= cmd_wr; sk_a <= addr;
     end
     if (pre_all)
         rq_hit <= 1'b0;

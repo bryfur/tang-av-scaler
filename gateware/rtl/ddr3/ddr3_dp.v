@@ -27,11 +27,23 @@
 //             opens g_cyc cycles and g_rot slots after the command's
 //             cycle for four slots, g_sel quarter clocks later.  Each
 //             lane's bursts come with its RVALID: rd_valid and the line in
-//             rd_data when every lane has its next one (eight cycles
-//             after rd_go on the board: seven to the deserializers'
-//             words, one for a register beside them), reads in order.
+//             rd_data when every lane has its next one (nine cycles
+//             after rd_go on the board: one to the pins' side, seven to
+//             the deserializers' words, one for the register after them),
+//             reads in order.
 //   dqs_pulse a strobe edge of our own: a gate left open by a wrong
 //             setting closes on it (the calibration's).
+//
+// The pins' side: the pins' logic is at the chip's edge, and what drives it
+// and reads it need not be: everything to the serializers and the DQS
+// blocks leaves a register here with nothing after it (a cycle later, all
+// alike: nothing moves against anything else), and the deserializers'
+// words and RVALID go into registers with nothing before them (r_data,
+// r_valid: the calibration's too).  A net across the chip then has a whole
+// cycle to itself.  (Before: the calibration's comparison straight off
+// the deserializers, 5 ns of net and seven levels of logic, and the
+// command's choice between the calibration and the controller straight
+// into the serializers: the paths every build ended on.)
 
 module ddr3_dp #(
     parameter CL  = 6,
@@ -61,7 +73,7 @@ module ddr3_dp #(
     output wire        rd_valid,
     output wire [8*8*LANES-1:0] rd_data,
     input  wire        rd_raw,            // (the calibration: no lines, r_data and r_valid as they come)
-    output wire [8*8*LANES-1:0] r_data,
+    output wire [8*8*LANES-1:0] r_data,   // (the deserializers' words, a register on)
     output reg         rd_stray = 1'b0,   // a burst no read asked for, or one too many kept (it stays)
 
     input  wire [2*LANES-1:0]   g_cyc,
@@ -72,7 +84,7 @@ module ddr3_dp #(
     input  wire [LANES-1:0]     l_rmove,
     input  wire [LANES-1:0]     l_rdir,
     input  wire [LANES-1:0]     l_slip,
-    output wire [LANES-1:0]     r_valid,
+    output wire [LANES-1:0]     r_valid,  // (RVALID, with r_data)
     output wire [7:0]  dll_step,
 
     output wire [14:0] ddr_addr,
@@ -143,12 +155,16 @@ end endgenerate
 // to two bursts; nothing is taken while no read is owed.)
 // (RVALID and the words registered once first: they come a long way from
 // the pins' blocks)
+wire [LANES-1:0] i_valid;
+wire [8*8*LANES-1:0] i_data;
 reg  [LANES-1:0] rv_q = 0;
 reg  [8*8*LANES-1:0] rdat_q = 0;
 always @(posedge pclk) begin
-    rv_q <= r_valid;
-    rdat_q <= r_data;
+    rv_q <= i_valid;
+    rdat_q <= i_data;
 end
+assign r_valid = rv_q;
+assign r_data = rdat_q;
 reg  [4:0] owed = 5'd0;                   // reads whose line is still to come
 wire [LANES-1:0] have;
 wire       line = &have && owed != 0;
@@ -188,15 +204,49 @@ always @(posedge pclk) begin
     end
 end
 
+// ---- to the pins: a register, nothing after it ----
+(* syn_preserve = 1 *) reg [3:0]  p_cs_n = 4'hf, p_ras_n = 4'hf, p_cas_n = 4'hf, p_we_n = 4'hf;
+(* syn_preserve = 1 *) reg [11:0] p_ba = 12'd0;
+(* syn_preserve = 1 *) reg [59:0] p_a = 60'd0;
+(* syn_preserve = 1 *) reg        p_cke = 1'b0, p_odt = 1'b0, p_reset_n = 1'b0;
+(* syn_preserve = 1 *) reg [8*8*LANES-1:0] p_data = 0;
+(* syn_preserve = 1 *) reg [8*LANES-1:0]   p_mask = 0;
+(* syn_preserve = 1 *) reg [3:0]  p_dq_oe = 4'd0, p_dqs_oe = 4'd0, p_dqs_tog = 4'd0;
+(* syn_preserve = 1 *) reg [4*LANES-1:0]   p_gate = 0;
+(* syn_preserve = 1 *) reg [3*LANES-1:0]   p_sel = 0;
+(* syn_preserve = 1 *) reg [LANES-1:0]     p_hold = 0, p_rmove = 0, p_rdir = 0, p_slip = 0;
+always @(posedge pclk) begin
+    p_cs_n <= c_cs_n;
+    p_ras_n <= c_ras_n;
+    p_cas_n <= c_cas_n;
+    p_we_n <= c_we_n;
+    p_ba <= c_ba;
+    p_a <= c_a;
+    p_cke <= c_cke;
+    p_odt <= c_odt;
+    p_reset_n <= c_reset_n;
+    p_data <= w_data;
+    p_mask <= w_mask;
+    p_dq_oe <= w_dq_oe;
+    p_dqs_oe <= w_dqs_oe;
+    p_dqs_tog <= w_dqs_tog;
+    p_gate <= r_gate;
+    p_sel <= g_sel;
+    p_hold <= l_hold;
+    p_rmove <= l_rmove;
+    p_rdir <= l_rdir;
+    p_slip <= l_slip;
+end
+
 ddr3_phy #(.LANES(LANES)) u_phy (
     .clk(clk), .rst(rst), .mclk(mclk), .mclk_en(mclk_en), .pclk(pclk), .ready(ready),
-    .c_cs_n(c_cs_n), .c_ras_n(c_ras_n), .c_cas_n(c_cas_n), .c_we_n(c_we_n), .c_ba(c_ba), .c_a(c_a),
-    .c_cke(c_cke), .c_odt(c_odt), .c_reset_n(c_reset_n),
-    .w_data(w_data), .w_mask(w_mask), .w_dq_oe(w_dq_oe), .w_dqs_oe(w_dqs_oe), .w_dqs_tog(w_dqs_tog),
-    .r_gate(r_gate), .r_sel(g_sel), .r_data(r_data), .r_valid(r_valid), .r_burst(),
-    .l_rloadn({LANES{1'b1}}), .l_rmove(l_rmove), .l_rdir(l_rdir),
+    .c_cs_n(p_cs_n), .c_ras_n(p_ras_n), .c_cas_n(p_cas_n), .c_we_n(p_we_n), .c_ba(p_ba), .c_a(p_a),
+    .c_cke(p_cke), .c_odt(p_odt), .c_reset_n(p_reset_n),
+    .w_data(p_data), .w_mask(p_mask), .w_dq_oe(p_dq_oe), .w_dqs_oe(p_dqs_oe), .w_dqs_tog(p_dqs_tog),
+    .r_gate(p_gate), .r_sel(p_sel), .r_data(i_data), .r_valid(i_valid), .r_burst(),
+    .l_rloadn({LANES{1'b1}}), .l_rmove(p_rmove), .l_rdir(p_rdir),
     .l_wloadn({LANES{1'b1}}), .l_wmove({LANES{1'b0}}), .l_wdir({LANES{1'b0}}),
-    .l_wstep({8*LANES{1'b0}}), .l_slip(l_slip), .l_hold(l_hold), .l_rflag(), .l_wflag(),
+    .l_wstep({8*LANES{1'b0}}), .l_slip(p_slip), .l_hold(p_hold), .l_rflag(), .l_wflag(),
     .dll_step(dll_step), .dll_lock(),
     .ddr_addr(ddr_addr), .ddr_bank(ddr_bank), .ddr_cs(ddr_cs), .ddr_ras(ddr_ras), .ddr_cas(ddr_cas),
     .ddr_we(ddr_we), .ddr_ck(ddr_ck), .ddr_ck_n(ddr_ck_n), .ddr_cke(ddr_cke), .ddr_odt(ddr_odt),
