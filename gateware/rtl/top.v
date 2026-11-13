@@ -50,6 +50,7 @@
 //                    (rcas.v dn), 20:16 the sharpening (rcas.v: 0 none to 16)
 //   37 R   FOCUS    focus.v: 27:0 the last field's sharpness across a line, 31:28 a count of fields
 //   35 RW  DEINT     deint.v: 1:0 mode (0 motion adaptive, 1 bob, 2 weave), 2 the F of the top field,
+//                    3 motion compensation (deint.v mc: with mode 0),
 //                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3),
 //                    6 a frame made from the field still coming in (deint.v ll: not while frozen),
 //                    7 the lines made where the picture moves go along its edges (deint.v edi),
@@ -93,10 +94,10 @@
 //   50-51 R AUD      the PCM1808's last left and right words as they came (audio_in.v: 32 bits; the
 //                    24-bit sample at 30:7)
 //   54-57  AUD, AUDL, AUDR, AUDO  the sound through the CPU: audio_fifo.v
-//   53 RW  MV        the picture's pan, for the deinterlacer (deint.v mv; sw/pan.c): 5:0 dx (signed: what is at
-//                    x in a field is at x + dx in the field two before), 9:6 dyr (signed: lines of the
-//                    field), 10 it is known (0: none used); the rest the program's notes for a host
-//                    (31:16 the time finding it took, in 10 us)
+//   53 RW  MV        for the motion compensation (deint.v mv, first; sw/pan.c): the picture's pan: 5:0 dx
+//                    (signed: what is at x in a field is at x + dx in the field two before), 9:6 dyr
+//                    (signed: lines of the field), 10 it is known; 25:16 the first line that wants
+//                    vectors (the part shown's first, less some)
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
 //                    sample's upper 16 bits)
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
@@ -246,11 +247,21 @@ module top (
         if (t_r0 && !t_r1)
             temp <= {1'b1, t_val};
     end
+`ifdef AVB_VCC
+    // (a build to measure the core's supply, GW_VCC=1: the same ADC in voltage mode on VCC, which it
+    // halves: TEMP's 13:0 are then VCC / 2 in 1/2048 V: volts = value / 1024)
+    ADCULC #(.DYN_BKEN("FALSE"), .BUF_VCC_EN(1'b1), .CLK_SEL(1'b0), .PIOCLK_SEL(1'b0), .VSEN_CTL(3'b000), .VSEN_CTL_SEL(1'b0),
+             .ADC_MODE(1'b1), .DIV_CTL(2'd0), .SAMPLE_CNT_SEL(3'd4), .RATE_CHANGE_CTRL(3'd4))
+        u_adc (.ADCINBK6A(1'b0), .ADCINBK6B(1'b0), .ADCINBK7A(1'b0), .ADCINBK7B(1'b0), .VSENCTL(3'b000),
+               .FSCAL_VALUE(10'd653), .OFFSET_VALUE(12'sd0), .ADCEN(1'b1), .CLK(clk), .DRSTN(pll_lock),
+               .ADCREQI(beat[24]), .ADCRDY(t_rdy), .ADCVALUE(t_val));
+`else
     ADCULC #(.DYN_BKEN("FALSE"), .CLK_SEL(1'b0), .PIOCLK_SEL(1'b0), .VSEN_CTL(3'b000), .VSEN_CTL_SEL(1'b0),
              .ADC_MODE(1'b0), .DIV_CTL(2'd0), .SAMPLE_CNT_SEL(3'd4), .RATE_CHANGE_CTRL(3'd4))
         u_adc (.ADCINBK6A(1'b0), .ADCINBK6B(1'b0), .ADCINBK7A(1'b0), .ADCINBK7B(1'b0), .VSENCTL(3'b000),
                .FSCAL_VALUE(10'd730), .OFFSET_VALUE(-12'sd1180), .ADCEN(1'b1), .CLK(clk), .DRSTN(pll_lock),
                .ADCREQI(beat[24]), .ADCRDY(t_rdy), .ADCVALUE(t_val));
+`endif
     always @(posedge clk)
         beat <= beat + 25'd1;
 
@@ -628,9 +639,9 @@ module top (
     reg  [31:0]  dcfg = 32'h140D0620;
     // the picture's pan, as the CPU found it (MV): to the DDR3's clock whole (the same twice)
     reg  [31:0]  mv_r = 32'd0;
-    reg  [10:0]  mv_p0 = 11'd0, mv_p1 = 11'd0, mv_p = 11'd0;
+    reg  [20:0]  mv_p0 = 21'd0, mv_p1 = 21'd0, mv_p = 21'd0;
     always @(posedge pclk) begin
-        mv_p0 <= mv_r[10:0];
+        mv_p0 <= {mv_r[25:16], mv_r[10:0]};
         mv_p1 <= mv_p0;
         if (mv_p0 == mv_p1)
             mv_p <= mv_p1;
@@ -719,7 +730,7 @@ module top (
     assign d_hold = hd_p ? pt_hold : ls_hold;
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mv(mv_p), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mv(mv_p[10:0]), .first(mv_p[20:11]), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),

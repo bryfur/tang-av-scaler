@@ -60,6 +60,9 @@ set fo [open $out/build.stamp w]; puts $fo "$number $place $route $sum"; close $
 puts $f "`define AVB_BUILD 32'd$number"
 # (the block RAMs put in by hand: rtl/bram.v)
 puts $f "`define AVB_GOWIN"
+# GW_VCC=1: a build that measures the core's supply in the temperature's place (rtl/top.v AVB_VCC)
+if {[env GW_VCC 0]} { puts $f "`define AVB_VCC" }
+
 set mode [env GW_MODE 1080p60]
 switch $mode {
     1080p60 { set ppc 1; set serdes {1.485G 148.5M 10 1:1} }
@@ -120,6 +123,9 @@ set_option -use_cpu_as_gpio 1
 set_option -bit_compress 0
 set_option -timing_driven 1
 #   GW_PLACE, GW_ROUTE  the place and route algorithms (as gowin/build.stamp says, or 3 and 1: above)
+# GW_SDP32=1: the 32/36-bit wide RAMs left whole (the IDE splits each over two blocks by default since 1.9.10;
+# whole, they want the core's supply at 0.9 V or more)
+if {[env GW_SDP32 0]} { set_option -convert_sdp32_36_to_sdp16_18 0 }
 set_option -place_option $place
 set_option -route_option $route
 set_option -output_base_name avb

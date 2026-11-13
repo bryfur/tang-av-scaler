@@ -1,14 +1,14 @@
-/* pan.c: the picture's pan, for the deinterlacer (rtl/deint.v mv; MV): how far the newest field is
+/* pan.c: the picture's pan, for the deinterlacer's motion compensation (rtl/deint.v mv; MV): how far the newest field is
  * from the one two before it (the same lines), found from the fields themselves in the memory:
  * what is at (x, row) of the newest is at (x + dx, row + dyr) of the older.
  *
  * Six rows across the field, 384 pixels in its middle (every other one): the sum of |newest - older
  * moved| for dx of -16 to 16 with no move down; then for dyr of -4 to 4 at that dx; then dx again
- * at that dyr.  It counts where the least sum is clearly under no move's, and (the deinterlacer
- * can only use an even dyr: the field between has no line at half a line) clearly under its
- * neighbours' one line up and down: else the picture moves by part of a line, or not as one, and
- * there is no pan to use.  The rows are read as they are in the memory (the data cache is off
- * after sw/mem.c's test: the capture writes the memory behind it).
+ * at that dyr.  It counts where something moves and the least sum is clearly under no move's.
+ * The deinterlacer finds each block's own vector and tests every pixel: this is one more vector
+ * for its blocks to try and what a frame's first line begins from, so it need not be exact.  The
+ * rows are read as they are in the memory (the data cache is off after sw/mem.c's test: the
+ * capture writes the memory behind it).
  */
 #include "hw.h"
 
@@ -83,7 +83,7 @@ static int sums(uint32_t *s, bool down, int latest, int older, int lines, int dx
 /* a field has come in: the pan from it and the one two before */
 void pan_service(int latest, int lines, bool on)
 {
-    uint32_t sx[2 * RX + 1], sy[2 * RY + 1], t0 = cycles(), zero, best, up, down;
+    uint32_t sx[2 * RX + 1], sy[2 * RY + 1], t0 = cycles(), zero, best;
     const uint32_t px = ROWS * (NX / 2);        /* the pixels in a sum */
     int older = (latest - 2) & 7, dx, dy;
 
@@ -106,21 +106,18 @@ void pan_service(int latest, int lines, bool on)
             dy = sums(sy, true, latest, older, lines, dx, 0);
     }
     best = sy[dy + RY];
-    up = dy > -RY ? sy[dy - 1 + RY] : best;
-    down = dy < RY ? sy[dy + 1 + RY] : best;
-    /* it counts: something moves (no move's sum is 3 a pixel or more), the least is under half of
-     * that and not at the search's end (the true one may be past it), dyr even, and, where the sums
-     * say anything about lines (the least over 2 a pixel: under that the rows looked at are plain,
-     * and one line or another is the same to them), the least an eighth under the lines beside:
-     * else the picture moves by part of a line.  (What the deinterlacer does with it, it tests
-     * pixel by pixel itself: a wrong pan costs the lines it would have made, not a wrong picture.) */
-    pan_ok = (dx || dy) && !(dy & 1) && zero >= 3 * px && best * 2 < zero && dx > -RX && dx < RX && dy > -RY && dy < RY &&
-             (best < 2 * px || (best * 8 < up * 7 && best * 8 < down * 7));
+    /* it counts: something moves (no move's sum is 3 a pixel or more), and the least is under half
+     * of that and not at the search's end (the true one may be past it).  The deinterlacer takes
+     * it as one more vector for its blocks to try, and what they begin a frame with: it finds each
+     * block's own, and tests every pixel, so a pan that is not quite the picture's costs nothing. */
+    pan_ok = (dx || dy) && zero >= 3 * px && best * 2 < zero && dx > -RX && dx < RX && dy > -RY && dy < RY;
     pan_dx = dx;
     pan_dy = dy;
     st.pan = pan_ok, st.pan_dx = dx, st.pan_dy = dy;
     pan_us = (cycles() - t0) / (core_hz / 1000000);
     st.pan_ms10 = pan_us / 100 > 255 ? 255 : pan_us / 100;
-    /* (the upper half for a host: the time this took in 10 us; 15:11 what was found even when not used) */
-    REG(R_MV) = (pan_us / 10 > 0xFFFF ? 0xFFFFu : pan_us / 10) << 16 | (pan_ok ? 0x400u : 0) | ((uint32_t)dy & 15) << 6 | ((uint32_t)dx & 63);
+    /* (25:16: the first line that wants vectors: the part shown's first, less 4: the lines above are
+     * wanted fast at a frame's start, and are not seen) */
+    REG(R_MV) = (uint32_t)((st.show_y > 4 ? st.show_y - 4 : 0) & 0x3FE) << 16 | (pan_ok ? 0x400u : 0) | ((uint32_t)dy & 15) << 6 |
+                ((uint32_t)dx & 63);
 }

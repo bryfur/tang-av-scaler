@@ -74,7 +74,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f"><span>Show what it finds<small>edges green, blends blue and red</small></span><input class="sw" type="checkbox" name="aa_dbg"></div>
 </section>
 <section><h2>Deinterlacing</h2>
-<div class="f"><span>Method<small id="pant"></small></span><span class="seg"><label><input type="radio" name="mode" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="mode" value="4"><span>Motion adaptive, along edges</span></label><label><input type="radio" name="mode" value="8"><span>Motion adaptive, pan followed</span></label><label><input type="radio" name="mode" value="12"><span>Motion adaptive, edges and pan</span></label><label><input type="radio" name="mode" value="1"><span>Bob</span></label><label><input type="radio" name="mode" value="5"><span>Bob, along edges</span></label><label><input type="radio" name="mode" value="2"><span>Weave</span></label></span></div>
+<div class="f"><span>Method<small id="pant"></small></span><span class="seg"><label><input type="radio" name="mode" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="mode" value="4"><span>Motion adaptive, along edges</span></label><label><input type="radio" name="mode" value="8"><span>Motion compensated</span></label><label><input type="radio" name="mode" value="12"><span>Motion compensated, along edges</span></label><label><input type="radio" name="mode" value="1"><span>Bob</span></label><label><input type="radio" name="mode" value="5"><span>Bob, along edges</span></label><label><input type="radio" name="mode" value="2"><span>Weave</span></label></span></div>
 <div class="f"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
 <div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
 </section>
@@ -147,7 +147,7 @@ async function vstat(){
   if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
   $('lk').textContent=['the output kept in step with the input','no input to follow','getting in step: '+(v.lock_us/1000).toFixed(2)+' ms to go, clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm','in step (clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm): every field shown once, the delay steady'][v.relay?v.lock:0];
   $('llt').textContent=v.set.lowlat?(v.ll?'on: a frame is begun with '+v.ll_lines+' lines of its field in':'on, but not in use yet (the output must be in step first)'):'the picture begun while the field is still coming in (needs frame lock)';
-  $('pant').textContent=(v.set.mode&8)?(v.pan[0]?'the picture pans '+v.pan[1]+' pixels, '+v.pan[2]+' lines in two fields: followed':'no pan to follow now ('+v.pan[1]+', '+v.pan[2]+')')+' (found in '+v.pan[3]+' ms)':'';
+  $('pant').textContent=(v.set.mode&8)?'each block of 8 pixels follows its own motion'+(v.pan[0]?'; the picture as a whole pans '+v.pan[1]+' pixels, '+v.pan[2]+' lines in two fields':''):'';
   $('shown').textContent='showing '+v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2];
   $('vs').innerHTML=
     row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':

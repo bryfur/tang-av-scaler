@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """pan_test.py: sw/pan.c on a PC: two fields of a picture that has moved put where the program
 finds them (a memory of 1 GB mapped for it, the registers a page), and what it says the pan is:
-right and used where the picture moves as one by whole pixels and an even number of the field's
-lines; found but not used where the lines are odd; not used where it moves by half a line, not at
-all, or past what is searched; used across where the rows looked at are plain down the picture."""
+right and given where the picture moves as one by whole pixels and lines; the nearest where it
+moves by part of a line (the deinterlacer finds each block's own from there); none where the
+picture does not move, or moves past what is searched; across only where the rows looked at are
+plain down the picture."""
 import os
 import subprocess
 import sys
@@ -78,9 +79,9 @@ CASES = [
     ((0, 15, 4, 0), True, (15, 2)),
     ((0, 1, 0, 0), True, (1, 0)),
     ((0, 0, 4, 0), True, (0, 2)),
-    ((0, 3, 2, 0), False, (3, 1)),          # an odd number of lines: found, not used
-    ((0, 4, 1, 0), False, None),            # half a line
-    ((0, -6, 3, 0), False, None),           # a line and a half
+    ((0, 3, 2, 0), True, (3, 1)),
+    ((0, 4, 1, 0), True, (4, None)),        # half a line: the nearest
+    ((0, -6, 3, 0), True, (-6, None)),      # a line and a half
     ((0, 0, 0, 0), False, (0, 0)),          # still
     ((0, 16, 0, 0), False, None),           # at the search's end
     ((0, 24, 0, 0), False, None),           # past it
@@ -105,8 +106,6 @@ def main():
             good = good and reg == (0x400 | (dy & 15) << 6 | (dx & 63))
         else:
             good = good and not reg & 0x400
-        if used and want and want[1] is not None:
-            good = good and dy % 2 == 0
         bad += not good
         print("%-18s %s (%d, %d)%s" % ("%s pan %d, %g%s" % ("plain rows" if c[0] else "picture", c[1], c[2] / 2, ", a still box" if c[3] else ""),
                                        "used" if ok else "not used", dx, dy, "" if good else "   WRONG"))

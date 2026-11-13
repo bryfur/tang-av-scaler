@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [pg] [edi] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
@@ -56,9 +56,12 @@ def main():
     pic = next((a[4:] for a in args if a.startswith("pic=")), None)
     prog = "pg" in args                 # 480p: each "field" a whole frame, F always 0
     edi = "edi" in args                 # the lines made go along the picture's edges
-    # mv=DX,DYR: the picture pans (model.pan_field) and the deinterlacer is told how; mv=DX,DYR,TX,TY: told (TX, TY)
+    # mc: motion compensation (the vectors found by the design itself); mv=DX,DYR: the picture pans (model.pan_field);
+    # with mc the design is not told; without, it is told the pan (the CPU's part), or with mv=DX,DYR,TX,TY told (TX, TY)
     mvs = next((tuple(int(v) for v in a[3:].split(",")) for a in args if a.startswith("mv=")), None)
-    mv = None if mvs is None else mvs[2:4] if len(mvs) == 4 else mvs[:2]
+    mc = "mc" in args or mvs is not None
+    mv = None if mvs is None or ("mc" in args and len(mvs) < 4) else mvs[2:4] if len(mvs) == 4 else mvs[:2]
+    mcfirst = (max(0, crop[2] - 4) & ~1) if crop else 0
     fields = [(0, model.frame(t)) for t in range(nf)] if prog else [(t & 1, model.field(t)) for t in range(nf)]
     if pic:
         fields = [(t & 1, f) for t, f in enumerate(model.picture_fields(pic, nf))]
@@ -67,7 +70,7 @@ def main():
     if noise:
         fields = [(f, w) for (f, _), w in zip(fields, model.noisy([w for _, w in fields], noise))]
     data = stream(fields)
-    tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, ("p" if pic else "") + ("pg" if prog else "") + ("e" if edi else "") + ("" if mvs is None else "_mv" + "_".join(str(v).replace("-", "m") for v in mvs)), ("_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "") + ("_ll%d" % ll if ll else ""), "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
+    tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, ("p" if pic else "") + ("pg" if prog else "") + ("e" if edi else "") + ("c" if "mc" in args else "") + ("" if mvs is None else "_mv" + "_".join(str(v).replace("-", "m") for v in mvs)), ("_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "") + ("_ll%d" % ll if ll else ""), "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     import fsr
@@ -118,7 +121,7 @@ module tb;
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
     deint u_deint (.clk(pclk), .nch(7'd45), .pg(1'b%(pg)d), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
-                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .edi(1'b%(edi)d), .mv(11'd%(mvw)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
+                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .edi(1'b%(edi)d), .mc(1'b%(mc)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
@@ -155,6 +158,9 @@ module tb;
     reg llbit = 0;
     reg dumping = 0;
     initial gf = $fopen("%(work)s/%(tag)s_ring.txt", "w");
+    // (the vectors the estimator keeps: the step, the block, {dyr, dx})
+    integer vf; initial vf = $fopen("%(work)s/%(tag)s_vec.txt", "w");
+    always @(posedge pclk) if (u_deint.vec_we && dumping) $fwrite(vf, "%%d %%d %%d\\n", u_deint.k, u_deint.vec_wa, u_deint.vec_wd);
     always @(posedge pclk) if (w_we && dumping) $fwrite(gf, "%%d %%d %%h\\n", w_slot, w_x, w_d);
     initial begin
         $readmemh("%(work)s/%(tag)s_in.hex", mem);
@@ -192,7 +198,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, edi=1 if edi else 0,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
@@ -224,10 +230,10 @@ endmodule
     # (the dump begins at the end of the frame before: its last row is still coming out)
     first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
     start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv)
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst)
     ana = fsr.analysis([[p[0] for p in row] for row in pix], 720, 480)
     line, prev, rb = -1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):
@@ -244,6 +250,21 @@ endmodule
             if rb <= 8:
                 print("  ring line %d x %d slot %d: got %s want %s" % (line, x, slot, got, (pix[line][x], ana[line][x])))
     print("ring: %d lines, %d words wrong" % (line + 1, rb))
+    if mc and not prog:
+        # the vectors, against the model's
+        vecs = []
+        model.deinterlace([w for _, w in fields], [f for f, _ in fields], mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=mcfirst, vecs=vecs)
+        wantv = {(k, b): v for k, vv in vecs for b, v in enumerate(vv)}
+        gotv = {}
+        for t in open(os.path.join(WORK, tag + "_vec.txt")):
+            k, b, d = (int(v) for v in t.split())
+            sx = lambda v, n: v - (1 << n) if v >> (n - 1) else v
+            gotv[k, b] = (sx(d & 63, 6), sx(d >> 6, 4))
+        kmax = max(k for k, b in gotv) if gotv else -1     # (a part shown: the stream stops below it)
+        wantv = {kb: v for kb, v in wantv.items() if kb[0] <= kmax}
+        vb = [kb for kb in sorted(wantv) if gotv.get(kb) != wantv[kb]]
+        print("vectors: %d of the model's, %d kept by the design, %d differ%s" % (
+            len(wantv), len(gotv), len(vb), "".join("\n  step %d block %d: got %s want %s" % (kb + (gotv.get(kb), wantv[kb])) for kb in vb[:8])))
     if ll:
         used = int(next(t for t in log.splitlines() if t.startswith("ll ")).split()[-1])
         print("the frame was made from the field coming in" if used else "the frame was NOT made from the field coming in")

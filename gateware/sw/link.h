@@ -38,8 +38,9 @@ struct link_settings {
     uint8_t ntsc;           /* the picture rate 60/1.001 Hz */
     uint8_t mode;           /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave; + 4: the lines made where the
                              * picture moves go along its edges (rtl/deint.v edi); + 8 (motion adaptive):
-                             * where the picture pans, the lines made are the field before's, moved
-                             * (rtl/deint.v mv, sw/pan.c) */
+                             * motion compensation: where the picture moves the lines made are the field
+                             * before's, moved by each block's own vector (rtl/deint.v mc; sw/pan.c finds
+                             * the picture's pan for it to start from) */
     uint8_t thr;            /* its motion threshold */
     uint8_t aa;             /* SMAA */
     uint8_t aa_thr;         /* its edge threshold */

@@ -192,14 +192,69 @@ def edge_line(o, n):
 
 
 MC_HOLD = 12
+ME_UPS = [(1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (-2, 0), (3, 0), (-3, 0), (1, 1), (-1, -1), (4, 0), (-4, 0), (0, 2), (0, -2),
+          (1, -1), (-1, 1)]
+ME_PEN = [0, 2, 2, 6, 4, 4]
+ME_RX, ME_RY, ME_OUT = 31, 4, 512
 
 
-def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
+def me_candidates(k, b, prev, pan, nb):
+    """the six vectors block b tries at step k (None: none there): its own of the line above; a
+    neighbour's of the line above (left and right in turn); no move, or the frame's pan (in turn, if
+    one is known); one of all the vectors there are (a different one each line and block); its own
+    nudged, twice (the nudges in turn)"""
+    side = b - 1 if (k + b) & 1 == 0 else b + 1
+    h = (37 * k + 101 * b) & 511
+    c = [prev[b], prev[side] if 0 <= side < nb else None, pan if pan is not None and (k + b) & 3 >= 2 else (0, 0),
+         ((h & 63) - 32, 2 * ((h >> 6) % 5) - 4)]
+    for u in range(2):
+        up = ME_UPS[(3 * k + 5 * b + 7 * u) & 15]
+        c.append((prev[b][0] + up[0], prev[b][1] + up[1]))
+    return c
+
+
+def me_line(k, cl, p2l, prev, pan):
+    """the vectors of step k's blocks of eight pixels (rtl/deint.v's estimator): for each block the
+    candidate (dx, dy) with the least sum of |C - P2 moved| over the block's eight pixels in C's four
+    rows about the line made (k - 2 to k + 1; past the field's ends: the nearest; a row of P2 past
+    them: ME_OUT), and the candidate's penalty; the first of the least.  A candidate is left out
+    if it is past +-ME_RX, +-ME_RY or takes the block outside the picture; none left: no move.
+    cl, p2l: the fields' luma rows; prev: the line above's vectors"""
+    nl, W = len(cl), len(cl[0])
+    nb = W // 8
+    out = []
+    for b in range(nb):
+        x0 = 8 * b
+        best = None
+        for ci, v in enumerate(me_candidates(k, b, prev, pan, nb)):
+            if v is None:
+                continue
+            dx, dy = v
+            if abs(dx) > ME_RX or abs(dy) > ME_RY or x0 + dx < 0 or x0 + 7 + dx > W - 1:
+                continue
+            sm = ME_PEN[ci]
+            for r in (k - 2, k - 1, k, k + 1):
+                if 0 <= r + dy < nl:
+                    ra, rb = cl[min(max(r, 0), nl - 1)], p2l[r + dy]
+                    sm += sum(abs(ra[x0 + j] - rb[x0 + dx + j]) for j in range(8))
+                else:
+                    sm += ME_OUT
+            if best is None or sm < best[0]:
+                best = (sm, v)
+        out.append(best[1] if best else (0, 0))
+    return out
+
+
+def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, mc=False, first=0, vecs=None):
     """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines; nr: the
-    temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity; mv:
-    the picture's pan (dx, dyr): what is at (x, row) in a field is at (x + dx, row + dyr) in the
-    field two before (rtl/deint.v mv; dyr even): where the picture is that, the line made is the
-    field before's, moved by half of it"""
+    temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity; mc:
+    motion compensation (rtl/deint.v mc): each block of eight pixels of each line made has a
+    vector (dx, dyr) (me_line(): what is at (x, row) in a field is at (x + dx, row + dyr) in the
+    field two before), and where the picture is that (and dyr is even: the field before has a line
+    there), the line made is the field before's, moved by half of it; mv: the frame's pan as the
+    CPU found it, a candidate for the blocks and what they begin with; first: no vectors for the
+    lines made before this one (a part of the picture shown: they are not seen); vecs: a list
+    that is given each step's (k, vectors)"""
     c, p1 = fields[-1], fields[-2]
     hist = (len(fields) >= 4 and pars[-2] != pars[-1] and pars[-3] == pars[-1] and pars[-4] != pars[-1])
     p2 = fields[-3] if len(fields) >= 3 else c
@@ -212,10 +267,16 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
     nl = len(c)
     out = [None] * (2 * nl)
     dcp = [[abs(a - b) for a, b in zip(luma(raw_c[n]), luma(p2[n]))] for n in range(nl)]
+    mc = mc and hist and mode == 0
+    W = 2 * PAIRS
+    if mc:
+        cl, p2l, p1l, p3l = ([luma(r) for r in f] for f in (raw_c, p2, raw_p1, p3))
+        vec = [mv if mv is not None else (0, 0)] * (W // 8)
     for k in range(nl + (0 if pc else 1)):
         if not pc and k == 0:
             continue
         new, old = (k if k < nl else None), (k - 1 if k >= 1 else None)
+        edge = new is None or old is None
         if new is None:
             new = old
         if old is None:
@@ -238,34 +299,36 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
                 al.append(min(16, max(0, md - thr)))
         line = []
         bob = edge_line(c[old], c[new]) if edi else None
-        # the pan's way: how far the picture is from itself two fields ago moved by (dx, dyr) (on old,
-        # on new, and the field before against the one three before, at the line itself moved by
-        # half of it): as m; 255 where a line or a pixel of it is outside the field, and at the
-        # picture's first and last lines
-        av, wv = [16] * (2 * PAIRS), [None] * PAIRS
-        if mv and mv[1] % 2 == 0 and hist and mode == 0:    # (an odd dyr: the field before has no line there)
-            dx, dyr = mv
-            s1, half = dx // 2, dx & 1
-            s3 = dx + s1
-            W = 2 * PAIRS
-            edge = k < 1 or k >= nl
-            lum = lambda f, row: luma(f[row]) if 0 <= row < nl else None
-            r1 = w + dyr // 2
-            l2n, l2o, l1, l3 = lum(p2, new + dyr), lum(p2, old + dyr), lum(raw_p1, r1), lum(p3, r1 + dyr)
-            cn_, co_ = luma(raw_c[new]), luma(raw_c[old])
-
-            def disp(L, x, s, hf):
-                if L is None or x + s < 0 or x + s + hf > W - 1:
-                    return None
-                return mean(L[x + s], L[x + s + 1]) if hf else L[x + s]
-            mm, wy = [], []
+        # the vectors' way: how far the picture is from itself two fields ago moved by the block's
+        # (dx, dyr) (on old, on new, and the field before against the one three before, at the line
+        # itself moved by half of it): as m; 255 (no use of it) where a line or a pixel of it is
+        # outside the field, at the picture's first and last lines, where dyr is odd, and where the
+        # block does not move
+        av, wv = [16] * W, [None] * PAIRS
+        if mc and not edge and line_i >= first:
+            vec = me_line(k, cl, p2l, vec, mv)
+            if vecs is not None:
+                vecs.append((k, list(vec)))
+            mm, wy = [255] * W, [None] * W
             for x in range(W):
-                pn, po = disp(l2n, x, dx, 0), disp(l2o, x, dx, 0)
-                e, f = disp(l1, x, s1, half), disp(l3, x, s3, half)
+                dx, dyr = vec[x // 8]
+                if dyr % 2 or (dx == 0 and dyr == 0):
+                    continue
+                s1, half = dx >> 1, dx & 1
+                s3 = dx + s1
+                r1 = w + dyr // 2
+                r3 = r1 + dyr
+
+                def disp(f, row, xx, hf):
+                    if not 0 <= row < nl or xx < 0 or xx + hf > W - 1:
+                        return None
+                    return mean(f[row][xx], f[row][xx + 1]) if hf else f[row][xx]
+                pn, po = disp(p2l, new + dyr, x + dx, 0), disp(p2l, old + dyr, x + dx, 0)
+                e, f = disp(p1l, r1, x + s1, half), disp(p3l, r3, x + s3, half)
                 part = lambda a_, b_: 255 if a_ is None or b_ is None else abs(a_ - b_)
-                mm.append(255 if edge else max(part(co_[x], po), part(cn_[x], pn), part(e, f)))
-                wy.append(e)
-            # (a pair with a pixel of the field before's outside the picture: no pan for either)
+                mm[x] = max(part(cl[old][x], po), part(cl[new][x], pn), part(e, f))
+                wy[x] = e
+            # (a pair with a pixel of the field before's outside the picture: no use for either)
             for q in range(PAIRS):
                 if wy[2 * q] is None or wy[2 * q + 1] is None:
                     mm[2 * q] = mm[2 * q + 1] = 255
@@ -280,7 +343,9 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None):
                 av[i] = a_
             for q in range(PAIRS):
                 if wy[2 * q] is not None and wy[2 * q + 1] is not None:
-                    qc = (2 * q + s1) >> 1
+                    dx, dyr = vec[q // 4]
+                    qc = (2 * q + (dx >> 1)) >> 1
+                    r1 = w + dyr // 2
                     wv[q] = (raw_p1[r1][qc][0], wy[2 * q], raw_p1[r1][qc][2], wy[2 * q + 1])
         for q in range(PAIRS):
             o, n_, ww = c[old][q], c[new][q], p1[w][q]
@@ -333,10 +398,10 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False, edi=False, mv=None):
+              prog=False, edi=False, mv=None, mc=False, first=0):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
     in is progressive (each of fields a whole frame): the newest as it is"""
-    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv)
+    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first)
     if smaa_thr is not None:
         import smaa
         lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
@@ -344,10 +409,10 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None):
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first)
     w, h = len(pix[0]), len(pix)
     out = fsr.rcas(fsr.scale_hw(pix, fsr.analysis([[p[0] for p in row] for row in pix], w, h), w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2

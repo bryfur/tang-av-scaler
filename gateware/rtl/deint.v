@@ -35,27 +35,38 @@
 // down and its own two pixels are alike enough; the result held between the pixels straight above
 // and below; the chroma goes the way of its pair's first pixel, half as far).
 //
-// mv: the picture's pan, {it is known, dyr (4 bits, signed), dx (6 bits, signed)}: what is at
-// (x, row) of a field is at (x + dx, row + dyr) of the field two before (the same lines); taken at
-// a frame's start, used while dyr is even and -4 to 4, in the motion adaptive mode.  Where the
-// picture moves and is that (C against P2 moved by (dx, dyr) on old and new, P1 moved by half of
-// it against P3 moved by three halves, at the line itself: as m, with thr), the line made is P1's
-// moved by half of it (half a pixel: the mean of two), not the mean of old and new (sim/model.py
-// deinterlace() mv): the picture as it was drawn, where it only pans.
+// mc: motion compensation.  Each block of eight pixels of each line made has a vector (dx, dyr):
+// what is at (x, row) of a field is at (x + dx, row + dyr) of the field two before (the same
+// lines).  Where the picture moves and is that (C against P2 moved by (dx, dyr) on old and new, P1
+// moved by half of it against P3 moved by three halves, at the line itself: as m, with thr), the
+// line made is P1's moved by half of it (half a pixel: the mean of two), not the mean of old and
+// new: the picture as it was drawn.  dyr even only (the field before has no line at half a line);
+// a block that does not move has none of it.
+//
+// The vectors are found here, a line at a time (sim/model.py me_line()): each block tries six:
+// its own of the line above; a neighbour's of the line above (left and right in turn); no move, or
+// the frame's pan (mv: {it is known, dyr 4 bits, dx 6 bits, signed}, as the CPU found it: in turn);
+// one of all the vectors there are (a different one each line and block); its own nudged, twice.
+// Each is scored by the sum of |C - P2 moved| over the block's eight pixels in C's four rows about
+// the line made, and a small penalty; the least wins, the first of equals.  A frame's first line
+// begins from the pan (or no move).  first: no vectors for lines made before this one (a part of
+// the picture shown: its lines above are not seen, and are wanted fast).
 //
 // pg: what comes in is progressive: each field in the memory is a whole frame, and the frame made
 // is the newest one's lines as they are, two a step (line 2k + 1 read as C's, line 2k in P1's
 // place and taken as it is: weave, no noise reduction); with ll, the one coming in.
 //
 // How: the fields' rows are read from the DDR3 whole, into line buffers (a RAM a row; a window of
-// rows of each field around the step's: C 4, P1 N1, P2 N2, P3 N3: the rows the pan can reach; a row
+// rows of each field around the step's: C 4, P1 N1, P2 N2, P3 N3: the rows the vectors can reach; a row
 // r in the buffer r mod N), each row once; then the step's passes go through them, a pair of
 // pixels (a word) a clock:
 //   - the load: the rows the step's windows still want, a DDR3 line (16 pixels) at a time, the four
 //     fields' in turn; a line's eight words are written a clock each (deint_fill)
-//   - the pan's pass (mv), by blocks of eight pixels: C's old and new, P2's two rows, P1's and P3's
-//     at the moved places (five words of each: the block may begin at an odd pixel, and half a
-//     pixel wants one more); the differences' greatest and P1's moved words go to a RAM (vram)
+//   - the estimator's pass (mc): for each block six times five words of P2's four rows at the
+//     candidate's place, and C's; the sums; the least's vector kept (vec)
+//   - the vectors' pass (mc), by the blocks: C's old and new, P2's two rows, P1's and P3's at the
+//     moved places (five words of each: the block may begin at an odd pixel, and half a pixel
+//     wants one more); the differences' greatest and P1's moved words go to a RAM (vram)
 //   - the output's pass: the words of all the rows at the place itself, the noise reduction, the
 //     motion, the edges, the blends; the two lines' words out (r_*)
 //
@@ -155,7 +166,7 @@ endmodule
 
 module deint #(
     parameter N1 = 5,                   // P1's rows kept: the line's own and two each way
-    parameter N2 = 10,                  // P2's: old and new, and four each way
+    parameter N2 = 12,                  // P2's: the four about the line made, and four each way
     parameter N3 = 13                   // P3's: the line's own and six each way
 ) (
     input              clk,
@@ -173,7 +184,9 @@ module deint #(
     input      [7:0]   thr,
     input      [1:0]   nr,              // temporal noise reduction: 0 none, 1 to 3
     input              edi,             // bob along the edges
+    input              mc,              // motion compensation
     input      [10:0]  mv,              // the picture's pan: {known, dyr, dx}
+    input      [9:0]   first,           // no vectors for the lines made before this one
     input              ll,
     input      [7:0]   ll_min,
     input      [9:0]   prog,
@@ -213,7 +226,7 @@ module deint #(
     end
 
     localparam S_IDLE = 0, S_LD = 1, S_LDW = 2, S_V = 3, S_VW = 4, S_O = 5, S_OW = 6, S_NEXT = 7,
-               S_GAP = 11, S_GAP2 = 12;
+               S_MP = 8, S_M = 9, S_MW = 10, S_GAP = 11, S_GAP2 = 12, S_VP = 13;
     reg [3:0]  st = S_IDLE;
     reg        active = 1'b0, pc, hist, ll_used = 1'b0;
     // (pg and nch as they were when the frame was begun: a change of them in the middle of a step
@@ -252,32 +265,31 @@ module deint #(
         head = r < {1'b0, n} ? r : {1'b0, n} - 11'd1;
     endfunction
 
-    // the pan (mv), as the frame has it
-    reg                mc_f = 1'b0;
+    // the motion compensation, as the frame has it: on; the pan (known, and what); the first line
+    reg                mc_f = 1'b0, pan_k = 1'b0;
     reg signed [5:0]   dxf = 6'sd0;
     reg signed [3:0]   dyf = 4'sd0;
-    wire signed [5:0]  sh1 = dxf >>> 1;                         // P1's pixels over (and half a pixel: dxf[0])
-    wire signed [6:0]  sh3 = {dxf[5], dxf} + {sh1[5], sh1};     // P3's
-    wire signed [3:0]  dyh = dyf >>> 1;
+    reg [9:0]          firstf = 10'd0;
+    reg                vfirst = 1'b0;                           // (no line of this frame has vectors yet)
+    wire [9:0]         pz = pan_k ? {dyf, dxf} : 10'd0;        // what the vectors begin from
     wire signed [4:0]  ow = pc ? 5'sd0 : -5'sd1;                // the line's own row of P1, from k
-    wire signed [4:0]  dy5 = {dyf[3], dyf}, dyh5 = {dyh[3], dyh};
+    wire [7:0]         nblk = {nchf, 1'b0};                     // a line's blocks of eight pixels
 
     // the step's lines (registered: k changes between steps only, clocks before they are used)
     wire [9:0] kmax = pgf ? {1'b0, nl[9:1]} - 10'd1 : pc ? nl - 10'd1 : nl;
     wire [9:0] row_w = pc ? k : k - 10'd1;
     wire       new_w = pgf || k < nl, old_w = k != 10'd0;
+    wire [9:0] line_i_w = pc ? {k[8:0], 1'b0} : {k[8:0] - 9'd1, 1'b1};
     reg        new_ok, old_ok;
+    reg        mc_s = 1'b0;             // the step has vectors
     reg [9:0]  line_i, line_d;
     reg        can = 1'b0;              // a step may start (a clock behind what it is made from)
     reg [10:0] hC, h1, h2, h3;          // the windows' last rows
     reg [1:0]  sCA, sCB;                // the rows' buffers: C's old and new,
+    reg [1:0]  sCm, sCp;                // the one before old and the one after new (the nearest in the field),
     reg [3:0]  s2A, s2B, s1W, s3W;      // P2's, P1's and P3's own
-    reg [3:0]  v2n, v2o, v1s, v3s;      // the pan's: P2's for new and old, P1's, P3's
-    reg        ok2n, ok2o, ok1, ok3;    // (they are in the field)
-    wire signed [11:0] rn_w = $signed({2'b00, k}) + dyf;
-    wire signed [11:0] ro_w = $signed({2'b00, k}) - 12'sd1 + dyf;
-    wire signed [11:0] r1_w = $signed({2'b00, row_w}) + dyh;
-    wire signed [11:0] r3_w = $signed({2'b00, row_w}) + dyh + dyf;
+    reg [8:0]  hk;                      // 37 k (mod 512) and 3 k (mod 16): the estimator's turns
+    reg [3:0]  uk;
     wire signed [11:0] nl_s = $signed({2'b00, nl});
     always @(posedge clk) begin
         line_ok <= !ll_used || latest == fc ||
@@ -285,26 +297,21 @@ module deint #(
         can <= active && !hold && k <= kmax && emitted <= goal && line_ok;
         new_ok <= new_w;
         old_ok <= old_w;
-        line_i <= pc ? {k[8:0], 1'b0} : {k[8:0] - 9'd1, 1'b1};
+        mc_s <= mc_f && new_w && old_w && line_i_w >= firstf;
+        line_i <= line_i_w;
         line_d <= pc ? {k[8:0], 1'b1} : {k[8:0] - 9'd1, 1'b0};
         hC <= head({1'b0, k} + 11'd1, nl);
-        h2 <= head({1'b0, k} + 11'd4, nl);
+        h2 <= head({1'b0, k} + 11'd5, nl);
         h1 <= head({1'b0, row_w} + 11'd2, nl);
         h3 <= head({1'b0, row_w} + 11'd6, nl);
         sCA <= old_w ? k[1:0] - 2'd1 : k[1:0];
         sCB <= new_w ? k[1:0] : k[1:0] - 2'd1;
+        sCm <= k >= 10'd2 ? k[1:0] - 2'd2 : 2'd0;
+        sCp <= {1'b0, k} + 11'd1 < {1'b0, nl} ? k[1:0] + 2'd1 : nl[1:0] - 2'd1;
         s2A <= wrap(km2, old_w ? -5'sd1 : 5'sd0, N2);
         s2B <= wrap(km2, new_w ? 5'sd0 : -5'sd1, N2);
         s1W <= wrap(km1, ow, N1);
         s3W <= wrap(km3, ow, N3);
-        v2n <= wrap(km2, dy5, N2);
-        v2o <= wrap(km2, dy5 - 5'sd1, N2);
-        v1s <= wrap(km1, ow + dyh5, N1);
-        v3s <= wrap(km3, ow + dyh5 + dy5, N3);
-        ok2n <= rn_w >= 12'sd0 && rn_w < nl_s;
-        ok2o <= ro_w >= 12'sd0 && ro_w < nl_s;
-        ok1 <= r1_w >= 12'sd0 && r1_w < nl_s;
-        ok3 <= r3_w >= 12'sd0 && r3_w < nl_s;
     end
 
     function [7:0] absd(input [7:0] a, input [7:0] b);
@@ -388,21 +395,7 @@ module deint #(
     wire [1:0]  pick = want[rr] ? rr : want[r1n] ? r1n : want[r2n] ? r2n : r3n;
     wire [2:0]  pick_f = pick == 2'd0 ? fc : pick == 2'd1 ? f1 : pick == 2'd2 ? f2 : f3;
 
-    // ---- the pan's pass ----
-    // a block of eight pixels, five words of each row read: the token through the stages
-    reg         v_run = 1'b0;
-    reg  [7:0]  vb;                     // the block
-    reg  [2:0]  vi;                     // the word of its five
-    reg  [11:0] vta = 12'd0, vtb = 12'd0, vtc = 12'd0, vtd = 12'd0;   // {valid, word, block}
-    wire [10:0] vx0 = {vb, 3'b000};     // the block's first pixel
-    wire signed [12:0] vt2 = $signed({2'b00, vx0}) + dxf;
-    wire signed [12:0] vt1 = $signed({2'b00, vx0}) + sh1;
-    wire signed [12:0] vt3 = $signed({2'b00, vx0}) + sh3;
-    // the rows' words, chosen
-    reg  [31:0] d2n, d2o, d1v, d3v, dcn, dco;
-    reg  [127:0] s2n, s2o, s1v, s3v, scn, sco;     // the block's first four words of each
-    // the block's pixels: ten of each row, from its first word's first
-    wire [159:0] w2n = {d2n, s2n}, w2o = {d2o, s2o}, w1v = {d1v, s1v}, w3v = {d3v, s3v};
+    // a row's ten pixels from its five words: pixel n's luma
     function [7:0] pix(input [159:0] w, input [3:0] n);
         reg [31:0] t;
         begin
@@ -410,7 +403,203 @@ module deint #(
             pix = n[0] ? t[7:0] : t[23:16];
         end
     endfunction
-    reg         x1v = 1'b0, x2v = 1'b0, x3v = 1'b0;
+
+    // ---- the vectors: a block's {dyr, dx}; the line above's until the step's estimator writes its own ----
+    reg  [9:0]  vec [0:255];
+    reg  [7:0]  vec_ra;
+    wire [9:0]  vec_q = vec[vec_ra];
+    reg         vec_we = 1'b0;
+    reg  [7:0]  vec_wa;
+    reg  [9:0]  vec_wd;
+    always @(posedge clk)
+        if (vec_we)
+            vec[vec_wa] <= vec_wd;
+
+    // ---- the estimator's pass ----
+    // a block's six candidates in turn, five words of P2's four rows for each: the candidate
+    // (cdx, cdy; cok: it is one) is worked out the clock before its first word is asked for, from
+    // the line above's vectors about the block (wm1, w0, wp1: the block before's, its own, the
+    // next's)
+    reg  [7:0]  mb;                     // the block
+    reg  [2:0]  mcd;                    // the candidate
+    reg  [2:0]  mi;                     // the word of its five
+    reg  [9:0]  wm1, w0, wp1;
+    reg  [8:0]  hb;                     // 37 k + 101 b (mod 512)
+    reg  [3:0]  ub;                     // 3 k + 5 b (mod 16)
+    reg signed [5:0] cdx;
+    reg signed [3:0] cdy;
+    reg         cok;
+    reg signed [7:0] pdx;                // (the next one, a clock or two before: what it is; then whether it may be)
+    reg signed [5:0] pdy;
+    reg         pso;
+    // the nudges: {dyr 3 bits, dx 4 bits} (signed)
+    function [6:0] ups(input [3:0] i);
+        case (i)
+            4'd0: ups = {3'sd0, 4'sd1};
+            4'd1: ups = {3'sd0, -4'sd1};
+            4'd2: ups = {3'sd1, 4'sd0};
+            4'd3: ups = {-3'sd1, 4'sd0};
+            4'd4: ups = {3'sd0, 4'sd2};
+            4'd5: ups = {3'sd0, -4'sd2};
+            4'd6: ups = {3'sd0, 4'sd3};
+            4'd7: ups = {3'sd0, -4'sd3};
+            4'd8: ups = {3'sd1, 4'sd1};
+            4'd9: ups = {-3'sd1, -4'sd1};
+            4'd10: ups = {3'sd0, 4'sd4};
+            4'd11: ups = {3'sd0, -4'sd4};
+            4'd12: ups = {3'sd2, 4'sd0};
+            4'd13: ups = {-3'sd2, 4'sd0};
+            4'd14: ups = {-3'sd1, 4'sd1};
+            default: ups = {3'sd1, -4'sd1};
+        endcase
+    endfunction
+    // the next candidate (of this block, or the next block's first: adv)
+    wire        adv = mcd == 3'd5;
+    wire [7:0]  n_b = adv ? mb + 8'd1 : mb;
+    wire [2:0]  n_cd = adv ? 3'd0 : mcd + 3'd1;
+    wire [9:0]  n_own = vfirst ? pz : adv ? wp1 : w0;
+    wire [9:0]  n_left = vfirst ? pz : adv ? w0 : wm1;
+    wire [9:0]  n_right = vfirst ? pz : adv ? vec_q : wp1;
+    wire [8:0]  n_hb = adv ? hb + 9'd101 : hb;
+    wire [3:0]  n_ub = adv ? ub + 4'd5 : ub;
+    wire [1:0]  n_kb = k[1:0] + n_b[1:0];
+    wire        n_side_ok = n_kb[0] ? n_b + 8'd1 != nblk : n_b != 8'd0;
+    wire [9:0]  n_side = n_kb[0] ? n_right : n_left;
+    wire [6:0]  n_up = ups(n_ub + (n_cd == 3'd5 ? 4'd7 : 4'd0));
+    wire signed [7:0] n_ux = $signed(n_own[5:0]) + $signed(n_up[3:0]);
+    wire signed [5:0] n_uy = $signed(n_own[9:6]) + $signed(n_up[6:4]);
+    reg signed [7:0] n_dx;
+    reg signed [5:0] n_dy;
+    always @(*)
+        case (n_cd)
+            3'd0: begin n_dx = $signed(n_own[5:0]); n_dy = $signed(n_own[9:6]); end
+            3'd1: begin n_dx = $signed(n_side[5:0]); n_dy = $signed(n_side[9:6]); end
+            3'd2: begin n_dx = n_kb[1] ? $signed(pz[5:0]) : 8'sd0; n_dy = n_kb[1] ? $signed(pz[9:6]) : 6'sd0; end
+            3'd3: begin
+                n_dx = $signed({~n_hb[5], n_hb[4:0]});
+                n_dy = n_hb[8:6] == 3'd0 || n_hb[8:6] == 3'd5 ? -6'sd4 : n_hb[8:6] == 3'd1 || n_hb[8:6] == 3'd6 ? -6'sd2 :
+                       n_hb[8:6] == 3'd3 ? 6'sd2 : n_hb[8:6] == 3'd4 ? 6'sd4 : 6'sd0;
+            end
+            default: begin n_dx = n_ux; n_dy = n_uy; end
+        endcase
+    wire signed [12:0] n_x = $signed({2'b00, n_b, 3'b000}) + pdx;       // the block's first pixel, moved
+    wire        n_ok = pso && pdx >= -8'sd31 && pdx <= 8'sd31 && pdy >= -6'sd4 && pdy <= 6'sd4 &&
+                       n_x >= 13'sd0 && n_x + 13'sd8 <= $signed({2'b00, wpix});
+    // the token through the stages: {valid, word, candidate, block, dx, dyr, it is a candidate}; the
+    // four rows' buffers; whether they are in the field
+    reg  [25:0] mta = 26'd0, mtb = 26'd0, mtc = 26'd0, mtd = 26'd0;
+    reg  [15:0] msa, msb, msc;
+    reg  [3:0]  mka, mkb, mkc, mkd;
+    wire signed [12:0] m_x = $signed({2'b00, mb, 3'b000}) + cdx;
+    wire signed [4:0]  cdy5 = {cdy[3], cdy};
+    wire signed [11:0] m_r = $signed({2'b00, k}) + cdy;                 // new's row, moved
+    // d: the four rows of P2 and of C; the block's first four words of each kept
+    reg  [31:0] m2r [0:3], mcr [0:3];
+    reg  [127:0] ms2 [0:3], msw [0:3];
+    // e1: the block's pixels; e2: their differences; e3: the rows' sums; e4: the sum, with the
+    // candidate's penalty; then the least
+    reg  [22:0] me1 = 23'd0, me2 = 23'd0, me3 = 23'd0, me4 = 23'd0;    // {valid, candidate, block, dx, dyr, ok}
+    reg  [3:0]  mk1, mk2;
+    reg  [63:0] mp2 [0:3], mcp [0:3], mad [0:3];
+    reg  [10:0] mrs [0:3];
+    reg  [12:0] mct, bestc;
+    reg         bestn = 1'b1, mfin = 1'b0;
+    reg  [9:0]  bestv;
+    reg  [7:0]  mfb;
+    integer     mr, mj;
+    reg  [159:0] m_w;
+    always @(posedge clk) begin
+        mtb <= mta;
+        mtc <= mtb;
+        mtd <= mtc;
+        msb <= msa;
+        msc <= msb;
+        {mkb, mkc, mkd} <= {mka, mkb, mkc};
+        for (mr = 0; mr < 4; mr = mr + 1) begin
+            m2r[mr] <= q2[msc[4 * mr +: 4]];
+            if (mtd[25] && mtd[24:22] != 3'd4) begin
+                ms2[mr][32 * mtd[23:22] +: 32] <= m2r[mr];
+                msw[mr][32 * mtd[23:22] +: 32] <= mcr[mr];
+            end
+            // e1 (the candidate's fifth word is here)
+            m_w = {m2r[mr], ms2[mr]};
+            for (mj = 0; mj < 8; mj = mj + 1) begin
+                mp2[mr][8 * mj +: 8] <= pix(m_w, mj + mtd[5]);
+                mcp[mr][8 * mj +: 8] <= mj % 2 ? msw[mr][32 * (mj / 2) +: 8] : msw[mr][32 * (mj / 2) + 16 +: 8];
+                // e2
+                mad[mr][8 * mj +: 8] <= absd(mcp[mr][8 * mj +: 8], mp2[mr][8 * mj +: 8]);
+            end
+            // e3 (a row outside the field: 512)
+            mrs[mr] <= !mk2[mr] ? 11'd512 :
+                       {3'd0, mad[mr][7:0]} + {3'd0, mad[mr][15:8]} + {3'd0, mad[mr][23:16]} + {3'd0, mad[mr][31:24]} +
+                       {3'd0, mad[mr][39:32]} + {3'd0, mad[mr][47:40]} + {3'd0, mad[mr][55:48]} + {3'd0, mad[mr][63:56]};
+        end
+        mcr[0] <= qc[sCm];
+        mcr[1] <= qc[sCA];
+        mcr[2] <= qc[sCB];
+        mcr[3] <= qc[sCp];
+        me1 <= {mtd[25] && mtd[24:22] == 3'd4, mtd[21:0]};
+        mk1 <= mkd;
+        me2 <= me1;
+        mk2 <= mk1;
+        me3 <= me2;
+        // e4 (the penalties: 0, 2, 2, 6, 4, 4)
+        me4 <= me3;
+        mct <= {2'd0, mrs[0]} + {2'd0, mrs[1]} + {2'd0, mrs[2]} + {2'd0, mrs[3]} +
+               (me3[21:19] == 3'd0 ? 13'd0 : me3[21:19] == 3'd3 ? 13'd6 : me3[21:19] >= 3'd4 ? 13'd4 : 13'd2);
+        // the least: the block's first candidate begins it (none: no move); the last ends it
+        mfin <= 1'b0;
+        if (me4[22]) begin
+            if (me4[21:19] == 3'd0) begin
+                bestn <= !me4[0];
+                bestc <= mct;
+                bestv <= me4[0] ? {me4[4:1], me4[10:5]} : 10'd0;
+            end else if (me4[0] && (bestn || mct < bestc)) begin
+                bestn <= 1'b0;
+                bestc <= mct;
+                bestv <= {me4[4:1], me4[10:5]};
+            end
+            mfin <= me4[21:19] == 3'd5;
+            mfb <= me4[18:11];
+        end
+        vec_we <= mfin;
+        vec_wa <= mfb;
+        vec_wd <= bestv;
+    end
+
+    // ---- the vectors' pass ----
+    // a block of eight pixels, five words of each row read: the token through the stages
+    reg  [7:0]  vb;                     // the block
+    reg  [2:0]  vi;                     // the word of its five
+    reg  [9:0]  vvec;                   // its vector
+    wire signed [5:0]  bdx = vvec[5:0];
+    wire signed [3:0]  bdy = vvec[9:6];
+    wire signed [5:0]  bsh1 = bdx >>> 1;                        // P1's pixels over (and half a pixel: bdx[0])
+    wire signed [6:0]  bsh3 = {bdx[5], bdx} + {bsh1[5], bsh1};  // P3's
+    wire signed [3:0]  bdyh = bdy >>> 1;
+    wire signed [4:0]  bdy5 = {bdy[3], bdy}, bdyh5 = {bdyh[3], bdyh};
+    wire        buse = !bdy[0] && vvec != 10'd0;                // (dyr even, and the block moves)
+    wire signed [11:0] rn_w = $signed({2'b00, k}) + bdy;
+    wire signed [11:0] ro_w = $signed({2'b00, k}) - 12'sd1 + bdy;
+    wire signed [11:0] r1_w = $signed({2'b00, row_w}) + bdyh;
+    wire signed [11:0] r3_w = $signed({2'b00, row_w}) + bdyh + bdy;
+    reg  [11:0] vta = 12'd0, vtb = 12'd0, vtc = 12'd0, vtd = 12'd0;   // {valid, word, block}
+    // with it: {the vector is used, dx, the buffers of P2's row for new, for old, of P1's, of P3's,
+    // and whether those rows are in the field}
+    reg  [26:0] vxa, vxb, vxc, vxd;
+    wire [10:0] vx0 = {vb, 3'b000};     // the block's first pixel
+    wire signed [12:0] vt2 = $signed({2'b00, vx0}) + bdx;
+    wire signed [12:0] vt1 = $signed({2'b00, vx0}) + bsh1;
+    wire signed [12:0] vt3 = $signed({2'b00, vx0}) + bsh3;
+    // the rows' words, chosen
+    reg  [31:0] d2n, d2o, d1v, d3v, dcn, dco;
+    reg  [127:0] s2n, s2o, s1v, s3v, scn, sco;     // the block's first four words of each
+    // the block's pixels: ten of each row, from its first word's first
+    wire [159:0] w2n = {d2n, s2n}, w2o = {d2o, s2o}, w1v = {d1v, s1v}, w3v = {d3v, s3v};
+    wire signed [5:0] ddx = vxd[25:20];
+    wire signed [5:0] dsh1 = ddx >>> 1;
+    wire signed [6:0] dsh3 = {ddx[5], ddx} + {dsh1[5], dsh1};
+    reg         x1v = 1'b0, x2v = 1'b0, x3v = 1'b0, x1u, x2u, x3u, x1h;
     reg  [7:0]  x1b, x2b, x3b;
     reg  [63:0] p2n, p2o, cnl, col, p1a, p1b, p3a, p3b, p1v, p3v, dnv, dov, p1x, mwv, mabv;
     reg  [7:0]  k2n, k2o, k1, k3, k13, k1b, k1c;
@@ -434,10 +623,13 @@ module deint #(
         vtb <= vta;
         vtc <= vtb;
         vtd <= vtc;
-        d2n <= q2[v2n];
-        d2o <= q2[v2o];
-        d1v <= q1[v1s];
-        d3v <= q3[v3s];
+        vxb <= vxa;
+        vxc <= vxb;
+        vxd <= vxc;
+        d2n <= q2[vxc[19:16]];
+        d2o <= q2[vxc[15:12]];
+        d1v <= q1[vxc[11:8]];
+        d3v <= q3[vxc[7:4]];
         dcn <= qc[sCB];
         dco <= qc[sCA];
         if (vtd[11] && vtd[10:8] != 3'd4) begin
@@ -452,34 +644,37 @@ module deint #(
         // and whether they are in the picture
         x1v <= vtd[11] && vtd[10:8] == 3'd4;
         x1b <= vtd[7:0];
+        x1u <= vxd[26];
+        x1h <= ddx[0];
         for (xj = 0; xj < 8; xj = xj + 1) begin
-            x_n = xj + dxf[0];
+            x_n = xj + ddx[0];
             p2n[8 * xj +: 8] <= pix(w2n, x_n);
             p2o[8 * xj +: 8] <= pix(w2o, x_n);
-            x_n = xj + sh1[0];
+            x_n = xj + dsh1[0];
             p1a[8 * xj +: 8] <= pix(w1v, x_n);
             p1b[8 * xj +: 8] <= pix(w1v, x_n + 4'd1);
-            x_n = xj + sh3[0];
+            x_n = xj + dsh3[0];
             p3a[8 * xj +: 8] <= pix(w3v, x_n);
             p3b[8 * xj +: 8] <= pix(w3v, x_n + 4'd1);
             cnl[8 * xj +: 8] <= xj % 2 ? scn[32 * (xj / 2) +: 8] : scn[32 * (xj / 2) + 16 +: 8];
             col[8 * xj +: 8] <= xj % 2 ? sco[32 * (xj / 2) +: 8] : sco[32 * (xj / 2) + 16 +: 8];
-            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + dxf + xj;
-            k2n[xj] <= ok2n && x_t >= 13'sd0 && x_t < $signed({2'b00, wpix});
-            k2o[xj] <= ok2o && x_t >= 13'sd0 && x_t < $signed({2'b00, wpix});
-            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + sh1 + xj;
-            k1[xj] <= ok1 && x_t >= 13'sd0 && x_t + $signed({12'd0, dxf[0]}) < $signed({2'b00, wpix});
-            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + sh3 + xj;
-            k3[xj] <= ok3 && x_t >= 13'sd0 && x_t + $signed({12'd0, dxf[0]}) < $signed({2'b00, wpix});
+            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + ddx + xj;
+            k2n[xj] <= vxd[3] && x_t >= 13'sd0 && x_t < $signed({2'b00, wpix});
+            k2o[xj] <= vxd[2] && x_t >= 13'sd0 && x_t < $signed({2'b00, wpix});
+            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + dsh1 + xj;
+            k1[xj] <= vxd[1] && x_t >= 13'sd0 && x_t + $signed({12'd0, ddx[0]}) < $signed({2'b00, wpix});
+            x_t = $signed({2'b00, vtd[7:0], 3'b000}) + dsh3 + xj;
+            k3[xj] <= vxd[0] && x_t >= 13'sd0 && x_t + $signed({12'd0, ddx[0]}) < $signed({2'b00, wpix});
         end
         for (xq = 0; xq < 4; xq = xq + 1)       // (the chroma of the pair the first pixel moved lies in)
             vch[16 * xq +: 16] <= {s1v[32 * xq + 24 +: 8], s1v[32 * xq + 8 +: 8]};
         // 2: the half pixel; C against P2
         x2v <= x1v;
         x2b <= x1b;
+        x2u <= x1u;
         for (xj = 0; xj < 8; xj = xj + 1) begin
-            p1v[8 * xj +: 8] <= dxf[0] ? mean(p1a[8 * xj +: 8], p1b[8 * xj +: 8]) : p1a[8 * xj +: 8];
-            p3v[8 * xj +: 8] <= dxf[0] ? mean(p3a[8 * xj +: 8], p3b[8 * xj +: 8]) : p3a[8 * xj +: 8];
+            p1v[8 * xj +: 8] <= x1h ? mean(p1a[8 * xj +: 8], p1b[8 * xj +: 8]) : p1a[8 * xj +: 8];
+            p3v[8 * xj +: 8] <= x1h ? mean(p3a[8 * xj +: 8], p3b[8 * xj +: 8]) : p3a[8 * xj +: 8];
             dnv[8 * xj +: 8] <= k2n[xj] ? absd(cnl[8 * xj +: 8], p2n[8 * xj +: 8]) : 8'd255;
             dov[8 * xj +: 8] <= k2o[xj] ? absd(col[8 * xj +: 8], p2o[8 * xj +: 8]) : 8'd255;
             k13[xj] <= k1[xj] && k3[xj];
@@ -489,6 +684,7 @@ module deint #(
         // 3: P1 against P3
         x3v <= x2v;
         x3b <= x2b;
+        x3u <= x2u;
         for (xj = 0; xj < 8; xj = xj + 1) begin
             mwv[8 * xj +: 8] <= k13[xj] ? absd(p1v[8 * xj +: 8], p3v[8 * xj +: 8]) : 8'd255;
             mabv[8 * xj +: 8] <= max2(dnv[8 * xj +: 8], dov[8 * xj +: 8]);
@@ -506,13 +702,13 @@ module deint #(
             if (vwe)
                 vwa <= vwa + 9'd1;
         end
-        // 4: the greatest (255: no pan here: at the picture's first and last lines, and a pair with
-        // a pixel of P1's outside the picture); the block's words
+        // 4: the greatest (255: no use of the vector here: it is not used at all (dyr odd, no
+        // move), or a pair has a pixel of P1's outside the picture); the block's words
         if (x3v) begin
             for (xq = 0; xq < 4; xq = xq + 1) begin
-                vblk[48 * xq + 40 +: 8] <= !(old_ok && new_ok) || !(k1c[2 * xq] && k1c[2 * xq + 1]) ? 8'd255 :
+                vblk[48 * xq + 40 +: 8] <= !x3u || !(k1c[2 * xq] && k1c[2 * xq + 1]) ? 8'd255 :
                                            max2(mabv[16 * xq +: 8], mwv[16 * xq +: 8]);
-                vblk[48 * xq + 32 +: 8] <= !(old_ok && new_ok) || !(k1c[2 * xq] && k1c[2 * xq + 1]) ? 8'd255 :
+                vblk[48 * xq + 32 +: 8] <= !x3u || !(k1c[2 * xq] && k1c[2 * xq + 1]) ? 8'd255 :
                                            max2(mabv[16 * xq + 8 +: 8], mwv[16 * xq + 8 +: 8]);
                 vblk[48 * xq +: 32] <= {vch3[16 * xq + 8 +: 8], p1x[16 * xq +: 8], vch3[16 * xq +: 8], p1x[16 * xq + 8 +: 8]};
             end
@@ -793,8 +989,8 @@ module deint #(
         otk <= otj;
         al0 <= pgf ? 5'd0 : mode == 2'd1 || (!hist && mode != 2'd2) ? 5'd16 : mode == 2'd2 ? 5'd0 : a_of(md0);
         al1 <= pgf ? 5'd0 : mode == 2'd1 || (!hist && mode != 2'd2) ? 5'd16 : mode == 2'd2 ? 5'd0 : a_of(md1);
-        alv0 <= mc_f ? a_of(mdv0) : 5'd16;
-        alv1 <= mc_f ? a_of(mdv1) : 5'd16;
+        alv0 <= mc_s ? a_of(mdv0) : 5'd16;
+        alv1 <= mc_s ? a_of(mdv1) : 5'd16;
         {WA[0], WB[0], nWk, vwk} <= {nAj, nBj, nWj, vwj};
         // the window: old's and new's words move on; the pair made is three words behind
         for (wi = 1; wi <= 6; wi = wi + 1) begin
@@ -877,6 +1073,27 @@ module deint #(
             end
         ota <= 11'd0;
         vta <= 12'd0;
+        mta <= 26'd0;
+        if ((st == S_M && mi == 3'd2) || (st == S_MP && wt == 6'd2)) begin
+            pdx <= n_dx;
+            pdy <= n_dy;
+            pso <= n_cd != 3'd1 || n_side_ok;
+        end
+        if ((st == S_M && mi == 3'd4) || (st == S_MP && wt == 6'd3)) begin
+            mb <= n_b;
+            mcd <= n_cd;
+            hb <= n_hb;
+            ub <= n_ub;
+            cdx <= pdx[5:0];
+            cdy <= pdy[3:0];
+            cok <= n_ok;
+            if (adv) begin
+                wm1 <= w0;
+                w0 <= wp1;
+                wp1 <= vec_q;
+                vec_ra <= n_b + 8'd2;
+            end
+        end
         case (st)
             S_IDLE:
                 if (start && !start_clr) begin
@@ -911,9 +1128,13 @@ module deint #(
                     if (pg || (ll_now ? par[latest] == top_f : par[latest] != top_f)) begin
                         k <= 10'd0;
                         {km1, km2, km3} <= 12'd0;
+                        hk <= 9'd0;
+                        uk <= 4'd0;
                     end else begin
                         k <= 10'd1;
                         {km1, km2, km3} <= {4'd1, 4'd1, 4'd1};
+                        hk <= 9'd37;
+                        uk <= 4'd3;
                     end
                     emitted <= 10'd0;
                     active <= nfields != 3'd0;
@@ -921,12 +1142,14 @@ module deint #(
                         nrow[fi] <= 11'd0;
                         wsl[fi] <= 4'd0;
                     end
-                    // (the pan: with the fields' history, in the motion adaptive mode, dyr even and
-                    // within the rows kept)
-                    mc_f <= mv[10] && !mv[6] && !pg && mode == 2'd0 && (ll_now || hist_n) &&
-                            ($signed(mv[9:6]) >= -4'sd4 && $signed(mv[9:6]) <= 4'sd4);
+                    // (the vectors: with the fields' history, in the motion adaptive mode; the pan a
+                    // candidate if it is within what the estimator may find)
+                    mc_f <= mc && !pg && mode == 2'd0 && (ll_now || hist_n);
+                    pan_k <= mv[10] && mv[5:0] != 6'b100000 && $signed(mv[9:6]) >= -4'sd4 && $signed(mv[9:6]) <= 4'sd4;
                     dxf <= mv[5:0];
                     dyf <= mv[9:6];
+                    firstf <= first;
+                    vfirst <= 1'b1;
                 end else if (can && !start_clr && !fstart) begin
                     pgd <= 2'd0;
                     st <= S_LD;
@@ -955,15 +1178,73 @@ module deint #(
                     st <= S_LDW;
             end
             S_LDW: begin                            // (the last word written is in its RAM)
-                vb <= 8'd0;
-                vi <= 3'd0;
                 oq <= 10'd0;
                 wt <= 6'd0;
-                st <= mc_f ? S_V : S_O;
+                st <= mc_s ? S_MP : S_O;
             end
-            // the pan's pass: a block's five words' addresses, a clock each
+            // the estimator: before its first block: the line above's vector of block 0 into the
+            // next's place, as if a block before it had just been done
+            S_MP: begin
+                wt <= wt + 6'd1;
+                if (wt == 6'd0)
+                    vec_ra <= 8'd0;
+                else if (wt == 6'd1) begin
+                    wp1 <= vec_q;
+                    vec_ra <= 8'd1;
+                    mb <= 8'hFF;
+                    mcd <= 3'd5;
+                    hb <= hk - 9'd101;
+                    ub <= uk - 4'd5;
+                end else if (wt == 6'd3) begin
+                    mi <= 3'd0;
+                    st <= S_M;
+                end
+            end
+            // a candidate's five words' addresses, a clock each
+            S_M: begin
+                mta <= {1'b1, mi, mcd, mb, cdx, cdy, cok};
+                msa <= {wrap(km2, cdy5 + 5'sd1, N2), wrap(km2, cdy5, N2), wrap(km2, cdy5 - 5'sd1, N2), wrap(km2, cdy5 - 5'sd2, N2)};
+                mka <= {m_r + 12'sd1 >= 12'sd0 && m_r + 12'sd1 < nl_s, m_r >= 12'sd0 && m_r < nl_s,
+                        m_r - 12'sd1 >= 12'sd0 && m_r - 12'sd1 < nl_s, m_r - 12'sd2 >= 12'sd0 && m_r - 12'sd2 < nl_s};
+                ra_2 <= m_x[9:1] + {6'd0, mi};
+                ra_c <= {mb[6:0], 2'b00} + {6'd0, mi};
+                if (mi == 3'd4) begin
+                    mi <= 3'd0;
+                    if (adv && mb + 8'd1 == nblk) begin
+                        wt <= 6'd0;
+                        st <= S_MW;
+                    end
+                end else
+                    mi <= mi + 3'd1;
+            end
+            S_MW: begin                             // (its last block through the stages, its vector kept)
+                wt <= wt + 6'd1;
+                if (wt == 6'd15) begin
+                    vfirst <= 1'b0;
+                    wt <= 6'd0;
+                    st <= S_VP;
+                end
+            end
+            // the vectors' pass: its first block's vector; then a block's five words' addresses, a
+            // clock each
+            S_VP: begin
+                wt <= wt + 6'd1;
+                vb <= 8'd0;
+                vi <= 3'd0;
+                if (wt == 6'd0)
+                    vec_ra <= 8'd0;
+                else begin
+                    vvec <= vec_q;
+                    vec_ra <= 8'd1;
+                    wt <= 6'd0;
+                    st <= S_V;
+                end
+            end
             S_V: begin
                 vta <= {1'b1, vi, vb};
+                vxa <= {buse, bdx, wrap(km2, bdy5, N2), wrap(km2, bdy5 - 5'sd1, N2), wrap(km1, ow + bdyh5, N1),
+                        wrap(km3, ow + bdyh5 + bdy5, N3), rn_w >= 12'sd0 && rn_w < nl_s, ro_w >= 12'sd0 && ro_w < nl_s,
+                        r1_w >= 12'sd0 && r1_w < nl_s, r3_w >= 12'sd0 && r3_w < nl_s};
                 ra_2 <= vt2[9:1] + {6'd0, vi};
                 ra_1 <= vt1[9:1] + {6'd0, vi};
                 ra_3 <= vt3[9:1] + {6'd0, vi};
@@ -971,7 +1252,9 @@ module deint #(
                 if (vi == 3'd4) begin
                     vi <= 3'd0;
                     vb <= vb + 8'd1;
-                    if (vb + 8'd1 == {nchf, 1'b0})
+                    vvec <= vec_q;
+                    vec_ra <= vb + 8'd2;
+                    if (vb + 8'd1 == nblk)
                         st <= S_VW;
                 end else
                     vi <= vi + 3'd1;
@@ -1005,6 +1288,8 @@ module deint #(
                 km1 <= km1 + 4'd1 == N1 ? 4'd0 : km1 + 4'd1;
                 km2 <= km2 + 4'd1 == N2 ? 4'd0 : km2 + 4'd1;
                 km3 <= km3 + 4'd1 == N3 ? 4'd0 : km3 + 4'd1;
+                hk <= hk + 9'd37;
+                uk <= uk + 4'd3;
                 emitted <= emitted + 10'd2;
                 st <= S_GAP;                        // (two clocks: lstream.v's hold follows emitted)
             end
