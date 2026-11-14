@@ -93,7 +93,8 @@ def main():
         def frame(mode):
             rows = model.frame_1080(fields, pars, mode & 3, s["thr"], s["aa_thr"] if s["aa"] else None, s["sharp"], bool(s["aa_dbg"]),
                                     bool(s["aa_diag"]), bool(s["aa_corner"]), crop, s["nr"], bool(s["dn"]), False, bool(mode & 4),
-                                    None, bool(mode & 8) and mode & 3 == 0, first, skip, tab)
+                                    None, bool(mode & 8) and mode & 3 == 0, first, skip, tab,
+                                    bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0)
             im = Image.new("RGB", (1920, 1080))
             im.putdata([p for row in rows for p in row])
             return im

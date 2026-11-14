@@ -9,11 +9,11 @@
 
 #include <stdint.h>
 
-/* "AVC3": the program speaks this.  A change to the messages, the settings or the status below is a
+/* "AVC4": the program speaks this.  A change to the messages, the settings or the status below is a
  * new number: a link whose firmware has another gives the CPU its own program (2026-11-13: without
  * that, a firmware from before the tables read this status as its own shorter one, took what lay
  * where its settings had been for the settings, and kept them) */
-#define LINK_MAGIC   0x33435641u
+#define LINK_MAGIC   0x34435641u
 
 enum {
     LINK_STATUS = 0x01,                 /* -> struct link_status */
@@ -84,10 +84,10 @@ struct link_settings {
     uint8_t table;          /* the scaler's table (sw/table.c): 0 the design's own (FSR's); 1 the pair in slots 1
                              * and 2: 1 with the anti-aliasing off, 2 with it on; 2 on: slot 3 on.  A slot
                              * that holds none: the design's own */
-    uint8_t pad;            /* 0.  (No gaps in this: the two sides compare theirs byte for byte.  With one the
-                             * link found the CPU's "changed" each second, by whatever lay in the gap, and
-                             * kept them in flash again each time; its flash's work held its UART's
-                             * interrupt off, and bytes from the FPGA were lost: 2026-11-14) */
+    uint8_t mv_dbg;         /* the motion compensation's vectors shown (rtl/deint.v mvdbg; with mode 8): the
+                             * picture grey, each block of eight pixels the colour of its vector */
+    /* (No gaps in this: the two sides compare theirs byte for byte.  With one the link found the CPU's
+     * "changed" each second, by whatever lay in the gap, and kept them in flash again each time) */
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
 _Static_assert(sizeof(struct link_settings) == 26 + 8, "link_settings: a gap, or a new member not counted here");

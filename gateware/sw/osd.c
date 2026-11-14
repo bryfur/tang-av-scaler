@@ -145,7 +145,9 @@ void osd_update(void)
     if (!board_ed() && (s->mode & 4) && (s->mode & 3) != 2)
         str(" + edges");
     if (!board_ed() && (s->mode & 8) && (s->mode & 3) == 0) {
-        str(pan_ok ? " + motion, pan " : " + motion");
+        str(s->mv_dbg ? " + VECTORS" : " + motion");
+        if (pan_ok)
+            str(", pan ");
         if (pan_ok) {
             if (pan_dx < 0)
                 put('-');

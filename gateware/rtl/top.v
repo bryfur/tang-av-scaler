@@ -54,6 +54,8 @@
 //                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3),
 //                    6 a frame made from the field still coming in (deint.v ll: not while frozen),
 //                    7 the lines made where the picture moves go along its edges (deint.v edi),
+//                    20 the vectors shown (deint.v mvdbg: with 3): the picture grey, each block the
+//                    colour of its vector,
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
 //                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
@@ -740,7 +742,7 @@ module top (
     assign d_hold = hd_p ? pt_hold : ls_hold;
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mvdbg(dcfg[20]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),

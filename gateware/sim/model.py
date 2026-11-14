@@ -294,7 +294,7 @@ def me_line(k, cl, p2l, prev, pan):
     return out
 
 
-def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, mc=False, first=0, vecs=None):
+def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, mc=False, first=0, vecs=None, mvdbg=False):
     """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines; nr: the
     temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity; mc:
     motion compensation (rtl/deint.v mc): each block of eight pixels of each line made has a
@@ -303,7 +303,9 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
     there), the line made is the field before's, moved by half of it; mv: the frame's pan as the
     CPU found it, a candidate for the blocks and what they begin with; first: no vectors for the
     lines made before this one (a part of the picture shown: they are not seen); vecs: a list
-    that is given each step's (k, vectors)"""
+    that is given each step's (k, vectors); mvdbg: the vectors' view (rtl/deint.v mvdbg): every
+    word's chroma is its block's vector's colour (Cb 128 + 4 dx, Cr 128 + 16 dyr), grey in a line
+    without vectors"""
     c, p1 = fields[-1], fields[-2]
     hist = (len(fields) >= 4 and pars[-2] != pars[-1] and pars[-3] == pars[-1] and pars[-4] != pars[-1])
     p2 = fields[-3] if len(fields) >= 3 else c
@@ -407,6 +409,13 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
                 b = (blend(wv[q][0], b[0], vc), blend(wv[q][1], b[1], v0), blend(wv[q][2], b[2], vc), blend(wv[q][3], b[3], v1))
             line.append((blend(ww[0], b[0], ac), blend(ww[1], b[1], a0), blend(ww[2], b[2], ac), blend(ww[3], b[3], a1)))
         out[line_i] = line
+        if mvdbg:
+            if mc and not edge and line_i >= first:
+                col = [((128 + 4 * vec[q // 4][0]) & 255, (128 + 16 * vec[q // 4][1]) & 255) for q in range(PAIRS)]
+            else:
+                col = [(128, 128)] * PAIRS
+            for ln in (line_d, line_i):
+                out[ln] = [(cb, w_[1], cr, w_[3]) for (cb, cr), w_ in zip(col, out[ln])]
     return out
 
 
@@ -447,10 +456,10 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False, edi=False, mv=None, mc=False, first=0, skip=0):
+              prog=False, edi=False, mv=None, mc=False, first=0, skip=0, mvdbg=False):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
     in is progressive (each of fields a whole frame): the newest as it is"""
-    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first)
+    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first, mvdbg=mvdbg)
     # (skip: the lines before it are not made: what follows takes the rest as the whole picture;
     # here they are black)
     lines = lines[skip:]
@@ -502,11 +511,11 @@ def table_load(path):
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None):
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None, mvdbg=False):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch);
     tab: the scaler's table (fsr.table()'s form: table_load()), else FSR's"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip)
+    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip, mvdbg)
     w, h = len(pix[0]), len(pix)
     ana = [[(0, 0, 0)] * w] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], w, h - skip)
     out = fsr.rcas(fsr.scale_hw(pix, ana, w, h, tab or fsr.table(), fsr.geom(*crop)), sharp, dn)

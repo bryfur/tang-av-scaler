@@ -80,6 +80,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <input type="hidden" name="mode">
 <div class="f"><span>Method<small id="mdt"></small></span><span class="seg"><label><input type="radio" name="_m" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="_m" value="1"><span>Bob</span></label><label><input type="radio" name="_m" value="2"><span>Weave</span></label></span></div>
 <div class="f" id="mcf"><span>Motion compensation<small id="pant"></small></span><input class="sw" type="checkbox" name="_c"></div>
+<div class="f sub" id="mvf"><span>Show the motion<small>the picture in grey, each block tinted by how it moves: blue left, yellow right, red up, green down; stronger is faster</small></span><input class="sw" type="checkbox" name="mv_dbg"></div>
 <div class="f" id="edf"><span>Follow edges<small>where a hard edge crosses a filled-in line, the line follows it</small></span><input class="sw" type="checkbox" name="_e"></div>
 <div class="f"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
 <div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
@@ -128,7 +129,8 @@ const vf=$('vf');
 function modeShow(){const f=vf.elements,m=+f.mode.value||0,b=m&3;
   f._m.value=b;f._c.checked=!!(m&8)&&b==0;f._e.checked=!!(m&4)&&b!=2;modeNa()}
 function modeNa(){const f=vf.elements,b=+f._m.value;
-  f._c.disabled=b!=0;f._e.disabled=b==2;$('mcf').classList.toggle('na',b!=0);$('edf').classList.toggle('na',b==2);
+  f._c.disabled=b!=0;f._e.disabled=b==2;$('mcf').classList.toggle('na',b!=0);
+  f.mv_dbg.disabled=b!=0||!f._c.checked;$('mvf').classList.toggle('na',f.mv_dbg.disabled);$('edf').classList.toggle('na',b==2);
   $('mdt').textContent=['fields woven where the picture is still, lines filled in where it moves','every line between filled in from its neighbours: half the detail, never a comb','the two fields woven as they are: right for a still picture only'][b]}
 function modeTake(){const f=vf.elements,b=+f._m.value;
   if(b!=0)f._c.checked=false;if(b==2)f._e.checked=false;

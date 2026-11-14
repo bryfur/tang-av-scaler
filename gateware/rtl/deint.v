@@ -192,6 +192,9 @@ module deint #(
     input      [1:0]   nr,              // temporal noise reduction: 0 none, 1 to 3
     input              edi,             // bob along the edges
     input              mc,              // motion compensation
+    input              mvdbg,           // a view of its vectors: the picture grey, each block of eight pixels
+                                        // the colour of its vector: Cb 128 + 4 dx, Cr 128 + 16 dyr (grey:
+                                        // it does not move, or the line has no vectors)
     input      [10:0]  mv,              // the picture's pan: {known, dyr, dx}
     input      [9:0]   first,           // no vectors for the lines made before this one
     input      [9:0]   skip,            // the lines before this one (a multiple of 8) are not made at all
@@ -659,6 +662,8 @@ module deint #(
     // with it: {the vector is used, dx, the buffers of P2's row for new, for old, of P1's, of P3's,
     // and whether those rows are in the field}
     reg  [26:0] vxb, vxc, vxd;
+    reg  [3:0]  vda, vdb, vdc, vdd;     // (and its dyr, for the vectors' view)
+    reg         dbg_r = 1'b0;           // the vectors' view (not of a progressive picture: it has none)
     // (a: the sums: {used, dx, the buffers' places before they are brought into their rings (6 bits,
     // signed: P2 new's, old's, P1's, P3's), the rows (12 bits, signed: the same four)})
     reg  [78:0] vxa;
@@ -718,6 +723,10 @@ module deint #(
                 va_r1 >= 12'sd0 && va_r1 < nl_s, va_r3 >= 12'sd0 && va_r3 < nl_s};
         vxc <= vxb;
         vxd <= vxc;
+        vdb <= vda;
+        vdc <= vdb;
+        vdd <= vdc;
+        dbg_r <= mvdbg && !pgf;
         vyb <= vya;
         vyc <= vyb;
         vyd <= vyc;
@@ -762,7 +771,8 @@ module deint #(
             k3[xj] <= vxd[0] && dt3 + xj >= 13'sd0 && x_t < $signed({2'b00, wpx_v});
         end
         for (xq = 0; xq < 4; xq = xq + 1)       // (the chroma of the pair the first pixel moved lies in)
-            vch[16 * xq +: 16] <= {s1v[32 * xq + 24 +: 8], s1v[32 * xq + 8 +: 8]};
+            vch[16 * xq +: 16] <= dbg_r ? {~vxd[25], vxd[24:20], 2'b00, ~vdd[3], vdd[2:0], 4'b0000} :
+                                  {s1v[32 * xq + 24 +: 8], s1v[32 * xq + 8 +: 8]};
         // 2: the half pixel; C against P2
         x2v <= x1v;
         x2b <= x1b;
@@ -889,6 +899,7 @@ module deint #(
     reg         t1_v = 1'b0;
     reg [9:0]   t1_wa;
     reg [31:0]  t1_wv, t1_bob, t1_w, t1_d;
+    wire [15:0] dbg_c = mc_s ? {s1_wv[31:24], s1_wv[15:8]} : 16'h8080;      // the vectors' view's {Cb, Cr}
     reg [4:0]   t1_v0, t1_v1, t1_vc, t1_ay0, t1_ay1, t1_ac;
     // (the vector's pixel must lie near the pixels above and below, within 12: else the mean)
     reg         nr0, nr1;               // (with stage 0's registers; its comparisons a clock before: nq0, nq1)
@@ -900,6 +911,10 @@ module deint #(
     endfunction
     wire [4:0]  v0g = nr0 ? v_y0 : 5'd16;
     wire [4:0]  v1g = nr1 ? v_y1 : 5'd16;
+
+    function [31:0] tint(input [31:0] w, input [15:0] c, input on);
+        tint = on ? {c[15:8], w[23:16], c[7:0], w[7:0]} : w;
+    endfunction
 
     // ---- the edges' way (edi): deint_edi.v ----
     deint_edi u_edi (.clk(clk), .en(edi), .nw(nw), .v_i(otk[10]), .q_i(otk[9:0]), .a2_i(nA2k), .a_i(nAk), .b_i(nBk), .b2_i(nB2k),
@@ -1035,7 +1050,9 @@ module deint #(
         // (the pan's word against the mean, by its a; then P1's own against that, by a)
         t1_v <= s1_v;
         t1_wa <= s1_wa;
-        {t1_wv, t1_bob, t1_w, t1_d} <= {s1_wv, s1_bob, s1_w, s1_d};
+        // (the vectors' view: every word's chroma is the vector's colour, which the vectors' pass put
+        // in the moved word's chroma's place; grey in a step without vectors)
+        {t1_wv, t1_bob, t1_w, t1_d} <= {tint(s1_wv, dbg_c, dbg_r), tint(s1_bob, dbg_c, dbg_r), tint(s1_w, dbg_c, dbg_r), tint(s1_d, dbg_c, dbg_r)};
         {t1_v0, t1_v1, t1_vc, t1_ay0, t1_ay1, t1_ac} <= {s1_v0, s1_v1, s1_vc, s1_ay0, s1_ay1, s1_ac};
         s2_v <= t1_v;
         s2_wa <= t1_wa;
@@ -1251,6 +1268,7 @@ module deint #(
                 vya <= {vt3, vt1, vt2};
                 vxa <= {buse, bdx, $signed({2'b00, km3}) + ow + bdyh5 + bdy5, $signed({2'b00, km1}) + ow + bdyh5,
                         $signed({2'b00, km2}) + bdy5 - 6'sd1, $signed({2'b00, km2}) + bdy5, r3_w, r1_w, ro_w, rn_w};
+                vda <= bdy;
                 ra_la <= vt2[9:1] + {6'd0, vi};
                 ra_1 <= vt1[9:1] + {6'd0, vi};
                 ra_3 <= vt3[9:1] + {6'd0, vi};

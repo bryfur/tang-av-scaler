@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mvdbg] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
@@ -57,6 +57,7 @@ def main():
     pic = next((a[4:] for a in args if a.startswith("pic=")), None)
     prog = "pg" in args                 # 480p: each "field" a whole frame, F always 0
     edi = "edi" in args                 # the lines made go along the picture's edges
+    mvdbg = "mvdbg" in args             # the vectors' view (with mc)
     tabf = next((a[4:] for a in args if a.startswith("tab=")), None)
     tab = model.table_load(tabf) if tabf else None
     # mc: motion compensation (the vectors found by the design itself); mv=DX,DYR: the picture pans (model.pan_field);
@@ -90,6 +91,8 @@ def main():
     tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, ("p" if pic else "") + ("y" if "poly" in args else "") + ("r" if real else "") + ("pg" if prog else "") + ("e" if edi else "") + ("c" if "mc" in args else "") + ("" if mvs is None else "_mv" + "_".join(str(v).replace("-", "m") for v in mvs)), ("_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "") + ("_ll%d" % ll if ll else ""), "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
     if tab:
         tag += "_t"
+    if mvdbg:
+        tag += "_v"
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     import fsr
@@ -140,7 +143,7 @@ module tb;
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
     deint u_deint (.clk(pclk), .nch(7'd45), .pg(1'b%(pg)d), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
-                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .edi(1'b%(edi)d), .mc(1'b%(mc)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .skip(10'd%(skip)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
+                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .edi(1'b%(edi)d), .mc(1'b%(mc)d), .mvdbg(1'b%(mvdbg)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .skip(10'd%(skip)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
@@ -256,7 +259,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     if tab:
@@ -290,10 +293,10 @@ endmodule
     # (the dump begins at the end of the frame before: its last row is still coming out)
     first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
     start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab, mvdbg)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip)
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip, mvdbg)
     ana = [None] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], 720, 480 - skip)
     line, prev, rb = skip - 1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):

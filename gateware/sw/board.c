@@ -177,6 +177,7 @@ static void picture(void)
 {
     const struct link_settings *s = &set;
     REG(R_DEINT) = (uint32_t)s->aa_thr << 24 | (s->aa_corner ? 1u : 0) << 19 | (s->aa_diag ? 1u : 0) << 18 |
+                   (s->mv_dbg && (s->mode & 8) && (s->mode & 3) == 0 ? 1u : 0) << 20 |
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
                    (s->mode & 4 ? 1u : 0) << 7 | (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 |
                    ((s->mode & 8) && (s->mode & 3) == 0 ? 8 : 0) | (s->top1 ? 4 : 0) | (s->mode & 3);

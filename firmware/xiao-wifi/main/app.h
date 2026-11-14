@@ -62,6 +62,7 @@ struct scaler_settings {
     bool surround;      /* the sound's two channels made 5.1 by the FPGA's CPU */
     uint8_t table;      /* the scaler's table: 0 FSR's, 1 the learnt pair (one for the anti-aliasing off, one
                          * for on), 2 on: the tables sent to the link (slots 3 on: tables.c) */
+    bool mv_dbg;        /* the motion compensation's vectors shown in the picture's place */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
