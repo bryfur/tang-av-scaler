@@ -46,6 +46,7 @@ tr+tr td,tbody+tbody td{border-top:1px solid var(--line)}
 pre{background:#0a0b0e;color:#cfd3dc;padding:.7em;border-radius:8px;overflow:auto;max-height:20em;font-size:12px;margin:.6em 0 0}
 details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 .crop{display:none}.crop.on{display:flex}
+.f.na{opacity:.45}.f.na .sw{cursor:default}
 #msg{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.5em 1em;box-shadow:0 6px 24px #0006;white-space:pre-wrap;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
 #msg.on{opacity:1}
 .stack{display:grid;gap:.5em;max-width:22em}.stack input{width:100%}
@@ -74,7 +75,10 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f"><span>Show what it finds<small>edges green, blends blue and red</small></span><input class="sw" type="checkbox" name="aa_dbg"></div>
 </section>
 <section><h2>Deinterlacing</h2>
-<div class="f"><span>Method<small id="pant"></small></span><span class="seg"><label><input type="radio" name="mode" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="mode" value="4"><span>Motion adaptive, along edges</span></label><label><input type="radio" name="mode" value="8"><span>Motion compensated</span></label><label><input type="radio" name="mode" value="12"><span>Motion compensated, along edges</span></label><label><input type="radio" name="mode" value="1"><span>Bob</span></label><label><input type="radio" name="mode" value="5"><span>Bob, along edges</span></label><label><input type="radio" name="mode" value="2"><span>Weave</span></label></span></div>
+<input type="hidden" name="mode">
+<div class="f"><span>Method<small id="mdt"></small></span><span class="seg"><label><input type="radio" name="_m" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="_m" value="1"><span>Bob</span></label><label><input type="radio" name="_m" value="2"><span>Weave</span></label></span></div>
+<div class="f" id="mcf"><span>Motion compensation<small id="pant"></small></span><input class="sw" type="checkbox" name="_c"></div>
+<div class="f" id="edf"><span>Follow edges<small>where a hard edge crosses a filled-in line, the line follows it</small></span><input class="sw" type="checkbox" name="_e"></div>
 <div class="f"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
 <div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
 </section>
@@ -117,6 +121,16 @@ const yes=(b,t,f)=>'<span class="'+(b?'ok':'bad')+'">'+(b?t:f)+'</span>';
 const pill=(c,t)=>'<span class="pill '+c+'">'+t+'</span>';
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const vf=$('vf');
+// the deinterlacer's setting is one number: the method (0 motion adaptive, 1 bob, 2 weave), 4 more with
+// the edges followed (not weave), 8 more with motion compensation (motion adaptive only): three controls
+function modeShow(){const f=vf.elements,m=+f.mode.value||0,b=m&3;
+  f._m.value=b;f._c.checked=!!(m&8)&&b==0;f._e.checked=!!(m&4)&&b!=2;modeNa()}
+function modeNa(){const f=vf.elements,b=+f._m.value;
+  f._c.disabled=b!=0;f._e.disabled=b==2;$('mcf').classList.toggle('na',b!=0);$('edf').classList.toggle('na',b==2);
+  $('mdt').textContent=['fields woven where the picture is still, lines filled in where it moves','every line between filled in from its neighbours: half the detail, never a comb','the two fields woven as they are: right for a still picture only'][b]}
+function modeTake(){const f=vf.elements,b=+f._m.value;
+  if(b!=0)f._c.checked=false;if(b==2)f._e.checked=false;
+  f.mode.value=b+(f._e.checked?4:0)+(f._c.checked?8:0);modeNa()}
 function outs(){for(const o of vf.querySelectorAll('output'))o.textContent=o.previousElementSibling.value;
   const c=vf.elements.crop.value;$('c_auto').classList.toggle('on',c=='1');$('c_man').classList.toggle('on',c=='2')}
 async function status(){
@@ -147,7 +161,7 @@ async function vstat(){
   if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
   $('lk').textContent=['the output kept in step with the input','no input to follow','getting in step: '+(v.lock_us/1000).toFixed(2)+' ms to go, clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm','in step (clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm): every field shown once, the delay steady'][v.relay?v.lock:0];
   $('llt').textContent=v.set.lowlat?(v.ll?'on: a frame is begun with '+v.ll_lines+' lines of its field in':'on, but not in use yet (the output must be in step first)'):'the picture begun while the field is still coming in (needs frame lock)';
-  $('pant').textContent=(v.set.mode&8)?'each block of 8 pixels follows its own motion'+(v.pan[0]?'; the picture as a whole pans '+v.pan[1]+' pixels, '+v.pan[2]+' lines in two fields':''):'';
+  $('pant').textContent=(v.set.mode&3)?'with motion adaptive only':(v.set.mode&8)?'on: each block of 8 pixels follows its own motion'+(v.pan[0]?'; the picture as a whole pans '+v.pan[1]+' pixels, '+v.pan[2]+' lines in two fields':''):'where the picture moves, the filled-in lines come from the field before, moved with it';
   $('shown').textContent='showing '+v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2];
   $('vs').innerHTML=
     row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':
@@ -160,14 +174,15 @@ async function vstat(){
     row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+new Date(v.cpu_build*1000).toISOString().slice(0,16).replace('T',' ')+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+
     row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'));
   if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;
-    if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}outs()}
+    if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}modeShow();outs()}
 }
 async function video(body){try{msg(await (await fetch('/api/video',{method:'POST',body})).text())}catch(e){msg('no answer from the link')}vfill=true;vstat()}
 // a setting changed: sent at once (a slider: when it is let go)
 let st;
 function send(){const p=new URLSearchParams();
-  for(const e of vf.elements){if(!e.name||e.type=='radio'&&!e.checked)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
+  for(const e of vf.elements){if(!e.name||e.name[0]=='_'||e.type=='radio'&&!e.checked)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
   video(p)}
+for(const n of ['_m','_c','_e'])for(const e of [].concat(...[vf.elements[n]].map(x=>x.length?[...x]:[x])))e.addEventListener('change',modeTake);
 vf.addEventListener('input',outs);
 vf.addEventListener('change',()=>{clearTimeout(st);st=setTimeout(send,150)});
 vf.onsubmit=e=>{e.preventDefault();send()};
