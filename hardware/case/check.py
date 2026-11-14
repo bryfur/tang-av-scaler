@@ -30,12 +30,10 @@ STANDINS = {
     "J15 USB-C": (143.03, 151.97, 49.41, 56.76, C.TOP, C.TOP + 3.26),
     "J6 HDMI mouth": (184.3, 197.7, 47.85, 49.0, C.HDMI_Z0 + 0.8, C.HDMI_Z1 - 0.8),       # (render only)
     "J15 USB-C mouth": (143.6, 151.4, 49.36, 50.0, C.TOP + 0.4, C.TOP + 2.86),
-    # the SOM on its 3 mm receptacles, its parts, and a heatsink (an estimate: about 28 x 28 mm,
-    # its top ~17 mm above the board; measure yours)
+    # the SOM on its 3 mm receptacles, its parts, and its heatsink (case.HEATSINK: from the photo)
     "SOM board": C.som_box() + (C.TOP + 3.0, C.TOP + 4.6),
     "SOM parts": tuple(np.add(C.som_box(), (1, -1, 1, -1))) + (C.TOP + 4.6, C.TOP + 6.6),
-    "heatsink (est.)": (C.floor.SOM_AT[0] - 14, C.floor.SOM_AT[0] + 14, C.floor.SOM_AT[1] - 14,
-                        C.floor.SOM_AT[1] + 14, C.TOP + 6.6, C.TOP + 17.0),
+    "heatsink (est.)": C.HEATSINK + (C.TOP + 6.6, C.HEATSINK_TOP),
     # the XIAO on its sockets: module, can, USB-C (2 mm past the module's end, an estimate)
     "XIAO": (103.1, 120.9, 128.5, 149.5, 12.6, 16.0),
     "XIAO USB-C": (107.5, 116.5, 143.0, 151.4, 13.8, 17.0),
@@ -108,9 +106,14 @@ def main():
     for k, b in STANDINS.items():
         sets[k] = box_points(b)
     bad = 0
-    for f in sorted(glob.glob(os.path.join(C.HERE, "out", "*-fitted.stl"))):
-        part = os.path.basename(f)[:-len("-fitted.stl")]
-        m = trimesh.load(f)
+    tests = [(os.path.basename(f)[:-len("-fitted.stl")], trimesh.load(f))
+             for f in sorted(glob.glob(os.path.join(C.HERE, "out", "*-fitted.stl")))]
+    if C.FAN:
+        x0, x1, y0, y1, z0, z1 = C.fan_box()
+        fan = trimesh.creation.box(extents=(x1 - x0, y1 - y0, z1 - z0))
+        fan.apply_translation(((x0 + x1) / 2 - C.CX, C.CY - (y0 + y1) / 2, (z0 + z1) / 2))
+        tests.append(("fan (%d mm)" % C.FAN, fan))
+    for part, m in tests:
         assert m.is_watertight, part
         lo, hi = m.bounds[0] - 3, m.bounds[1] + 3
         tree = cKDTree(np.concatenate([m.vertices, trimesh.sample.sample_surface_even(m, int(m.area / 0.09))[0]]))

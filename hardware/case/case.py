@@ -12,8 +12,9 @@ footprints), taken from the footprint's courtyard and the part's name (HDMI ... 
 The parts (all print without supports):
 
     base     floor + side walls, four standoffs under the board's holes; floor down
-    lid      top plate, vents over the SOM's heatsink, four pillars that press the board onto the
-             standoffs, guides for the buttons, tubes over the LEDs; printed upside down
+    lid      top plate, vents over the SOM's heatsink, a 40 mm fan under it over the SOM's memory,
+             four pillars that press the board onto the standoffs, guides for the buttons, tubes
+             over the LEDs; printed upside down
     back     the back panel: RCA x 5, USB-C power, HDMI; outside face down
     front    the front panel: the XIAO's USB-C; outside face down
     button   x 3, a plunger from the lid to each tact switch, held by a bayonet; head down
@@ -137,16 +138,24 @@ TAB_R, TAB_W, TAB_T = 3.15, 1.8, 1.6
 KEYWAY_R, KEYWAY_W = 3.45, 2.2    # toward +X; the tab rests toward the back
 BUTTONS = [("SW1", "K1"), ("SW2", "K2"), ("SW3", "RCFG")]
 
-# a 5 V fan on top of the lid over the SOM's heatsink (under the lid there is no room for one: the
-# heatsink's top ~7 mm from the lid), blowing through a round grille; M3 x 16 screws through the
-# fan's corners cut their thread in bosses under the lid. Its wire goes in by J13, whose pins 4
-# (GND) and 5 (5 V, behind a 0.2 A resettable fuse) take a 2-pin plug. FAN = 0: slots instead
-FAN = 40                          # 40, 30 or 25 mm
+# the SOM's heatsink, on the FPGA in the SOM's front half (the board photo, img/av-board-cb-photo.jpg,
+# measured against the SOM's holes: its back edge ~y 105; the DDR3 chips behind it, ~y 89-103):
+# x0, x1, y0, y1 on the board and its top. Not measured on the part: check it before printing
+HEATSINK = (141.0, 169.0, 105.0, 131.0)
+HEATSINK_TOP = TOP + 17.0
+# a 5 V fan inside, hung under the lid over the SOM's memory, beside the heatsink (the lid is 7 mm
+# above the heatsink: no room over it), blowing down through a round grille; the warm air leaves by
+# the slots over the heatsink and the side vents. M3 x 12 screws from the top through countersunk
+# holes cut their thread in the fan's corner holes. Its wire plugs onto J13 pins 4 (GND) and 5
+# (5 V, behind a 0.2 A resettable fuse). FAN = 0: no fan
+FAN = 40                          # 40, 30 or 25 mm square, FAN_T thick
+FAN_T = 10.0
 FAN_HOLES = {25: 20.0, 30: 24.0, 40: 32.0}     # the fans' hole spacing
 FAN_GRILLE = {25: 23.0, 30: 28.0, 40: 37.0}
 FAN_HUB = {25: 9.0, 30: 11.0, 40: 14.0}        # the motor's hub: no air there
-FAN_PILOT, FAN_BOSS_D, FAN_BOSS_H = 2.6, 6.5, 4.0
-FAN_WIRE_D = 4.5
+FAN_GAP = 2.5                     # fan to heatsink, sideways
+FAN_AT = (floor.SOM_AT[0], HEATSINK[2] - FAN_GAP - FAN / 2)
+FAN_SCREW, FAN_CSK = 3.4, 6.6
 
 # LEDs: a tube from the lid to 1 mm above each, for a piece of 1.75 mm clear filament
 PIPE_ID, PIPE_OD = 1.9, 3.6
@@ -264,15 +273,14 @@ def lid():
             l = l.cut(cyl(x, y, 2.0, TOP - 1, TOP + 12))
         else:
             l = l.cut(cyl(x, y, PILOT, TOP - 1, TOP + 12))
-    sx0, sx1, sy0, sy1 = som_box()
+    # vents over the heatsink: slots front to back
+    hx0, hx1, hy0, hy1 = HEATSINK
+    n = int((hx1 - hx0 + 4) // 4)
+    for i in range(n):
+        x = (hx0 + hx1) / 2 + (i - (n - 1) / 2) * 4.0
+        l = l.cut(box(x - 1.0, x + 1.0, hy0 + 1.0, hy1 - 2.0, Z_LID - 1, Z_TOP + 1))
     if FAN:
-        l = fan_mount(l, (sx0 + sx1) / 2, (sy0 + sy1) / 2)
-    else:
-        # vents over the SOM and its heatsink: slots front to back
-        n = int((sx1 - sx0 - 4) // 4)
-        for i in range(n):
-            x = (sx0 + sx1) / 2 + (i - (n - 1) / 2) * 4.0
-            l = l.cut(box(x - 1.0, x + 1.0, sy0 + 2.5, sy1 - 4.5, Z_LID - 1, Z_TOP + 1))
+        l = fan_mount(l, *FAN_AT)
     # buttons: round guides with a keyway
     for ref, _ in BUTTONS:
         x, y = at(ref)
@@ -286,19 +294,17 @@ def lid():
         l = l.cut(cyl(x, y, PIPE_ID, LED_TOP + 0.5, Z_TOP + 1))
     # labels on top
     up = (0, 0, 1)
-    l = text_cut(l, "tang-av-scaler", 5.0, (X(CX), Y(BY0 + 9.0), Z_TOP), (1, 0, 0), up)
     for ref, name in BUTTONS:
         x, y = at(ref)
         l = text_cut(l, name, 2.4, (X(x), Y(y + HEAD_D / 2 + 2.4), Z_TOP), (1, 0, 0), up)
     for ref, name in LEDS:
         x, y = at(ref)
         l = text_cut(l, name, 2.2, (X(x), Y(y - 3.0), Z_TOP), (1, 0, 0), up)
-    l = text_cut(l, "AV board rev C-B", 3.0, (X(CX), Y(BY0 + 15.5), Z_TOP), (1, 0, 0), up)
     return l
 
 
 def fan_mount(l, cx, cy):
-    """The fan's grille, four screw bosses and a hole for its wire, centred on (cx, cy)."""
+    """The fan's grille and its four countersunk screw holes, centred on (cx, cy)."""
     r, hub, a = FAN_GRILLE[FAN] / 2, FAN_HUB[FAN] / 2, FAN_HOLES[FAN] / 2
     z0, z1 = Z_LID - 1, Z_TOP + 1
     hole = cyl(cx, cy, 2 * r, z0, z1).cut(cyl(cx, cy, 2 * hub, z0 - 1, z1 + 1))
@@ -312,12 +318,18 @@ def fan_mount(l, cx, cy):
     l = l.cut(hole)
     for sx in (-a, a):
         for sy in (-a, a):
-            l = l.union(cyl(cx + sx, cy + sy, FAN_BOSS_D, Z_LID - FAN_BOSS_H, Z_LID + 0.1))
-            l = l.cut(cyl(cx + sx, cy + sy, FAN_PILOT, Z_LID - FAN_BOSS_H - 1, Z_TOP + 1))
-    # the wire: in beside the fan's corner toward J13
-    jx, jy = at("J13")
-    l = l.cut(cyl(cx + FAN / 2 + FAN_WIRE_D / 2 + 1.0, max(cy - FAN / 2 + FAN_WIRE_D, jy), FAN_WIRE_D, z0, z1))
+            l = l.cut(cyl(cx + sx, cy + sy, FAN_SCREW, z0, z1))
+            d = (FAN_CSK - FAN_SCREW) / 2                       # 90 degree countersink
+            csk = (cq.Workplane("XY").circle(FAN_SCREW / 2).workplane(offset=d).circle(FAN_CSK / 2).loft()
+                   .translate((X(cx + sx), Y(cy + sy), Z_TOP - d)))
+            l = l.cut(csk).cut(cyl(cx + sx, cy + sy, FAN_CSK, Z_TOP - 0.01, Z_TOP + 1))
     return l
+
+
+def fan_box():
+    """The fan's volume, for check.py and render.py: (x0, x1, y0, y1, z0, z1) on the board."""
+    cx, cy = FAN_AT
+    return (cx - FAN / 2, cx + FAN / 2, cy - FAN / 2, cy + FAN / 2, Z_LID - FAN_T, Z_LID)
 
 
 def panel(y_out, y_in):
@@ -350,6 +362,9 @@ def front():
     w, h, r = XIAO_HOLE
     p = p.cut(rrect_y(x, XIAO_USB_Z, w, h, r, FRONT_IN - 1, FRONT_OUT + 1))
     p = text_cut(p, "ESP USB", 3.0, (X(x), Y(FRONT_OUT), XIAO_USB_Z + h / 2 + 3.5), (1, 0, 0), (0, -1, 0))
+    tx = (x + XIAO_HOLE[0] / 2 + X_IN1) / 2 + 3
+    p = text_cut(p, "tang-av-scaler", 5.5, (X(tx), Y(FRONT_OUT), 15.5), (1, 0, 0), (0, -1, 0))
+    p = text_cut(p, "AV board rev C-B", 3.0, (X(tx), Y(FRONT_OUT), 8.5), (1, 0, 0), (0, -1, 0))
     return p
 
 
@@ -409,9 +424,8 @@ def main():
     asm.save(os.path.join(out, "case.step"))
     import json
     with open(os.path.join(out, "meta.json"), "w") as f:
-        sx0, sx1, sy0, sy1 = som_box()
         json.dump({"CX": CX, "CY": CY, "Z_BOT": Z_BOT, "Z_TOP": Z_TOP, "Z_LID": Z_LID,
-                   "fan": [X((sx0 + sx1) / 2), Y((sy0 + sy1) / 2), FAN]}, f)
+                   "fan": [X(FAN_AT[0]), Y(FAN_AT[1]), FAN, Z_LID - FAN_T]}, f)
     print("outside %.1f x %.1f x %.1f mm" % (X_OUT1 - X_OUT0, Y_OUT1 - Y_OUT0, Z_TOP - Z_BOT))
     for name, shape in parts.items():
         bb = shape.val().BoundingBox()

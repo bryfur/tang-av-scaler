@@ -159,10 +159,10 @@ def view(name):
             parts["button-" + sw] = (key, (0, 0, lid_z))
     for p, (m, off) in parts.items():
         load_part(p, m, off)
-    fx, fy, fs = META.get("fan", [0, 0, 0])
-    if fs and name == "exploded":
-        # a fan (a stand-in) above the lid
-        z = META["Z_TOP"] + lid_z + 18
+    fx, fy, fs, fz = META.get("fan", [0, 0, 0, 0])
+    if fs and name in ("open", "exploded"):
+        # the fan (a stand-in) where it hangs under the lid (on "open" the lid is not drawn)
+        z = fz + (lid_z * 0.5 if up else 0)
         bpy.ops.mesh.primitive_cube_add(size=1, location=(fx, fy, z + 5))
         frame = bpy.context.object
         frame.scale = (fs, fs, 10)
