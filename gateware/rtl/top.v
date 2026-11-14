@@ -56,6 +56,8 @@
 //                    7 the lines made where the picture moves go along its edges (deint.v edi),
 //                    20 the vectors shown (deint.v mvdbg: with 3): the picture grey, each block the
 //                    colour of its vector,
+//                    23:21 the anti-aliasing's edges of the frame before count (smaa_hist.v: 0 not, to
+//                    7: that many levels),
 //                    16 the anti-aliasing on (smaa.v), 17 what it finds shown in the picture's place
 //                    (its edges green, what it mixes blue and red), 18 its diagonal patterns too, 19 corners kept,
 //                    31:24 its edge threshold (a luma step)
@@ -636,12 +638,17 @@ module top (
             dm_done <= 1'b1;
         end
     end
+    wire         he_valid, he_wr, he_ack, he_rvalid;     // (the anti-aliasing's edges of the frame before: smaa_hist.v)
+    wire [24:0]  he_line;
+    wire [255:0] he_data;
     ddr_arb u_arb (.clk(pclk), .cmd_ready(d_cmd_ready), .cmd(d_cmd), .cmd_en(d_cmd_en), .addr(d_addr),
                    .wr_data(d_wr_data), .wr_mask(d_wr_mask), .wr_data_en(d_wr_en), .rd_data_valid(d_rd_valid),
                    .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .c_valid(dm_valid), .c_wr(dm_cmd[31]), .c_line(dm_cmd[24:0]), .c_data(dm_wdata),
                    .c_ack(dm_ack), .c_rvalid(dm_rvalid),
+                   .e_valid(he_valid), .e_wr(he_wr), .e_line(he_line), .e_data(he_data), .e_ack(he_ack),
+                   .e_rvalid(he_rvalid),
                    .d_valid(cm_valid), .d_wr(cm_wr), .d_line(cm_line), .d_data(cm_data), .d_mask(cm_mask),
                    .d_ack(cm_ack), .d_rvalid(cm_rvalid));
     // the picture through the DDR3: the fields in (cap_ddr.v), the frame's lines out (deint.v) to
@@ -800,6 +807,8 @@ module top (
     lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .skip(ls_skip), .hold(ls_hold), .r_we(r_we),
                   .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),
                   .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
+                  .aa_keep(dcfg[23:21]), .e_valid(he_valid), .e_wr(he_wr), .e_line(he_line), .e_data(he_data),
+                  .e_ack(he_ack), .e_rvalid(he_rvalid), .rd_data(d_rd_q),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
     // how old the newest field is when a frame is begun: from the field's end (latest changes), in 10 us
     reg  [9:0]   lt_div = 10'd0;

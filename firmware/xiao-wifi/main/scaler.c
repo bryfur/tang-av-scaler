@@ -57,8 +57,8 @@ enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, 
 enum { BUS_PLL, BUS_DP, BUS_DDC, BUS_IN };
 
 static struct scaler_state state;
-static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 20, .sharp = 8,
-                                      .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480, .nr = 2, .dn = true};
+static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 10, .sharp = 8,
+                                      .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480, .nr = 2, .dn = true, .aa_keep = 3};
 static SemaphoreHandle_t lock;          /* set, state, dirty */
 static bool dirty, again, measure, tune;
 static bool cpu_mode;                   /* the FPGA's CPU runs the scaler */
@@ -268,7 +268,7 @@ static void picture(void)
     s = set;
     dirty = false;
     xSemaphoreGive(lock);
-    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (s.aa_corner ? 1u : 0) << 19 | (s.aa_diag ? 1u : 0) << 18 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (uint32_t)(s.nr & 3) << 4 | (s.top1 ? 4 : 0) | (s.mode & 3));
+    wr(R_DEINT, (uint32_t)s.aa_thr << 24 | (uint32_t)(s.aa_keep & 7) << 21 | (s.aa_corner ? 1u : 0) << 19 | (s.aa_diag ? 1u : 0) << 18 | (s.aa_dbg ? 1u : 0) << 17 | (s.aa ? 1u : 0) << 16 | (uint32_t)s.thr << 8 | (uint32_t)(s.nr & 3) << 4 | (s.top1 ? 4 : 0) | (s.mode & 3));
     wr(R_OSD, s.osd ? 1 : 0);
     wr(R_HDMI, s.audio ? 6 : 0);        /* the video guard band and the data islands, or DVI's blanking */
     wr(R_VID, (uint32_t)(s.sharp > 16 ? 16 : s.sharp) << 16 | (s.dn ? 16 : 0) | (s.swap ? 8 : 0) | 4 | (s.pattern ? 0 : 1) | (s.freeze ? 2 : 0));
@@ -430,7 +430,7 @@ static struct link_settings to_link(const struct scaler_settings *v)
                               .aa_thr = v->aa_thr, .sharp = v->sharp, .swap = v->swap, .top1 = v->top1,
                               .pattern = v->pattern, .freeze = v->freeze, .audio = v->audio, .aa_dbg = v->aa_dbg,
                               .aa_diag = v->aa_diag, .aa_corner = v->aa_corner, .crop = v->crop, .wide = v->wide,
-                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat, .surround = v->surround, .table = v->table, .mv_dbg = v->mv_dbg, .net = v->net,
+                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat, .surround = v->surround, .table = v->table, .mv_dbg = v->mv_dbg, .net = v->net, .aa_keep = v->aa_keep,
                               .crop_x = v->crop_x, .crop_w = v->crop_w, .crop_y = v->crop_y, .crop_h = v->crop_h};
     return l;
 }
@@ -441,7 +441,7 @@ static struct scaler_settings from_link(const struct link_settings *l)
                                 .aa_thr = l->aa_thr, .sharp = l->sharp, .swap = l->swap, .top1 = l->top1,
                                 .pattern = l->pattern, .freeze = l->freeze, .audio = l->audio, .aa_dbg = l->aa_dbg,
                                 .aa_diag = l->aa_diag, .aa_corner = l->aa_corner, .crop = l->crop, .wide = l->wide,
-                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround, .table = l->table, .mv_dbg = l->mv_dbg, .net = l->net,
+                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround, .table = l->table, .mv_dbg = l->mv_dbg, .net = l->net, .aa_keep = l->aa_keep,
                                 .crop_x = l->crop_x, .crop_w = l->crop_w, .crop_y = l->crop_y, .crop_h = l->crop_h};
     return v;
 }

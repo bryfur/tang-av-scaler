@@ -77,6 +77,47 @@ def field(m, slot, lines=240):
     return out
 
 
+def mem_lines(m, nums):
+    """the memory's lines of these numbers (rtl/ddr_arb.v's: 256 bits each), as whole numbers: as
+    field() reads them, ninety a round trip"""
+    out = []
+    for n0 in range(0, len(nums), 90):
+        todo = nums[n0:n0 + 90]
+        want = len(todo) * 36
+        for attempt in range(10):
+            for n in todo:
+                m.out += b"W" + bytes([DDR]) + n.to_bytes(4, "little")
+                m.out += bytes([ord("R"), DDR]) + b"".join(bytes([ord("R"), DDRD + k]) for k in range(8))
+            m.flush()
+            buf, t = b"", time.time()
+            while len(buf) < want and time.time() - t < 1.5:
+                buf += m.read_raw()
+                time.sleep(0.001)
+            if len(buf) == want:
+                break
+            quiet = time.time()
+            while time.time() - quiet < 0.3:
+                if m.read_raw():
+                    quiet = time.time()
+                time.sleep(0.005)
+        else:
+            sys.exit("still: the monitor stopped answering (line %d)" % todo[0])
+        out += [int.from_bytes(buf[36 * i + 4:36 * i + 36], "little") for i in range(len(todo))]
+    return out
+
+
+def edges(m, skip=0, rows=480):
+    """the anti-aliasing's edges of the frame before, as rtl/smaa_hist.v keeps them in the memory (slot
+    0, each picture line's own 4096 bytes from byte 3840: six lines of the memory, a pixel two bits):
+    [row from skip][x] -> (left, top), sim/smaa.py edges()'s form"""
+    d = mem_lines(m, [(skip + r) << 7 | 120 + i for r in range(rows - skip) for i in range(6)])
+    out = []
+    for r in range(rows - skip):
+        v = sum(d[6 * r + i] << 256 * i for i in range(6))
+        out.append([(v >> 2 * x & 1, v >> 2 * x + 1 & 1) for x in range(720)])
+    return out
+
+
 def rgb(y, cb, cr):
     """BT.601, 16-235, as rtl/rcas.v does it"""
     clamp = lambda v: 0 if v < 0 else 255 if v > 0xFFFF else v >> 8

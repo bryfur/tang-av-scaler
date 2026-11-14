@@ -73,6 +73,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <section><h2>Anti-aliasing</h2>
 <div class="f"><span>SMAA</span><input class="sw" type="checkbox" name="aa"></div>
 <div class="f"><span>Edge threshold<small>lower catches more edges</small></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
+<div class="f"><span>Steady edges<small>how firmly an edge found in the frame before is kept, so still edges do not shimmer; 0 off</small></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
 <div class="f"><span>Diagonal edges</span><input class="sw" type="checkbox" name="aa_diag"></div>
 <div class="f"><span>Keep corners sharp</span><input class="sw" type="checkbox" name="aa_corner"></div>
 <div class="f"><span>Show what it finds<small>edges green, blends blue and red</small></span><input class="sw" type="checkbox" name="aa_dbg"></div>

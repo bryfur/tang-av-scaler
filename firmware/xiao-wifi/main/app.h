@@ -64,6 +64,7 @@ struct scaler_settings {
                          * for on), 2 on: the tables sent to the link (slots 3 on: tables.c) */
     bool mv_dbg;        /* the motion compensation's vectors shown in the picture's place */
     uint8_t net;        /* the scaler's first stage: 0 none, 1 the network (the FPGA's cnn.v) */
+    uint8_t aa_keep;    /* SMAA: how firmly the edges of the frame before are kept (0 not, to 7: smaa_hist.v) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */

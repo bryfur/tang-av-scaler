@@ -99,20 +99,45 @@ def main():
         skip = (max(0, crop[2] - 24) & ~7)
         print("frozen: %d x %d from %d, %d shown; the fields read" % (crop[1], crop[3], crop[0], crop[2]), flush=True)
 
-        def frame(mode):
+        # (keep: the anti-aliasing's edges of the frame before count (rtl/smaa_hist.v): which edges a still
+        # picture has then hangs on what went before: the model is given the board's own, read from its
+        # memory once the mode is set, and must find the same again: a frozen picture's do not change)
+        keep = s.get("aa_keep", 0) if s["aa"] else 0
+
+        def frame(mode, prev=None):
+            hist = {"keep": keep, "prev": prev} if prev is not None else None
             rows = model.frame_1080(fields, pars, mode & 3, s["thr"], s["aa_thr"] if s["aa"] else None, s["sharp"], bool(s["aa_dbg"]),
                                     bool(s["aa_diag"]), bool(s["aa_corner"]), crop, s["nr"], bool(s["dn"]), False, bool(mode & 4),
                                     None, bool(mode & 8) and mode & 3 == 0, first, skip, tab,
-                                    bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0, net)
+                                    bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0, net, hist)
             im = Image.new("RGB", (1920, 1080))
             im.putdata([p for row in rows for p in row])
+            if hist:
+                # (the lines the stream reaches: below the part shown it stops)
+                end = min(480, crop[2] + crop[3] + 4) - 1 - skip
+                n = sum(tuple(a) != tuple(b) for ra, rb in zip(prev[:end], hist["new"][:end]) for a, b in zip(ra, rb))
+                print("  the edges kept (keep %d): %d in the board's memory; %d pixels' not the model's" % (
+                    keep, sum(a + b for row in prev[:end] for a, b in row), n), flush=True)
+                frame.bad += n
             return im
+        frame.bad = 0
         plain = frame(0)
         bad = 0
         for mode in modes:
-            want = plain if mode == 0 else frame(mode)
+            if keep:
+                api(mode=mode)
+                time.sleep(1.5)
+                m = avb.Mon()
+                prev = still.edges(m, skip)
+                m.close()
+                want = frame(mode, prev)
+            else:
+                want = plain if mode == 0 else frame(mode)
             box = ImageChops.difference(want, plain).getbbox()
             y0, y1 = (max(0, box[1] - 8), min(1080, box[3] + 8)) if box else (500, 580)
+            if keep and y1 - y0 > 160:      # (the edges kept change pixels all over: the middle of where they do)
+                y0 = (y0 + y1) // 2 - 80 & ~1
+                y1 = y0 + 160
             if tabset is not None and mode == modes[0]:
                 y0, y1 = 300, 780
             if rowset and mode == modes[0]:
@@ -156,6 +181,7 @@ def main():
                 mode, deint, y0, y1 - 1, n, "" if n else ": the same", moved), flush=True)
     finally:
         api(freeze=0, mode=was, osd=s["osd"], table=tabwas)
+    bad += frame.bad
     print("PASS" if not bad else "FAIL")
     sys.exit(1 if bad else 0)
 

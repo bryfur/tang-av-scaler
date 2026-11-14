@@ -67,6 +67,17 @@ module smaa #(
     input             dbg,
     input             diag,             // the diagonal patterns too
     input             corner,           // less mixed where a line ends in a corner
+    // the edges of the frame before (smaa_hist.v; keep 0: none of it): asked for by the place (hq_x,
+    // hq_l: three clocks before p_e is wanted), and this frame's as they are decided (hg_*)
+    input      [2:0]  keep,
+    output     [9:0]  hq_x,
+    output     [9:0]  hq_l,
+    input      [1:0]  p_e,              // {top, left}
+    output            hg_v,
+    output     [10:0] hg_x,
+    output     [9:0]  hg_e,
+    output            hg_el,
+    output            hg_et,
     input             i_v,
     input      [9:0]  i_x,
     input      [9:0]  i_j,
@@ -171,7 +182,21 @@ module smaa #(
     reg [9:0]  g_e;
     wire [10:0] xc = e1_x - 11'd1;
     // (twice a step no less than the greatest of the six: than each of the others, side by side)
-    wire [8:0]  dl3x = {dl3, 1'b0}, dt3x = {dt3, 1'b0};
+    // (and keep: an edge the frame before had counts keep levels more, one it had not keep levels
+    // less: sim/smaa.py edges(); p_e is the frame before's of the column the steps (2) are of)
+    wire signed [3:0] kp = {1'b0, keep};
+    wire signed [3:0] kl = p_e[0] ? kp : -kp;
+    wire signed [3:0] kt = p_e[1] ? kp : -kp;
+    reg  signed [9:0] dl3k, dt3k;
+    reg  signed [10:0] dl3x, dt3x;
+    wire [10:0] tq = t_x - 11'd1;
+    assign hq_x = tq[9:0];
+    assign hq_l = t_j - 10'd1;
+    assign hg_v = g_v;
+    assign hg_x = g_x;
+    assign hg_e = g_e;
+    assign hg_el = g_el;
+    assign hg_et = g_et;
     always @(posedge clk) begin
         e2_v <= 1'b0;
         if (e1_v) begin
@@ -207,14 +232,20 @@ module smaa #(
         mx3c <= max2(dll, dtt);
         dl3 <= dl;
         dt3 <= dt;
+        dl3k <= $signed({2'b00, dl}) + kl;
+        dt3k <= $signed({2'b00, dt}) + kt;
+        dl3x <= $signed({2'b00, dl, 1'b0}) + kl;
+        dt3x <= $signed({2'b00, dt, 1'b0}) + kt;
         {sl3, sr3} <= {sl2, sr2};
         {g_sl, g_sr} <= {sl3, sr3};
         // (4) the edges
         g_v <= e3_v;
         g_x <= e3_x;
         g_e <= e3_e;
-        g_el <= !e3_z && dl3 >= thr && dl3 != 8'd0 && dl3x >= {1'b0, dt3} && dl3x >= {1'b0, mx3b} && dl3x >= {1'b0, mx3c};
-        g_et <= !e3_z && dt3 >= thr && dt3 != 8'd0 && dt3x >= {1'b0, dl3} && dt3x >= {1'b0, mx3b} && dt3x >= {1'b0, mx3c};
+        g_el <= !e3_z && dl3k >= $signed({2'b00, thr}) && dl3 != 8'd0 && dl3x >= $signed({3'b000, dt3})
+                && dl3x >= $signed({3'b000, mx3b}) && dl3x >= $signed({3'b000, mx3c});
+        g_et <= !e3_z && dt3k >= $signed({2'b00, thr}) && dt3 != 8'd0 && dt3x >= $signed({3'b000, dl3})
+                && dt3x >= $signed({3'b000, mx3b}) && dt3x >= $signed({3'b000, mx3c});
     end
 
     // ---- weights ----

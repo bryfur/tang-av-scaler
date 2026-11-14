@@ -108,6 +108,7 @@ module tb;
                    .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .c_valid(1'b0), .c_wr(1'b0), .c_line(25'd0), .c_data(256'd0), .c_ack(), .c_rvalid(),
+                   .e_valid(1'b0), .e_wr(1'b0), .e_line(25'd0), .e_data(256'd0), .e_ack(), .e_rvalid(),
                    .d_valid(1'b0), .d_wr(1'b0), .d_line(25'd0), .d_data(256'd0), .d_mask(32'd0), .d_ack(), .d_rvalid(),
                    .wr_mask());
     ddr_model u_ddr (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),

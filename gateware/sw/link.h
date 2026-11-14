@@ -13,7 +13,7 @@
  * new number: a link whose firmware has another gives the CPU its own program (2026-11-13: without
  * that, a firmware from before the tables read this status as its own shorter one, took what lay
  * where its settings had been for the settings, and kept them) */
-#define LINK_MAGIC   0x35435641u
+#define LINK_MAGIC   0x36435641u
 
 enum {
     LINK_STATUS = 0x01,                 /* -> struct link_status */
@@ -89,15 +89,17 @@ struct link_settings {
     uint8_t net;            /* the scaler's first stage: 0 none (the table's kernel does it all: rtl/easu.v), 1 the
                              * network (rtl/cnn.v: the picture's luma made twice the size by it, then a
                              * bicubic stretch: rtl/bicu.v; the table is not used then) */
-    uint8_t pad;            /* 0 */
+    uint8_t aa_keep;        /* SMAA: the edges of the frame before count (rtl/smaa_hist.v): 0 not; 1 to 7: an edge
+                             * that was there is kept that many levels more easily, one that was not needs as
+                             * many more (a still picture's edges then stay as they are, noise or not) */
     /* (No gaps in this: the two sides compare theirs byte for byte.  With one the link found the CPU's
      * "changed" each second, by whatever lay in the gap, and kept them in flash again each time) */
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
 _Static_assert(sizeof(struct link_settings) == 28 + 8, "link_settings: a gap, or a new member not counted here");
 
-#define LINK_SETTINGS_DEFAULT { .on = 1, .ntsc = 1, .thr = 6, .aa = 1, .aa_thr = 12, .sharp = 8, .audio = 1, \
-                                .aa_diag = 1, .aa_corner = 1, .crop = 1, .nr = 2, .dn = 1, .flock = 1, .crop_w = 720, .crop_h = 480 }
+#define LINK_SETTINGS_DEFAULT { .on = 1, .ntsc = 1, .thr = 6, .aa = 1, .aa_thr = 10, .sharp = 8, .audio = 1, \
+                                .aa_diag = 1, .aa_corner = 1, .aa_keep = 3, .crop = 1, .nr = 2, .dn = 1, .flock = 1, .crop_w = 720, .crop_h = 480 }
 
 struct link_status {
     uint32_t magic;         /* LINK_MAGIC */

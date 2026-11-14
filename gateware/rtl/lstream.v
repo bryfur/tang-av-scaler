@@ -38,6 +38,15 @@ module lstream #(
     input             aa_diag,
     input             aa_corner,
     input      [7:0]  aa_thr,
+    input      [2:0]  aa_keep,          // the edges of the frame before count (smaa_hist.v; 0: not)
+    // (their memory: ddr_arb.v's port e)
+    output            e_valid,
+    output            e_wr,
+    output     [24:0] e_line,
+    output     [255:0] e_data,
+    input             e_ack,
+    input             e_rvalid,
+    input      [255:0] rd_data,
 
     output reg        w_we = 1'b0,
     output reg [2:0]  w_slot,
@@ -86,6 +95,7 @@ module lstream #(
         hold <= em - (sj > hr ? hr : sj) > 10'd2;
     reg        r_v = 1'b0, r_last = 1'b0;
     reg [9:0]  r_x, r_j;
+    wire       h_busy;
     reg [7:0]  r_y, r_c;
     always @(posedge clk) begin
         r_v <= 1'b0;
@@ -97,7 +107,7 @@ module lstream #(
             run <= 1'b0;
             prime <= 1'b0;
         end else if (!run && !prime) begin
-            if (have && gap == 6'd0) begin
+            if (have && gap == 6'd0 && !h_busy) begin
                 prime <= 1'b1;
                 pw <= 2'd0;
                 ra <= 9'd0;
@@ -142,9 +152,19 @@ module lstream #(
     wire       o_v, o_last;
     wire [9:0] o_x, o_j;
     wire [7:0] o_y, o_c;
+    wire [2:0] keep = aa_en ? aa_keep : 3'd0;
+    wire [9:0] hq_x, hq_l, hg_e;
+    wire [10:0] hg_x;
+    wire [1:0] p_e;
+    wire       hg_v, hg_el, hg_et;
     smaa #(.W(W), .N(FL - 4)) u_aa (.clk(clk), .h(hr), .en(aa_en), .dbg(aa_dbg), .diag(aa_diag), .corner(aa_corner), .thr(aa_thr), .i_v(r_v), .i_x(r_x), .i_j(r_j),
                                          .i_last(r_last), .i_y(r_y), .i_c(r_c), .o_v(o_v), .o_x(o_x), .o_j(o_j),
-                                         .o_last(o_last), .o_y(o_y), .o_c(o_c));
+                                         .o_last(o_last), .o_y(o_y), .o_c(o_c), .keep(keep), .hq_x(hq_x), .hq_l(hq_l),
+                                         .p_e(p_e), .hg_v(hg_v), .hg_x(hg_x), .hg_e(hg_e), .hg_el(hg_el), .hg_et(hg_et));
+    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fstart), .skip(skip), .h(hr), .r_x(hq_x), .r_l(hq_l),
+                               .p_e(p_e), .busy(h_busy), .g_v(hg_v), .g_x(hg_x), .g_e(hg_e), .g_el(hg_el), .g_et(hg_et),
+                               .e_valid(e_valid), .e_wr(e_wr), .e_line(e_line), .e_data(e_data), .e_ack(e_ack),
+                               .e_rvalid(e_rvalid), .rd_data(rd_data));
 
     // 4:4:4: the pixel two before the one coming in (and two clocks more at a line's end)
     reg [15:0] u0, u1, u2;

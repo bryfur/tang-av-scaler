@@ -71,6 +71,7 @@ module bicu #(
     output reg [15:0]  under = 16'd0    // rows begun before their lines were made (counted: there should be none)
 ) /* synthesis syn_srlstyle = "registers" */;      // (the short delays here are registers, not block RAM)
     localparam LAT = 26;
+    reg on_q = 1'b0;
     assign last = H - 1;
 
     // the kernel: 32 places, four weights (256ths, signed 10 bits; 9:0 the pixel before the place's,
@@ -323,7 +324,11 @@ module bicu #(
             ev_gap <= 5'd31;
         end
         // (a row's first pixel: its lines must be there)
-        if (de && x == 13'd0 && (!f_ok || n_done < $signed({1'b0, need})) && under != 16'hFFFF)
+        // (counted while the network is the picture shown, from when it is made so)
+        on_q <= on;
+        if (on && !on_q)
+            under <= 16'd0;
+        else if (on && de && x == 13'd0 && (!f_ok || n_done < $signed({1'b0, need})) && under != 16'hFFFF)
             under <= under + 16'd1;
     end
 

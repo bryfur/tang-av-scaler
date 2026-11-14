@@ -31,8 +31,15 @@ NH = 15             # ... and along a line, left and right (31: rtl/smaa.v NH 31
 T = 20              # the luma step that is an edge (of 255)
 
 
-def edges(y, w, h, thr=T):
-    """[row][col] -> (left edge, top edge)"""
+def edges(y, w, h, thr=T, prev=None, keep=0):
+    """[row][col] -> (left edge, top edge).
+
+    prev, keep: the edges of the frame before (the same form) and a number of levels: an edge that
+    was there is kept keep levels more easily, one that was not needs keep levels more (the
+    threshold, and twice the step against the steps round it).  A picture that stands still has
+    noise, and without this some of its edges come and go from frame to frame, each taking the
+    smoothing of a whole stretch of edge with it (measured on the board's own frames, 2026-11-14:
+    4.4 % of a still picture's edge pixels change from one frame to the next; with keep 4, none)."""
     Y = lambda x, r: y[min(max(r, 0), h - 1)][min(max(x, 0), w - 1)]
     out = []
     for r in range(h):
@@ -40,12 +47,15 @@ def edges(y, w, h, thr=T):
         for x in range(w):
             c = Y(x, r)
             dl, dt = abs(c - Y(x - 1, r)), abs(c - Y(x, r - 1))
-            el, et = dl >= thr and x > 0, dt >= thr and r > 0
+            kl = kt = 0
+            if keep:
+                pl, pt = prev[r][x] if prev is not None else (0, 0)
+                kl, kt = (keep if pl else -keep), (keep if pt else -keep)
+            el, et = dl + kl >= thr and dl > 0 and x > 0, dt + kt >= thr and dt > 0 and r > 0
             if el or et:
-                mx = max(dl, dt, abs(c - Y(x + 1, r)), abs(c - Y(x, r + 1)),
-                         abs(Y(x - 1, r) - Y(x - 2, r)), abs(Y(x, r - 1) - Y(x, r - 2)))
-                el = el and 2 * dl >= mx
-                et = et and 2 * dt >= mx
+                o = max(abs(c - Y(x + 1, r)), abs(c - Y(x, r + 1)), abs(Y(x - 1, r) - Y(x - 2, r)), abs(Y(x, r - 1) - Y(x, r - 2)))
+                el = el and 2 * dl + kl >= max(dt, o)
+                et = et and 2 * dt + kt >= max(dl, o)
             line.append((int(el), int(et)))
         out.append(line)
     return out
@@ -332,14 +342,19 @@ def blend(pix, wts, w, h):
     return out
 
 
-def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False, nh=NH):
+def smaa_words(lines, thr=T, n=N, dbg=False, diag=False, corner=False, nh=NH, hist=None):
     """rtl/smaa.v: the picture as lines of 4:2:2 words (cb, y0, cr, y1) -> the same: luma mixed as
     blend() does; a chroma sample mixed only with the one above or below it (a pixel carries one:
-    Cb the even pixels, Cr the odd)"""
+    Cb the even pixels, Cr the odd).  hist: {"keep": levels, "prev": the frame before's edges or None}:
+    edges(prev, keep); its "new" is set to this frame's edges (the next one's prev)"""
     h, w = len(lines), 2 * len(lines[0])
     y = [[v for wd in line for v in (wd[1], wd[3])] for line in lines]
     c = [[v for wd in line for v in (wd[0], wd[2])] for line in lines]
-    e = edges(y, w, h, thr)
+    if hist and hist.get("keep"):
+        e = edges(y, w, h, thr, hist.get("prev"), hist["keep"])
+        hist["new"] = e
+    else:
+        e = edges(y, w, h, thr)
     wts = weights(e, w, h, n, diag, corner, nh, y, thr)
     W = lambda x, r: wts[r][x] if 0 <= x < w and 0 <= r < h else (0, 0, 0, 0)
     mix = lambda a, b, k: a + (((b - a) * k + 128) >> 8)

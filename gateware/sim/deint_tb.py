@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mvdbg] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE] [net[=MODEL.json]]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mvdbg] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [keep=N] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE] [net[=MODEL.json]]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
@@ -50,6 +50,10 @@ def main():
     dbg = "aadbg" in args
     diag = "diag" in args
     corner = "corner" in args
+    # keep=N: the edges of the frame before count (rtl/smaa_hist.v): the frame compared follows one of the same
+    # fields; keep=N,rand: the first frame, the memory's bits any (the model is given what the design read)
+    keeps = next((a[5:] for a in args if a.startswith("keep=")), "0").split(",")
+    keep, hrand = int(keeps[0]), "rand" in keeps
     crop = next((tuple(int(v) for v in a[5:].split(",")) for a in args if a.startswith("crop=")), ())
     nr = int(next((a[3:] for a in args if a.startswith("nr=")), 0))
     dn = "dn" in args
@@ -98,6 +102,8 @@ def main():
         tag += "_v"
     if net:
         tag += "_n"
+    if keep:
+        tag += "_k%d%s" % (keep, "r" if hrand else "")
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 90
     import fsr
@@ -135,11 +141,13 @@ module tb;
                     .eof_lines(lines), .freeze(1'b0), .pclk(pclk), .a_valid(ca_valid), .a_line(ca_line),
                     .a_data(ca_data), .a_ack(ca_ack), .latest(latest), .par(par), .nfields(fn), .flines(flines), .prog(f_prog), .prog_slot(f_pslot));
     wire cmd_ready, cmd_en, wr_en, rd_valid; wire [2:0] cmd; wire [28:0] addr; wire [255:0] wr_data;
+    wire he_valid, he_wr, he_ack, he_rvalid; wire [24:0] he_line; wire [255:0] he_data;
     ddr_arb u_arb (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),
                    .wr_data_en(wr_en), .rd_data_valid(rd_valid),
                    .a_valid(ca_valid), .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .c_valid(1'b0), .c_wr(1'b0), .c_line(25'd0), .c_data(256'd0), .c_ack(), .c_rvalid(),
+                   .e_valid(he_valid), .e_wr(he_wr), .e_line(he_line), .e_data(he_data), .e_ack(he_ack), .e_rvalid(he_rvalid),
                    .d_valid(1'b0), .d_wr(1'b0), .d_line(25'd0), .d_data(256'd0), .d_mask(32'd0), .d_ack(), .d_rvalid(),
                    .wr_mask());
     ddr_model u_ddr (.clk(pclk), .cmd_ready(cmd_ready), .cmd(cmd), .cmd_en(cmd_en), .addr(addr), .wr_data(wr_data),
@@ -155,9 +163,25 @@ module tb;
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
     lstream u_ls (.clk(pclk), .fstart(fstart), .emitted(emitted), .goal(s_goal), .skip(10'd%(skip)d), .hold(hold), .aa_en(1'b%(aa_en)d), .aa_dbg(1'b%(aa_dbg)d), .aa_diag(1'b%(aa_diag)d), .aa_corner(1'b%(aa_corner)d),
-                  .aa_thr(8'd%(aa_thr)d), .r_we(r_we), .r_slot_d(sd[1:0]),
+                  .aa_thr(8'd%(aa_thr)d), .aa_keep(3'd%(keep)d), .e_valid(he_valid), .e_wr(he_wr), .e_line(he_line), .e_data(he_data),
+                  .e_ack(he_ack), .e_rvalid(he_rvalid), .rd_data(rd_q), .r_we(r_we), .r_slot_d(sd[1:0]),
                   .r_slot_i(si[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(wd_d), .r_wd_i(wd_i), .w_we(w_we), .w_slot(w_slot),
                   .w_x(w_x), .w_d(w_d));
+    // the edges' memory (smaa_hist.v): each of its lines read and written, with the count of frames begun
+    // (hf_ring: the frame the ring's first words in the dump are of)
+    integer hf, hf_n = 0, hf_ring = -1, h_slow = 0;
+    initial hf = $fopen("%(work)s/%(tag)s_hist.txt", "w");
+    integer hi, hj;
+    initial if (%(hrand)d) for (hi = 0; hi < 480; hi = hi + 1) for (hj = 120; hj < 126; hj = hj + 1)
+        u_ddr.mem[hi * 128 + hj] = {$random, $random, $random, $random, $random, $random, $random, $random};
+    always @(posedge pclk) begin
+        if (fstart) hf_n <= hf_n + 1;
+        if (w_we && dumping && hf_ring < 0) begin hf_ring <= hf_n; $display("hist: the dump's frame is %%0d", hf_n); end
+        if (he_valid && he_ack && he_wr) $fwrite(hf, "W %%0d %%0d %%h\\n", hf_n, he_line, he_data);
+        if (he_rvalid) $fwrite(hf, "R %%0d %%0d %%h\\n", hf_n, he_line, rd_q);
+        if (u_ls.h_busy && u_ls.have && u_ls.gap == 0 && !u_ls.run && !u_ls.prime) h_slow <= h_slow + 1;
+    end
+    final if (%(keep)d) $display("hist: %%0d clocks a line waited for the edges' memory", h_slow);
     wire de, hs, vs, pre, gb, ucc; wire [7:0] pr, pg, pb, r, g, b; wire [12:0] ox; wire [11:0] oy;
     pattern u_pat (.clk(clk), .ce(1'b1), .hd(1'b0), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
                    .ox(ox), .oy(oy));
@@ -286,6 +310,8 @@ module tb;
         // (the network: a frame that follows one of its own, as every frame on the board does: its lines
         // are begun before the frame before is over)
         if (NET && !%(ll_on)d) begin @(negedge ev_first); @(posedge ev_first); end
+        // (keep: a frame that has one before it with the same fields: the edges it wrote are read)
+        if (%(keep)d != 0 && !%(ll_on)d && !%(hrand)d) begin @(negedge ev_first); @(posedge ev_first); end
         if (%(ll_on)d) $display("as the frame begins: %%0d lines of the field in slot %%0d are in (latest %%0d)", f_prog, f_pslot, latest);
         dumping = 1;
         under0 = n_under;
@@ -304,12 +330,12 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, net_on=1 if net else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, keep=keep, hrand=1 if hrand else 0, net_on=1 if net else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     if tab:
         open(os.path.join(WORK, tag + "_tab.hex"), "w").write("".join("%08x\n" % v for v in model.table_words(tab)))
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint_edi.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "cnn.v", "bicu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint_edi.v", "deint.v", "lstream.v", "smaa.v", "smaa_hist.v", "easu.v", "cnn.v", "bicu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
     cnn_inc = os.path.join(WORK, tag + "_inc")
@@ -349,10 +375,46 @@ endmodule
             gap = 0
         else:
             gap += 1
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab, mvdbg, net)
+    # keep: the edges of the frame before as the design read them from its memory (its lines of the
+    # dump's frame; a line six words, a pixel two bits: {top, left}); what it wrote must be this frame's
+    aa_hist = None
+    if keep and aa is not None:
+        fr = int(next(t for t in log.splitlines() if t.startswith("hist: the dump's frame is")).split()[-1])
+        rd, wr = {}, {}
+        for t in open(os.path.join(WORK, tag + "_hist.txt")):
+            k, n, ln, d = t.split()
+            if int(n) == fr:
+                (rd if k == "R" else wr)[int(ln)] = int(d, 16)
+        def bits(m):
+            out, miss = [], 0
+            for r in range(480 - skip):
+                v = 0
+                for i in range(6):
+                    ln = (skip + r) << 7 | 120 + i
+                    miss += ln not in m
+                    v |= m.get(ln, 0) << 256 * i
+                out.append([(v >> 2 * x & 1, v >> 2 * x + 1 & 1) for x in range(720)])
+            return out, miss
+        hprev, miss = bits(rd)
+        aa_hist = {"keep": keep, "prev": hprev}
+        print("hist: %d lines read (%d of the frame's missing), %d edges in them" % (len(rd), miss, sum(a + b for row in hprev for a, b in row)))
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip, mvdbg)
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip, mvdbg, aa_hist)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab, mvdbg, net, pix=pix)
+    if aa_hist:
+        hnew, miss = bits(wr)
+        # (the lines written: with a part shown the stream stops below it, and its last lines' edges are of whatever follows)
+        rows = [r for r in range(480 - skip) if all(((skip + r) << 7 | 120 + i) in wr for i in range(6))]
+        if crop:
+            rows = [r for r in rows if skip + r < min(480, crop[2] + crop[3] + 4) - 1]
+        badr = [r for r in rows if any(a != tuple(b) for a, b in zip(hnew[r], aa_hist["new"][r]))]
+        bad = sum(a != tuple(b) for r in rows for a, b in zip(hnew[r], aa_hist["new"][r]))
+        if badr:
+            print("hist: rows not the model's: %s" % badr[:20])
+        print("hist: %d lines written (%d of the frame's missing), %d edges, %d pixels' not the model's; %d pixels' edges other than the frame before's"
+              % (len(wr), miss, sum(a + b for row in hnew for a, b in row), bad,
+                 sum(tuple(a) != tuple(b) for ra, rb_ in zip(hprev, aa_hist["new"]) for a, b in zip(ra, rb_))))
     ana = [None] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], 720, 480 - skip)
     line, prev, rb = skip - 1, None, 0
     for t in open(os.path.join(WORK, tag + "_ring.txt")):

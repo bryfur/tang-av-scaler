@@ -1,7 +1,8 @@
 // ddr_arb.v: the DDR3 controller's one port (rtl/ddr3/ddr3_top.v: Gowin's DDR3 interface's, a line
-// of 256 bits a command) shared by four users, on its user clock:
+// of 256 bits a command) shared by five users, on its user clock:
 //   a   writes (the capture): first
 //   b   reads (the picture)
+//   e   reads and writes (the anti-aliasing's edges of the frame before: smaa_hist.v)
 //   c   reads and writes (the host's monitor)
 //   d   reads and writes, a write's bytes by a mask (the CPU's data memory: rtl/cpu_ddr.v): last
 // A user holds valid, its line's number and data until ack (a clock: the command was taken the
@@ -33,6 +34,13 @@ module ddr_arb (
     output             b_ack,
     output             b_rvalid,
 
+    input              e_valid,
+    input              e_wr,
+    input       [24:0] e_line,
+    input      [255:0] e_data,
+    output             e_ack,
+    output             e_rvalid,
+
     input              c_valid,
     input              c_wr,
     input       [24:0] c_line,
@@ -61,18 +69,20 @@ module ddr_arb (
     wire free = !h_v && !cmd_en;
     wire a_take = free && a_valid;
     wire b_take = free && !a_valid && b_valid;
-    wire c_take = free && !a_valid && !b_valid && c_valid;
-    wire d_take = free && !a_valid && !b_valid && !c_valid && d_valid;
-    reg  a_ack_r = 1'b0, b_ack_r = 1'b0, c_ack_r = 1'b0, d_ack_r = 1'b0;
+    wire e_take = free && !a_valid && !b_valid && e_valid;
+    wire c_take = free && !a_valid && !b_valid && !e_valid && c_valid;
+    wire d_take = free && !a_valid && !b_valid && !e_valid && !c_valid && d_valid;
+    reg  a_ack_r = 1'b0, b_ack_r = 1'b0, c_ack_r = 1'b0, d_ack_r = 1'b0, e_ack_r = 1'b0;
+    assign e_ack = e_ack_r;
     assign a_ack = a_ack_r;
     assign b_ack = b_ack_r;
     assign c_ack = c_ack_r;
     assign d_ack = d_ack_r;
 
     // whose each read in flight is
-    reg [63:0] who, who_d;
+    reg [63:0] who, who_d, who_e;
     reg [5:0]  wp = 6'd0, rp = 6'd0;
-    reg        rv = 1'b0, rv_b = 1'b0, rv_c = 1'b0, rv_d = 1'b0;    // (whose the word is: registers: what they gate is wide)
+    reg        rv = 1'b0, rv_b = 1'b0, rv_c = 1'b0, rv_d = 1'b0, rv_e = 1'b0;   // (whose the word is: registers: what they gate is wide)
     wire [5:0] rp_n = rv ? rp + 6'd1 : rp;
     always @(posedge clk) begin
         cmd_en <= 1'b0;
@@ -81,26 +91,29 @@ module ddr_arb (
         b_ack_r <= b_take;
         c_ack_r <= c_take;
         d_ack_r <= d_take;
+        e_ack_r <= e_take;
         if (h_v && cmd_ready) begin
             cmd_en <= 1'b1;
             wr_data_en <= h_wr;
             h_v <= 1'b0;
         end
         // (not in the clock the command goes out in: cmd_en is up then, and h_v already down)
-        if (a_take || b_take || c_take || d_take) begin
+        if (a_take || b_take || c_take || d_take || e_take) begin
             h_v <= 1'b1;
-            h_wr <= a_take || (c_take && c_wr) || (d_take && d_wr);
-            h_line <= a_take ? a_line : b_take ? b_line : c_take ? c_line : d_line;
-            h_data <= a_take ? a_data : c_take ? c_data : d_data;
+            h_wr <= a_take || (c_take && c_wr) || (d_take && d_wr) || (e_take && e_wr);
+            h_line <= a_take ? a_line : b_take ? b_line : e_take ? e_line : c_take ? c_line : d_line;
+            h_data <= a_take ? a_data : e_take ? e_data : c_take ? c_data : d_data;
             h_mask <= d_take ? d_mask : 32'd0;
         end
-        if (b_take || (c_take && !c_wr) || (d_take && !d_wr)) begin
+        if (b_take || (c_take && !c_wr) || (d_take && !d_wr) || (e_take && !e_wr)) begin
             who[wp] <= c_take;
             who_d[wp] <= d_take;
+            who_e[wp] <= e_take;
             wp <= wp + 6'd1;
         end
         rv <= rd_data_valid;
-        rv_b <= rd_data_valid && !who[rp_n] && !who_d[rp_n];
+        rv_b <= rd_data_valid && !who[rp_n] && !who_d[rp_n] && !who_e[rp_n];
+        rv_e <= rd_data_valid && who_e[rp_n];
         rv_c <= rd_data_valid && who[rp_n];
         rv_d <= rd_data_valid && who_d[rp_n];
         if (rv)
@@ -109,4 +122,5 @@ module ddr_arb (
     assign b_rvalid = rv_b;
     assign c_rvalid = rv_c;
     assign d_rvalid = rv_d;
+    assign e_rvalid = rv_e;
 endmodule

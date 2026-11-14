@@ -170,6 +170,10 @@ void osd_update(void)
             str("  diagonals");
         if (s->aa_corner)
             str("  corners");
+        if (s->aa_keep) {
+            str("  keep ");
+            num(s->aa_keep, 1);
+        }
     } else
         str("off");
 

@@ -456,16 +456,17 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False, edi=False, mv=None, mc=False, first=0, skip=0, mvdbg=False):
+              prog=False, edi=False, mv=None, mc=False, first=0, skip=0, mvdbg=False, aa_hist=None):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
-    in is progressive (each of fields a whole frame): the newest as it is"""
+    in is progressive (each of fields a whole frame): the newest as it is; aa_hist: the edges of the
+    frame before count (smaa.smaa_words() hist; rtl/smaa_hist.v)"""
     lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first, mvdbg=mvdbg)
     # (skip: the lines before it are not made: what follows takes the rest as the whole picture;
     # here they are black)
     lines = lines[skip:]
     if smaa_thr is not None:
         import smaa
-        lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner)
+        lines = smaa.smaa_words(lines, smaa_thr, dbg=smaa_dbg, diag=smaa_diag, corner=smaa_corner, hist=aa_hist)
     return [[(16, 128, 128)] * (2 * len(lines[0]))] * skip + [upsample(line) for line in lines]
 
 
@@ -630,12 +631,14 @@ def scale_net(pix, skip, net, g):
 
 
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None, mvdbg=False, net=None):
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None, mvdbg=False, net=None,
+               aa_hist=None, pix=None):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch);
     tab: the scaler's table (fsr.table()'s form: table_load()), else FSR's; net: the network in the
-    scaler's place (net_load(): scale_net())"""
+    scaler's place (net_load(): scale_net()); pix: frame_480()'s, if the caller has them"""
     import fsr
-    pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip, mvdbg)
+    if pix is None:
+        pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip, mvdbg, aa_hist)
     w, h = len(pix[0]), len(pix)
     ana = [[(0, 0, 0)] * w] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], w, h - skip)
     if net:
