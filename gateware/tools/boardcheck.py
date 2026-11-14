@@ -65,8 +65,8 @@ def main():
         v = api()
         t = v["tab"]
     slot = max(t["slot"], 0)
-    tabfile = os.environ.get("TABLE") or {0: None, 1: os.path.join(HERE, "../tables/learnt-plain.tab"),
-                                         2: os.path.join(HERE, "../tables/learnt-aa12.tab")}.get(slot, "")
+    tabfile = os.environ.get("TABLE") or {0: None, 1: os.path.join(HERE, "../tables/learnt-11games.tab"),
+                                         2: os.path.join(HERE, "../tables/learnt-11games-aa12.tab")}.get(slot, "")
     if tabfile == "":
         sys.exit("boardcheck: the scaler has the table in slot %d (%s): TABLE=its file" % (slot, t["names"][slot]))
     tab = model.table_load(tabfile) if tabfile else None

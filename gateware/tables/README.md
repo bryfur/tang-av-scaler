@@ -12,7 +12,7 @@ chooses it.
 | Setting `table` | The scaler has |
 |---|---|
 | 0 | FSR's (the design's own) |
-| 1 | a learnt pair: `learnt-plain` with the anti-aliasing off, `learnt-aa12` with it on (it follows the switch) |
+| 1 | a learnt pair: `learnt-11games` with the anti-aliasing off, `learnt-11games-aa12` with it on (it follows the switch) |
 | 2 to 6 | a table sent to the board (slots 3 to 7) |
 
 A change takes about 0.2 s. Entries are written whole and only in the picture's blanking, so the
@@ -21,12 +21,13 @@ CPU reads the RAM back and compares (the status says how many entries differ: no
 
 ## The files here
 
-`learnt-plain.tab`, `learnt-aa12.tab`: FSR's table refitted to the truth: least squares on pairs of
-pictures of one game (480i as the console sends it, and the same frames rendered by an emulator at
-the output's size), for the path with the anti-aliasing off and with SMAA at threshold 12. On that
-game they score about 0.4 dB above FSR's table ([docs/deinterlace-research.md](../docs/deinterlace-research.md),
-"Emulator truth"). Options to look at, not the default. The link's firmware carries both and gives
-them to the CPU at each start.
+`learnt-11games.tab`, `learnt-11games-aa12.tab`: FSR's table refitted to the truth by least squares, on
+pairs of pictures from eleven games (the console's frame through a model of the capture path, and the
+same frame rendered by an emulator at 8 x), for the path with the anti-aliasing off and with SMAA at
+threshold 12. On games they were not fitted on they score about +0.2 to +0.4 dB over a plain bicubic
+stretch, where FSR's own table gives 0 to +0.05 ([docs/cnn-upscaler.md](../docs/cnn-upscaler.md)).
+Options to look at, not the default. The link's firmware carries both and gives them to the CPU at
+each start.
 
 ## A table file (.tab)
 

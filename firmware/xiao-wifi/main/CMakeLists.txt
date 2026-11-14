@@ -9,5 +9,5 @@ target_add_binary_data(${COMPONENT_LIB} "page.html" TEXT)
 # the scaler's CPU's program (gateware/sw: make): the link gives it to the CPU if the bitstream's is older
 target_add_binary_data(${COMPONENT_LIB} "../../../gateware/sw/build/cpu.bin" BINARY)
 # the scaler's learnt tables (tables.c: the CPU is given them)
-target_add_binary_data(${COMPONENT_LIB} "../../../gateware/tables/learnt-plain.tab" BINARY)
-target_add_binary_data(${COMPONENT_LIB} "../../../gateware/tables/learnt-aa12.tab" BINARY)
+target_add_binary_data(${COMPONENT_LIB} "../../../gateware/tables/learnt-11games.tab" BINARY)
+target_add_binary_data(${COMPONENT_LIB} "../../../gateware/tables/learnt-11games-aa12.tab" BINARY)

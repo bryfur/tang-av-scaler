@@ -20,8 +20,8 @@
 
 static const char *TAG = "tables";
 
-extern const uint8_t plain_start[] asm("_binary_learnt_plain_tab_start");
-extern const uint8_t aa12_start[] asm("_binary_learnt_aa12_tab_start");
+extern const uint8_t plain_start[] asm("_binary_learnt_11games_tab_start");
+extern const uint8_t aa12_start[] asm("_binary_learnt_11games_aa12_tab_start");
 
 /* the flash after the two application slots (partitions.csv): a slot's table each TAB_STEP: a head
  * in the first sector, the words from the second */
@@ -69,6 +69,9 @@ void tables_start(void)
         if (held(s))
             ESP_LOGI(TAG, "slot %d: \"%s\"", s, kept[s].name);
     }
+    /* (the CPU may hold tables from a firmware before this one: each of ours is given once again) */
+    for (int s = 1; s < LINK_TABLES; s++)
+        resend[s] = held(s);
 }
 
 void tables_name(int slot, char *name)
@@ -77,9 +80,9 @@ void tables_name(int slot, char *name)
     if (slot == 0)
         strcpy(name, "FSR");
     else if (slot == 1)
-        strcpy(name, "learnt-plain");
+        strcpy(name, "learnt-11games");
     else if (slot == 2)
-        strcpy(name, "learnt-aa12");
+        strcpy(name, "learnt-11games-aa12");
     else if (slot < LINK_TABLES) {
         xSemaphoreTake(lock, portMAX_DELAY);
         if (held(slot))
