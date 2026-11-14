@@ -1,6 +1,6 @@
 # The picture's path with the network, as it runs on the board
 
-What is in the board's flash and running on 2026-11-14: the build, the stages a pixel goes through
+The tree's build as it runs on the board on 2026-11-15: the build, the stages a pixel goes through
 with the network as the scaler's first stage, the weights and where they live, how to change them,
 and how all of it is checked. The research behind the network (what was tried, what it gains, the
 arithmetic in full) is in [cnn-upscaler.md](cnn-upscaler.md); this note is the deployed state.
@@ -9,13 +9,12 @@ arithmetic in full) is in [cnn-upscaler.md](cnn-upscaler.md); this note is the d
 
 | | |
 |---|---|
-| Bitstream | build 1794673585 (`gowin/build.stamp`: place 3, route 1), in the SOM's flash since 2026-11-14: the FPGA starts with it by itself |
-| Timing | system clock 51.7 MHz (wanted 50), output clock 149.7 MHz (148.5), memory's user clock 102.5 MHz (100) |
-| Size | logic 42 %, registers 44 %, block RAM 288 of 340 (85 %), multiplier blocks 159 of 298 (54 %) of the GW5AST-138 |
+| Bitstream | build 1794698353 (`gowin/build.stamp`: place 3, route 1), loaded into the FPGA from a host and checked there. The SOM's flash still holds the build before it (1794673585: no storage of the board's own, the edge search still in) until this one is written to it |
+| Timing | system clock 65.3 MHz (wanted 50), output clock 157.5 MHz (148.5), memory's user clock 101.4 MHz (100); ten of ten builds of these sources meet their timing |
+| Size | logic 34 %, registers 35 %, block RAM 258 of 340 (76 %), multiplier blocks 159 of 298 (54 %) of the GW5AST-138 |
 | Network | `t8s` shape: three layers of 3 x 3, 1 -> 8 -> 8 -> 4 channels, luma only, 720 x 480 to 1440 x 960 |
-| Weights at power-on | `sim/cnn/t8s.json`, built into the bitstream |
-| Weights that can be loaded | `sim/cnn/t8s-s10k3.json` (refitted for the anti-aliasing with its edges kept), by `tools/net.py load`; in the FPGA's RAM only, gone when the FPGA loads again |
-| Scaler tables | in the link's firmware: `learnt-11games` and `learnt-11games-aa12` (the built-in pair); `learnt-11games-aa10k3` sent to slot 3. Not used while the network is on |
+| Weights at power-on | the ones the board keeps in its flash ([storage.md](storage.md)): `t8s-s10k3` (refitted for the anti-aliasing with its edges kept), given once by `tools/net.py load`. A board that keeps none has the bitstream's own, `sim/cnn/t8s.json` |
+| Scaler tables | kept by the board in its flash: `learnt-11games` and `learnt-11games-aa12` (the pair the link's firmware carries) and `learnt-11games-aa10k3` in slot 3. Not used while the network is on |
 | Settings it runs with | network on, SMAA on (diagonals, corners, edges kept: keep 3), noise reduction 2, sharpening 8, low latency and frame lock on |
 
 ## The path
@@ -25,7 +24,7 @@ console, 480i YPbPr
   -> ADV7181D, 13.5 MHz line-locked                                   [decoder's clock]
   -> vcap.v, cap_ddr.v: fields into the DDR3 (eight kept)
   -> deint.v: 720 x 480 progressive from the last four fields         [memory's clock, 100 MHz]
-       motion adaptive; motion compensated by a vector a block; along edges
+       motion adaptive; motion compensated by a vector a block
        noise reduction where the picture is still
   -> lstream.v: whole lines in order
   -> smaa.v + smaa_hist.v: SMAA 1x, the edges of the frame before kept in the DDR3
@@ -122,15 +121,16 @@ every start (`net.py try`: not kept; `net.py drop`: back to the bitstream's own)
 - **The board**: `tools/boardcheck.py` freezes the picture, reads the fields and SMAA's kept edges
   out of the board's memory, reads rows of the output back, and compares them with the model's
   frame from those fields and the board's settings (`NET=MODEL.json` for loaded weights). The
-  flashed build passes in the deinterlacing modes 0, 8, 4 and 12 with the network, and in mode 0
-  with the kernel; with `t8s-s10k3` loaded in modes 0 and 8.
+  build passes in the deinterlacing modes 0 and 8 with the network (the board's kept weights) and
+  with the kernel, the frame's first rows among those compared.
 - **A new build** is screened on the board before it is kept: the memory's calibration and test
   (`tools/ddr.py test`), frames still coming once the tables are in, then `boardcheck.py`. Two
-  builds of the network that met timing failed there, so this is not skipped.
+  earlier builds of the network that met timing failed there, so this is not skipped.
 
 ## What is not done
 
 - One shape only. `f16s` (+0.05 dB) is not built.
 - How the network's picture does in motion has not been measured: the scores are on single frames.
-- Block RAM is at 85 % and only one of the three builds that finished met timing: there is little
-  room for more beside it without making room first.
+- With the kernel in the network's place, low latency, a part of the picture shown and motion
+  compensation together, a frame's first lines have no time to spare (the kernel's path does not
+  begin a frame's lines early as `bicu.v` does): to be given the same.

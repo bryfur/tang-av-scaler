@@ -274,8 +274,11 @@ def main():
     a = sys.argv[1:]
     if a[0] == "table":
         tab = table()
-        # four files, three weights each (rtl/easu.v's four ROMs): OUT0.hex ... OUT3.hex
-        fs = [open("%s%d.hex" % (a[1][:-4] if a[1].endswith(".hex") else a[1], k), "w") for k in range(4)]
+        # four files, three weights each (the table's four quarters): OUT0.hex ... OUT3.hex; and a file
+        # a weight, as rtl/easu.v's RAMs take them: OUT0_0.hex ... OUT3_2.hex
+        base = a[1][:-4] if a[1].endswith(".hex") else a[1]
+        fs = [open("%s%d.hex" % (base, k), "w") for k in range(4)]
+        fw = [open("%s%d_%d.hex" % (base, k // 3, k % 3), "w") for k in range(12)]
         for py in range(NPY // 2):
             for px in range(NPX):
                 for ang in range(NANG):
@@ -283,7 +286,9 @@ def main():
                         q = tab.get((py, px, ang, li), [0] * 12)
                         for k in range(4):
                             fs[k].write("%08x\n" % sum((v & 0x3FF) << 10 * j for j, v in enumerate(q[3 * k:3 * k + 3])))
-        for f in fs:
+                        for k in range(12):
+                            fw[k].write("%03x\n" % (q[k] & 0x3FF))
+        for f in fs + fw:
             f.close()
         lo = min(min(q) for q in tab.values())
         hi = max(max(q) for q in tab.values())

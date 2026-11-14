@@ -71,7 +71,7 @@ module bicu #(
     output reg [15:0]  under = 16'd0    // rows begun before their lines were made (counted: there should be none)
 ) /* synthesis syn_srlstyle = "registers" */;      // (the short delays here are registers, not block RAM)
     localparam LAT = 26;
-    reg on_q = 1'b0;
+    reg on_q = 1'b0, u_x0 = 1'b0, u_late = 1'b0;
     assign last = H - 1;
 
     // the kernel: 32 places, four weights (256ths, signed 10 bits; 9:0 the pixel before the place's,
@@ -328,8 +328,12 @@ module bicu #(
         on_q <= on;
         if (on && !on_q)
             under <= 16'd0;
-        else if (on && de && x == 13'd0 && (!f_ok || n_done < $signed({1'b0, need})) && under != 16'hFFFF)
+        else if (on && u_x0 && u_late && under != 16'hFFFF)
             under <= under + 16'd1;
+        // (a row's first pixel, and its lines not there: a clock before they are counted: registers,
+        // so the count is no part of the raster's own paths)
+        u_x0 <= de && x == 13'd0;
+        u_late <= !f_ok || n_done < $signed({1'b0, need});
     end
 
     // ---- the place across (as easu.v's xq: the pixel's now at x), kept as what is wanted of it: ----

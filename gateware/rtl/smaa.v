@@ -55,6 +55,52 @@ module smaa_rom #(
     end
 endmodule
 
+// the same read at two places at once (two of the searches use one table): one set of block RAMs,
+// their two ports.  The synthesis makes two ROMs of this, so for the build the block RAMs are
+// named: the included file is sim/smaa.py dpb's (DIAG: the diagonals' table, else the plain one's).
+// The data two clocks after the address.
+module smaa_rom2 #(
+    parameter FILE = "",
+    parameter DIAG = 0
+) (
+    input             clk,
+    input      [11:0] a,
+    input      [11:0] b,
+    output reg [15:0] qa,
+    output reg [15:0] qb
+);
+`ifdef AVB_GOWIN
+    wire [15:0] xa, xb;
+    generate
+        if (DIAG) begin : g_d
+            wire [15:0] da, db;
+`include "smaad_dpb.vh"
+            assign xa = da;
+            assign xb = db;
+        end else begin : g_o
+            wire [15:0] da, db;
+`include "smaa_dpb.vh"
+            assign xa = da;
+            assign xb = db;
+        end
+    endgenerate
+    always @(posedge clk) begin
+        qa <= xa;
+        qb <= xb;
+    end
+`else
+    reg [15:0] mem [0:4095];
+    initial $readmemh(FILE, mem);
+    reg [15:0] a1, b1;
+    always @(posedge clk) begin
+        a1 <= mem[a];
+        b1 <= mem[b];
+        qa <= a1;
+        qb <= b1;
+    end
+`endif
+endmodule
+
 module smaa #(
     parameter W = 720,
     parameter N = 15,                   // the searches' reach up and down (the lines kept) ...
@@ -112,6 +158,8 @@ module smaa #(
         if (i_v) begin
             t_x <= {1'b0, i_x};
             t_j <= i_j;
+            if (i_x == 10'd0)
+                ws <= i_j == 10'd0 || ws == PL - 1 ? 5'd0 : ws + 5'd1;
             t_b <= 1'b0;
             t_y <= i_y;
             t_c <= i_c;
@@ -123,15 +171,32 @@ module smaa #(
         end
     end
 
-    // the pixels kept, 32 lines of them: for the mixing, N + 2 lines on
-    reg [15:0] pm [0:32767];
+    // the pixels kept, for the mixing, N + 2 lines on: PL = N + 3 lines of them (the one coming in to
+    // the one mixed: a block RAM a line, and no more of them than that), a line's place its number
+    // modulo PL: counted (ws) as the lines come, from 0 with a frame's first
+    // (a RAM a line, named so: of one memory of PL x 1024 the synthesis makes thirty-two blocks a bit
+    // wide, as of 32768 words)
+    localparam PL = N + 3;
+    reg [4:0]  ws = 5'd0;
     reg [14:0] p_ra;
-    reg [15:0] p_q;
-    always @(posedge clk) begin
-        if (t_v && !t_b)
-            pm[{t_j[4:0], t_x[9:0]}] <= {t_y, t_c};
-        p_q <= pm[p_ra];
-    end
+    wire [15:0] p_qs [0:PL - 1];
+    reg [4:0]  p_sl;
+    genvar gp;
+    generate
+        for (gp = 0; gp < PL; gp = gp + 1) begin : g_pm
+            reg [15:0] m [0:1023];
+            reg [15:0] q1;
+            always @(posedge clk) begin
+                if (t_v && !t_b && ws == gp)
+                    m[t_x[9:0]] <= {t_y, t_c};
+                q1 <= m[p_ra[9:0]];
+            end
+            assign p_qs[gp] = q1;
+        end
+    endgenerate
+    always @(posedge clk)
+        p_sl <= p_ra[14:10];
+    wire [15:0] p_q = p_qs[p_sl];
 
     // ---- edges ----
     // each column's luma of the three lines before
@@ -338,6 +403,7 @@ module smaa #(
             s_v <= w1_x >= M + 1 && w1_e >= 10'd16;
             s_x <= w1_x - (M + 1);
             s_r <= w1_e - 10'd16;
+            s_sl <= ws == PL - 1 ? 5'd0 : ws + 5'd1;    // (that line's place among the pixels kept: N + 2 lines before the one coming in)
             s_et <= hk[M][2];
             s_el <= hk[M][1];
             for (i = 0; i <= NH; i = i + 1) begin
@@ -422,6 +488,7 @@ module smaa #(
     reg        q_v = 1'b0, q_et, q_el, q2_v = 1'b0, q2_et, q2_el, q3_v = 1'b0, q3_et, q3_el;
     reg [10:0] q_x, q2_x, q3_x;
     reg [9:0]  q_r, q2_r, q3_r;
+    reg [4:0]  s_sl, q_sl, q2_sl, q3_sl, k_sl;
     reg [8:0]  fl, fr;                  // {the turn 4, the distance 5}
     reg [7:0]  fu, fd;
     // a diagonal search: {the line goes on past the eighth pixel, pixels before it stops (0-7)}
@@ -439,8 +506,7 @@ module smaa #(
     reg [3:0]  t_al, t_ar, t_bl, t_br, d1a, d2a, d1b, d2b;
     reg [1:0]  c1a, c2a, c1b, c2b;
     wire [15:0] ada, adb;
-    smaa_rom #(.FILE(`SMAA_DHEX)) u_da (.clk(clk), .a(fda), .q(ada));
-    smaa_rom #(.FILE(`SMAA_DHEX)) u_db (.clk(clk), .a(fdb), .q(adb));
+    smaa_rom2 #(.FILE(`SMAA_DHEX), .DIAG(1)) u_dab (.clk(clk), .a(fda), .b(fdb), .qa(ada), .qb(adb));
     reg [8:0]  dwr, dwg;
     wire [15:0] ah, av;                 // {above, below} of the top edge; {other side, own} of the left
     // (an end still crossing both ways with one turn at the other end: that turn's opposite, the
@@ -451,11 +517,12 @@ module smaa #(
     generate
         if (NH > 15) begin : g_h31
             smaa_rom #(.FILE(`SMAA_HHEX), .AW(14)) u_ah (.clk(clk), .a({zends(fr[6:5], fl[6:5]), fl[4:0], fr[4:0]}), .q(ah));
-        end else begin : g_h15
-            smaa_rom #(.FILE(`SMAA_HEX)) u_ah (.clk(clk), .a({zends(fr[6:5], fl[6:5]), fl[3:0], fr[3:0]}), .q(ah));
+            smaa_rom #(.FILE(`SMAA_HEX)) u_av (.clk(clk), .a({zends(fd[5:4], fu[5:4]), fu[3:0], fd[3:0]}), .q(av));
+        end else begin : g_h15          // (along a line and up and down by the same table: one, read twice)
+            smaa_rom2 #(.FILE(`SMAA_HEX)) u_ahv (.clk(clk), .a({zends(fr[6:5], fl[6:5]), fl[3:0], fr[3:0]}),
+                                               .b({zends(fd[5:4], fu[5:4]), fu[3:0], fd[3:0]}), .qa(ah), .qb(av));
         end
     endgenerate
-    smaa_rom #(.FILE(`SMAA_HEX)) u_av (.clk(clk), .a({zends(fd[5:4], fu[5:4]), fu[3:0], fd[3:0]}), .q(av));
     reg        k_v = 1'b0;
     reg [10:0] k_x;
     reg [9:0]  k_r;
@@ -465,6 +532,7 @@ module smaa #(
         q_v <= s_v;
         q_x <= s_x;
         q_r <= s_r;
+        q_sl <= s_sl;
         q_et <= s_et;
         q_el <= s_el;
         fl <= firsth(ls, lc);
@@ -499,11 +567,13 @@ module smaa #(
         {q3_v, q2_v} <= {q2_v, q_v};
         {q3_x, q2_x} <= {q2_x, q_x};
         {q3_r, q2_r} <= {q2_r, q_r};
+        {q3_sl, q2_sl} <= {q2_sl, q_sl};
         {q3_et, q2_et} <= {q2_et, q_et};
         {q3_el, q2_el} <= {q2_el, q_el};
         k_v <= q3_v;
         k_x <= q3_x;
         k_r <= q3_r;
+        k_sl <= q3_sl;
         k_e <= {q3_el, q3_et};
         k_wt <= q3_et ? rnd(ah[7:0], n3_ht) : 8'd0;         // the pixel takes this much of the one above
         k_wu <= q3_et ? rnd(ah[15:8], n3_hu) : 8'd0;        // the one above this much of it
@@ -535,7 +605,7 @@ module smaa #(
     reg [9:0]  b0_r, b1_r;
     reg [7:0]  b0_wt, b0_wu, b0_wl, b0_wo, b1_wt, b1_wu, b1_wl, b1_wo;
     reg [1:0]  b0_e, b1_e;
-    always @* p_ra = {k_r[4:0], k_x[9:0]};
+    always @* p_ra = {k_sl, k_x[9:0]};
     always @(posedge clk) begin
         c_r1 <= cm[k_x[9:0]];
         f_r1 <= fm[k_x[9:0]];

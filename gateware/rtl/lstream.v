@@ -78,9 +78,11 @@ module lstream #(
     // the stores is the same, skip being a multiple of 8)
     reg  [9:0] skf = 10'd0;             // (skip, as the frame was begun with)
     always @(posedge clk)
-        if (fstart)
+        if (fs1)
             skf <= skip;
-    wire [9:0] hr = H - skf;
+    reg  [9:0] hr = H;                  // (a register: skf changes with a frame's start only)
+    always @(posedge clk)
+        hr <= H - skf;
     wire [9:0] em = emitted - skf;
     reg        gok = 1'b0;              // (the goal counted from the first line made: registers)
     reg  [10:0] gl = 11'd0;
@@ -96,27 +98,25 @@ module lstream #(
     reg        r_v = 1'b0, r_last = 1'b0;
     reg [9:0]  r_x, r_j;
     wire       h_busy;
-    // (the edges' memory hears of a frame's start a clock later, from a register here: fstart comes
-    // a long way; no line is begun in that clock)
-    reg        fs1 = 1'b0;
-    always @(posedge clk)
+    // (a frame's start is taken a clock later, from a register here: fstart comes a long way.  A
+    // line begun in that clock is given up in the next: nothing of it has gone out)
+    reg        fs1 = 1'b0, fs2 = 1'b0;    // (fs2: for the edges' memory, which takes skf: a clock after it is set)
+    always @(posedge clk) begin
         fs1 <= fstart;
+        fs2 <= fs1;
+    end
     reg [7:0]  r_y, r_c;
     always @(posedge clk) begin
         r_v <= 1'b0;
         r_last <= 1'b0;
         if (gap != 6'd0)
             gap <= gap - 6'd1;
-        if (fstart) begin
+        if (fs1) begin
             sj <= 10'd0;
             run <= 1'b0;
             prime <= 1'b0;
         end else if (!run && !prime) begin
-`ifdef AVB_TRIAL_NOFS1
-            if (have && gap == 6'd0 && !h_busy) begin
-`else
-            if (have && gap == 6'd0 && !h_busy && !fs1) begin
-`endif
+            if (have && gap == 6'd0 && !h_busy && !fs2) begin
                 prime <= 1'b1;
                 pw <= 2'd0;
                 ra <= 9'd0;
@@ -170,11 +170,7 @@ module lstream #(
                                          .i_last(r_last), .i_y(r_y), .i_c(r_c), .o_v(o_v), .o_x(o_x), .o_j(o_j),
                                          .o_last(o_last), .o_y(o_y), .o_c(o_c), .keep(keep), .hq_x(hq_x), .hq_l(hq_l),
                                          .p_e(p_e), .hg_v(hg_v), .hg_x(hg_x), .hg_e(hg_e), .hg_el(hg_el), .hg_et(hg_et));
-`ifdef AVB_TRIAL_NOFS1
-    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fstart), .skip(skip), .h(hr),
-`else
-    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fs1), .skip(skf), .h(hr),
-`endif .r_x(hq_x), .r_l(hq_l),
+    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fs2), .skip(skf), .h(hr), .r_x(hq_x), .r_l(hq_l),
                                .p_e(p_e), .busy(h_busy), .g_v(hg_v), .g_x(hg_x), .g_e(hg_e), .g_el(hg_el), .g_et(hg_et),
                                .e_valid(e_valid), .e_wr(e_wr), .e_line(e_line), .e_data(e_data), .e_ack(e_ack),
                                .e_rvalid(e_rvalid), .rd_data(rd_data));

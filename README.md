@@ -20,8 +20,7 @@ console: component video (YPbPr, 480i) + stereo audio
 
 Status (2026-11-14): the board (rev C-B) is built and runs a console's picture and sound to a
 display and a capture device. The table below is what it does now, on the board. New since
-2026-11-12: motion compensated deinterlacing with vectors found in the FPGA, lines made along
-edges, a small neural network as the upscaler's first stage, scaler tables learnt from games and
+2026-11-12: motion compensated deinterlacing with vectors found in the FPGA, a small neural network as the upscaler's first stage, scaler tables learnt from games and
 changeable while the picture runs, and SMAA that holds its edges from frame to frame
 ([the path with the network, as deployed](gateware/docs/neural-pipeline.md)). The console it
 has been run with is a PlayStation 2; an Xbox or a GameCube with its component cable puts out the
@@ -54,7 +53,7 @@ stretched the plain way, then the scaler's output; the corner says which.
 | | |
 |---|---|
 | Input | 480i component (YPbPr) through an ADV7181D, sampled line-locked at 13.5 MHz; stereo analogue audio through a PCM1808. The decoder's sampling phase can be set, or tuned to the console's pixels (every phase tried on a still picture, the sharpest kept). |
-| Deinterlacing | Motion adaptive from the last four fields, kept in the SOM's DDR3: a field's lines as they are, the lines between from the field before where nothing moves and from their neighbours where something does. Two more steps can be switched on. Motion compensated: each block of 8 pixels of each line has its own motion vector, found in the FPGA line by line (six candidates a block, scored against the field two before); where the picture moves that way the line between is the field before's, moved, so a pan or a moving object keeps its full detail. Along edges: where a hard edge crosses the line (a polygon's side at a low angle), the lines taken from the neighbours follow it, up to 8 pixels either way, instead of going straight down; only where the edge is plain to see in four lines of the field and the pixels beside agree, so text and fine patterns are left as they are. Bob and weave can be chosen instead. The vectors can be shown in the picture's place (each block tinted by how it moves) to see what the motion compensation found. |
+| Deinterlacing | Motion adaptive from the last four fields, kept in the SOM's DDR3: a field's lines as they are, the lines between from the field before where nothing moves and from their neighbours where something does. One more step can be switched on. Motion compensated: each block of 8 pixels of each line has its own motion vector, found in the FPGA line by line (six candidates a block, scored against the field two before); where the picture moves that way the line between is the field before's, moved, so a pan or a moving object keeps its full detail. Bob and weave can be chosen instead. The vectors can be shown in the picture's place (each block tinted by how it moves) to see what the motion compensation found. |
 | Noise | Where the picture is still, each sample is averaged with the same one a frame earlier (off, or three strengths). |
 | Anti-aliasing | SMAA 1x on the 480-line picture: luma edges, the orthogonal and the diagonal patterns, corners kept; the edges of the frame before are kept in memory and held to, so a still picture's edges do not shimmer with its noise. A view that paints what it finds (edges, blends) in the picture's place, for tuning. |
 | Scaling | FSR 1's edge adaptive upsampling (EASU) to 1440 x 1080 (4:3) or 1920 x 1080 (16:9, for a game's widescreen mode). Any part of the source can be shown: the black border round a game's picture is measured and left out, so the picture fills the screen (or the part is set by hand). In its place a small neural network can make the picture twice the size first, with a plain bicubic stretch after it: three layers, under 1 kB of weights, 192 multipliers, trained on eleven games against the same frames rendered at 8 x; +0.54 dB over a bicubic stretch on games it never saw ([as deployed](gateware/docs/neural-pipeline.md), [the research](gateware/docs/cnn-upscaler.md)). Its weights can be changed while the picture runs. The kernel comes from a table that can be changed while the picture runs: FSR's own, a pair learnt from a game's pictures, or one you send to the board ([gateware/tables](gateware/tables/README.md)). |
@@ -112,7 +111,7 @@ The pictures themselves, in [`docs/compare/`](docs/compare/):
   program. What must outlast the power (settings, tables, weights) the board keeps itself, in the
   SOM's flash; the XIAO passes changes on and holds a copy.
 
-The design uses 42 % of the FPGA's logic, 85 % of its block RAM and 54 % of its multipliers (the
+The design uses 34 % of the FPGA's logic, 76 % of its block RAM and 54 % of its multipliers (the
 network's 192 are most of those).
 
 ## Measured on the board
@@ -134,7 +133,11 @@ network's 192 are most of those).
 - Inputs: 480i is the one in use; 720p goes out as it came, 720p; 480p is taken as the progressive
   picture it is and scaled like the rest, but only in simulation so far (not yet tried from a
   console); 576i and 1080i need the decoder's settings and the capture's timing for each.
-- The network: one shape is built; how it does in motion is not measured. The
+- The network: one shape is built; how it does in motion is not measured.
+- With the kernel scaler (not the network), low latency, a part of the picture shown and motion
+  compensation all at once, a frame's first lines are made with no time to spare: in simulation its
+  first one or two rows can come from lines not yet there. The network's path begins a frame's
+  lines early and has the room; the kernel's wants the same. The
   edges SMAA keeps are held by screen position, so they steady a still picture, not edges that
   move across it.
 - The surround decoding runs on the board (the CPU keeps up, nothing lost), but has not been

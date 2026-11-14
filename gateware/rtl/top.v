@@ -53,7 +53,6 @@
 //                    3 motion compensation (deint.v mc: with mode 0),
 //                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3),
 //                    6 a frame made from the field still coming in (deint.v ll: not while frozen),
-//                    7 the lines made where the picture moves go along its edges (deint.v edi),
 //                    20 the vectors shown (deint.v mvdbg: with 3): the picture grey, each block the
 //                    colour of its vector,
 //                    23:21 the anti-aliasing's edges of the frame before count (smaa_hist.v: 0 not, to
@@ -694,15 +693,9 @@ module top (
                                    .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack));
     // the SOM's flash (the board's storage: sw/store.c)
     wire [31:0]  fl_d, fl_s;
-`ifdef AVB_TRIAL_NOFLASH                 // (a trial build: the pins there, the port not)
-    assign fl_d = 32'd0;
-    assign fl_s = 32'd0;
-    assign {flash_cs_n, flash_sck, flash_mosi, flash_wp_n, flash_hold_n} = 5'b10011;
-`else
     sflash #(.A(8'h68)) u_flash (.clk(clk), .we(we), .addr(addr), .wdata(wdata), .q_d(fl_d), .q_s(fl_s),
                                  .f_cs_n(flash_cs_n), .f_sck(flash_sck), .f_mosi(flash_mosi), .f_miso(flash_miso),
                                  .f_wp_n(flash_wp_n), .f_hold_n(flash_hold_n));
-`endif
     // the network (cnn.v): on, and its weights' port
     reg          net_on = 1'b0;
     reg  [11:0]  net_a = 12'd0;
@@ -818,7 +811,7 @@ module top (
     end
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mvdbg(dcfg[20]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .mc(dcfg[3]), .mvdbg(dcfg[20]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
@@ -904,8 +897,8 @@ module top (
             assign l_ev = n_on ? b_ev : a_ev;
             assign l_first = n_on ? b_first : a_first;
             assign l_goal = n_on ? b_goal : a_goal;
-            pthru u_pt (.w_clk(pclk), .r_we(r_we), .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa),
-                        .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .hold(pt_hold), .goal(pt_goal), .clk(tx_clk),
+            pthru u_pt (.w_clk(pclk), .r_we(p_we), .r_slot_d(p_slot_d), .r_slot_i(p_slot_i), .r_wa(p_wa),
+                        .r_wd_d(p_wd_d), .r_wd_i(p_wd_i), .emitted(d_emitted), .hold(pt_hold), .goal(pt_goal), .clk(tx_clk),
                         .ce(pcev[10]), .swap(swap), .x(p_x), .y(p_y), .ev(pt_ev), .ev_first(pt_first), .rgb(pt_rgb));
             dline #(.W(25), .D(LAT_E)) u_dxy (.clk(tx_clk), .ce(1'b1), .d({p_x, p_y}), .q(e_xy));
             rcas u_rcas (.dn(dn), .wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),

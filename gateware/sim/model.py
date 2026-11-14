@@ -176,70 +176,6 @@ EDI_D, EDI_T1, EDI_E, EDI_SIDE = 8, 24, 60, 26
 EDI_ORDER = [d for k in range(1, EDI_D + 1) for d in (-k, k)]      # the offsets, as they are tried
 
 
-def edge_dirs(A, B, A2, B2):
-    """each made pixel's direction (rtl/deint_edi.v): d of -8 to 8: the line above (A) at x + d and
-    the line below (B) at x - d are the two ends of an edge through the pixel.  A direction is one
-    only where
-      - there is a step to bridge: |A[x] - B[x]| >= EDI_T1
-      - its two ends are alike over five columns: c = the sum over k of -2 to 2 of
-        |A[x + k + d] - B[x + k - d]| is under a third of straight down's (the same sum at d = 0)
-      - the edge goes on through the field's next lines out (A2 above A, B2 below B):
-        e = the sum over the five columns of |A2[x + k + 3 d] - A[x + k + d]| +
-        |B2[x + k - 3 d] - B[x + k - d]| is under EDI_E
-      - its own two pixels differ by a quarter of the step at most
-    The least 2 c + e + 2 |d| wins (the first of equals, in the order -1, 1, -2, 2, ...); none: 0.
-    Then the pixels beside must agree: a direction more than 1 from the median of the five about it
-    is dropped.  The EDI_SIDE pixels at each side: 0 (the search reaches that far)."""
-    w = len(A)
-    ds = [0] * w
-    for x in range(EDI_SIDE, w - EDI_SIDE):
-        v = abs(A[x] - B[x])
-        if v < EDI_T1:
-            continue
-        c0 = sum(abs(A[x + k] - B[x + k]) for k in range(-2, 3))
-        best = None
-        for d in EDI_ORDER:
-            if 4 * abs(A[x + d] - B[x - d]) > v:
-                continue
-            c = sum(abs(A[x + k + d] - B[x + k - d]) for k in range(-2, 3))
-            if 3 * c >= c0:
-                continue
-            e = sum(abs(A2[x + k + 3 * d] - A[x + k + d]) + abs(B2[x + k - 3 * d] - B[x + k - d]) for k in range(-2, 3))
-            if e >= EDI_E:
-                continue
-            sc = 2 * c + e + 2 * abs(d)
-            if best is None or sc < best[0]:
-                best = (sc, d)
-        if best:
-            ds[x] = best[1]
-    out = []
-    for x in range(w):
-        med = sorted(ds[min(max(x + j, 0), w - 1)] for j in (-2, -1, 0, 1, 2))[2]
-        out.append(ds[x] if abs(ds[x] - med) <= 1 else 0)
-    return out
-
-
-def edge_line(o, n, o2=None, n2=None):
-    """the line between o (above) and n (below) made along the picture's edges (rtl/deint.v edi;
-    o2, n2: the field's next lines out, above o and below n: without one, the nearer line itself):
-    each pixel the mean of the line above at x + d and the line below at x - d (edge_dirs()), held
-    between the pixels straight above and below.  The chroma goes the way of its pair's first
-    pixel, half as far (towards straight down).  -> the line's words"""
-    A, B = luma(o), luma(n)
-    ds = edge_dirs(A, B, luma(o2 if o2 is not None else o), luma(n2 if n2 is not None else n))
-    hold = lambda v, a, b: min(max(v, min(a, b)), max(a, b))
-    out = []
-    for q in range(len(A) // 2):
-        d0, d1 = ds[2 * q], ds[2 * q + 1]
-        dq = int(d0 / 2)                    # (towards 0)
-        y0 = hold(mean(A[2 * q + d0], B[2 * q - d0]), A[2 * q], B[2 * q])
-        y1 = hold(mean(A[2 * q + 1 + d1], B[2 * q + 1 - d1]), A[2 * q + 1], B[2 * q + 1])
-        cb = hold(mean(o[q + dq][0], n[q - dq][0]), o[q][0], n[q][0])
-        cr = hold(mean(o[q + dq][2], n[q - dq][2]), o[q][2], n[q][2])
-        out.append((cb, y0, cr, y1))
-    return out
-
-
 MC_HOLD = 12
 ME_UPS = [(1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (-2, 0), (3, 0), (-3, 0), (1, 1), (-1, -1), (4, 0), (-4, 0), (0, 2), (0, -2),
           (1, -1), (-1, 1)]
@@ -306,6 +242,8 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
     that is given each step's (k, vectors); mvdbg: the vectors' view (rtl/deint.v mvdbg): every
     word's chroma is its block's vector's colour (Cb 128 + 4 dx, Cr 128 + 16 dyr), grey in a line
     without vectors"""
+    if edi:
+        raise ValueError("the lines made along the picture's edges (edi) were taken out of the design on 2026-11-14")
     c, p1 = fields[-1], fields[-2]
     hist = (len(fields) >= 4 and pars[-2] != pars[-1] and pars[-3] == pars[-1] and pars[-4] != pars[-1])
     p2 = fields[-3] if len(fields) >= 3 else c
@@ -349,7 +287,6 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
             else:
                 al.append(min(16, max(0, md - thr)))
         line = []
-        bob = edge_line(c[old], c[new], c[old - 1] if old >= 1 else None, c[new + 1] if new + 1 < nl else None) if edi else None
         # the vectors' way: how far the picture is from itself two fields ago moved by the block's
         # (dx, dyr) (on old, on new, and the field before against the one three before, at the line
         # itself moved by half of it): as m; 255 (no use of it) where a line or a pixel of it is
@@ -402,7 +339,7 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
             o, n_, ww = c[old][q], c[new][q], p1[w][q]
             a0, a1 = al[2 * q], al[2 * q + 1]
             ac = max(a0, a1)
-            b = bob[q] if edi else (mean(o[0], n_[0]), mean(o[1], n_[1]), mean(o[2], n_[2]), mean(o[3], n_[3]))
+            b = (mean(o[0], n_[0]), mean(o[1], n_[1]), mean(o[2], n_[2]), mean(o[3], n_[3]))
             v0, v1 = av[2 * q], av[2 * q + 1]
             vc = max(v0, v1)
             if wv[q] is not None:

@@ -12,9 +12,11 @@
 //   wm   this frame's bits of the line decided now, and of the one before (written to the memory
 //        when its line is over)
 // smaa.v asks by the pixel's place three clocks before it wants the bits (r_x, r_l; p_e then), and
-// says each pixel's edges as it decides them (g_*).  busy: a line is being read or written, or is
-// to be: lstream.v begins no line then (so a line's bits are here before it is decided, and written
-// before its place is another's; a line's two take some 350 clocks when the memory is free).
+// says each pixel's edges as it decides them (g_*).  busy: lstream.v begins no line then: a line's
+// bits are being read or are to be (so they are here before it is decided), or a line waits to be
+// written while the one before it still is (so each is written before its place is another's).  A
+// line's read and the line before's write go on while a line passes (some 350 clocks of its 770
+// when the memory is free): the lines are not held up unless the memory is.
 
 module smaa_hist #(
     parameter W = 720
@@ -91,7 +93,12 @@ module smaa_hist #(
     reg [255:0] dw;
     wire [9:0] abs_l = skf + cur;
     assign e_line = {8'd0, abs_l, 4'b1111, wn};
-    assign busy = rd_pend || wr_pend || st != S_IDLE;
+    // (a line may begin while the line before's bits are still being written: they are read from the
+    // other half of wm.  Not while a line's bits are being read, or wait to be: they are for the line
+    // decided next; and not while a line waits to be written behind one still being: the next line
+    // decided would write over its half)
+    wire       reading = st == S_RREQ || st == S_RWAIT || st == S_RSTORE;
+    assign busy = rd_pend || reading || wr_pend;
     assign e_data = dw;
     always @(posedge clk) begin
         rm_we <= 1'b0;

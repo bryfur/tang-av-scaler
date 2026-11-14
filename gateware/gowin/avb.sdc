@@ -18,3 +18,22 @@ set_clock_groups -asynchronous -group [get_clocks {sys}] -group [get_clocks {cor
 set_max_delay -to [get_regs {u_ddr3/u_dp/rdat_q_*}] 5
 set_max_delay -to [get_regs {u_ddr3/u_dp/rv_q_*}] 5
 set_max_delay -from [get_regs {u_ddr3/u_dp/p_*}] 8
+// Settings that stand still while a picture is made (the part shown, the 720p pass-through's
+// flag, what comes in, the network's switch): each a register in the clock of the logic it goes
+// to, changed by the CPU's program now and then.  What they go into is deep (the part shown: a
+// multiplier and its sum), and none of it matters in the clock they change: four clocks for them.
+set_multicycle_path -from [get_regs {g_lv.geo_*_s0}] -setup -end 4
+set_multicycle_path -from [get_regs {g_lv.geo_*_s0}] -hold -end 3
+set_multicycle_path -from [get_regs {hd_t_s0}] -setup -end 4
+set_multicycle_path -from [get_regs {hd_t_s0}] -hold -end 3
+set_multicycle_path -from [get_regs {src_p_*_s0}] -setup -end 4
+set_multicycle_path -from [get_regs {src_p_*_s0}] -hold -end 3
+set_multicycle_path -from [get_regs {g_lv.n_on_s0}] -setup -end 4
+set_multicycle_path -from [get_regs {g_lv.n_on_s0}] -hold -end 3
+// The scaler's row place (it changes between rows, and the next row's pixels are hundreds of clocks
+// off) and the first line a frame makes (it changes with a frame's start: lstream.v is begun again
+// then): two clocks for what they go into.
+set_multicycle_path -from [get_regs {g_lv.u_easu/yp_*_s0}] -setup -end 2
+set_multicycle_path -from [get_regs {g_lv.u_easu/yp_*_s0}] -hold -end 1
+set_multicycle_path -from [get_regs {u_ls/skf_*_s0}] -setup -end 2
+set_multicycle_path -from [get_regs {u_ls/skf_*_s0}] -hold -end 1

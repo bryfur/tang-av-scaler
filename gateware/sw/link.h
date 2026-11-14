@@ -81,8 +81,7 @@ enum {
 struct link_settings {
     uint8_t on;             /* the scaler is run (else left alone) */
     uint8_t ntsc;           /* the picture rate 60/1.001 Hz */
-    uint8_t mode;           /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave; + 4: the lines made where the
-                             * picture moves go along its edges (rtl/deint.v edi); + 8 (motion adaptive):
+    uint8_t mode;           /* deinterlacing: 0 motion adaptive, 1 bob, 2 weave; + 8 (motion adaptive):
                              * motion compensation: where the picture moves the lines made are the field
                              * before's, moved by each block's own vector (rtl/deint.v mc; sw/pan.c finds
                              * the picture's pan for it to start from) */

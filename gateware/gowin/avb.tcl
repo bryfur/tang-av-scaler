@@ -75,7 +75,7 @@ switch $mode {
 puts $f "`define AVB_PPC $ppc"
 # the scaler's table (sim/fsr.py table)
 exec python3 $gw/sim/fsr.py table $out/easu >@ stdout
-foreach k {0 1 2 3} { puts $f "`define EASU_HEX$k \"$out/easu$k.hex\"" }
+foreach k {0 1 2 3} { foreach j {0 1 2} { puts $f "`define EASU_HEX${k}_$j \"$out/easu${k}_$j.hex\"" } }
 # the network's weights as it is built (rtl/cnn.v includes cnn_init.vh: the include path has $out)
 exec python3 -c "import sys; sys.path.insert(0, '$gw/sim'); import model; model.net_init(model.net_load('$gw/sim/cnn/t8s.json'), '$out/cnn_init.vh')"
 # the anti-aliasing's area table (sim/smaa.py table)
@@ -83,6 +83,9 @@ exec python3 $gw/sim/smaa.py table $out/smaa.hex $out/smaad.hex $out/smaah.hex
 puts $f "`define SMAA_HEX \"$out/smaa.hex\""
 puts $f "`define SMAA_DHEX \"$out/smaad.hex\""
 puts $f "`define SMAA_HHEX \"$out/smaah.hex\""
+# (the two tables each read at two places: as named block RAMs, for the build)
+exec python3 $gw/sim/smaa.py dpb $out/smaa.hex $out/smaa_dpb.vh
+exec python3 $gw/sim/smaa.py dpb $out/smaad.hex $out/smaad_dpb.vh
 # the on-screen text's font (kept in the tree: tools/mkfont.py) and the CPU's program (sw/: make)
 puts $f "`define OSD_FONT \"$gw/rtl/osd_font.hex\""
 file copy -force [env GW_CPU $gw/sw/build/cpu.hex] $out/cpu.hex
@@ -94,7 +97,7 @@ create_project -name avb -dir $out -pn GW5AST-LV138PG484AC1/I0 -device_version [
 cd $out/avb
 add_file -type verilog $out/defines.v
 #   GW_SRCS   the sources, from gateware/ (default: the bring-up image's; a test's: test/loop.v)
-foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/cpu.v rtl/cpu_ddr.v rtl/spis.v rtl/osd.v rtl/vcap.v rtl/border.v rtl/focus.v rtl/grab.v rtl/cap_ddr.v rtl/bram.v rtl/deint_edi.v rtl/deint.v rtl/pthru.v rtl/audio_fifo.v rtl/lstream.v rtl/smaa.v rtl/smaa_hist.v rtl/easu.v rtl/cnn.v rtl/bicu.v rtl/rcas.v rtl/dline.v rtl/sflash.v rtl/audio_in.v rtl/hdmi_audio.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
+foreach f [env GW_SRCS {rtl/top.v rtl/sys_pll.v rtl/mon.v rtl/uart.v rtl/fmeter.v rtl/gtx_quad.v rtl/pattern.v rtl/hdmi_scr.v rtl/tmds.v rtl/cpu.v rtl/cpu_ddr.v rtl/spis.v rtl/osd.v rtl/vcap.v rtl/border.v rtl/focus.v rtl/grab.v rtl/cap_ddr.v rtl/bram.v rtl/deint.v rtl/pthru.v rtl/audio_fifo.v rtl/lstream.v rtl/smaa.v rtl/smaa_hist.v rtl/easu.v rtl/cnn.v rtl/bicu.v rtl/rcas.v rtl/dline.v rtl/sflash.v rtl/audio_in.v rtl/hdmi_audio.v rtl/ddr_arb.v rtl/ddr3/ddr3_top.v rtl/ddr3/ddr3_ctl.v rtl/ddr3/ddr3_cal.v rtl/ddr3/ddr3_dp.v rtl/ddr3/ddr3_phy.v rtl/ddr3/ddr_pll.v rtl/ddr3/pll_init.v}] {
     add_file -type verilog $gw/$f
 }
 # the hard CPU's SoC (Gowin's RiscV_AE350_SOC, from the IDE's own files: its top in plain Verilog, the rest

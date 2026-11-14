@@ -21,8 +21,10 @@ it is scaled.
     smaa.py table OUT.hex [DIAG.hex [H.hex]]  # the areas for $readmemh: {pattern 4, left 4, right 4} ->
                                               # {above 8, below 8}; the diagonals' table; and the one
                                               # for along a line: {pattern 4, left 5, right 5}
+    smaa.py dpb IN.hex OUT.vh                 # a table as block RAMs read at two places (rtl/smaa.v smaa_rom2)
 """
 import math
+import os
 import sys
 
 N = 15              # the search's reach up and down (the lines kept: the picture's delay)
@@ -433,6 +435,23 @@ def main():
                             for right in range(16):
                                 r, g = diag_lookup(e1, e2, left, right) if left <= ND and right <= ND else (0, 0)
                                 f.write("%04x\n" % (r << 8 | g))
+    elif a[0] == "dpb":
+        # a table of 4096 words read at two places at once (rtl/smaa.v smaa_rom2): the synthesis makes
+        # two ROMs of that, so the block RAMs are named here: four, four bits of each word each, both
+        # ports reading; what they hold is in their parameters (a word's four bits at 4 x its number)
+        words = [int(t, 16) for t in open(a[1]).read().split()]
+        assert len(words) == 4096
+        with open(a[2], "w") as f:
+            f.write("// %s as four block RAMs of 4096 x 4, each read at two places (sim/smaa.py dpb)\n" % os.path.basename(a[1]))
+            f.write("wire [11:0] na0, na1, na2, na3, nb0, nb1, nb2, nb3;     // (the outputs' bits not used)\n")
+            for p in range(4):
+                bits = sum((w >> 4 * p & 15) << 4 * n for n, w in enumerate(words))
+                f.write("DPB #(.READ_MODE0(1'b0), .READ_MODE1(1'b0), .WRITE_MODE0(2'b00), .WRITE_MODE1(2'b00), .BIT_WIDTH_0(4), .BIT_WIDTH_1(4),\n"
+                        "      .BLK_SEL_0(3'b000), .BLK_SEL_1(3'b000), .RESET_MODE(\"SYNC\"),\n")
+                f.write(",\n".join("      .INIT_RAM_%02X(256'h%064x)" % (k, bits >> 256 * k & (1 << 256) - 1) for k in range(64)))
+                f.write(")\n    u%d (.DOA({na%d, da[%d:%d]}), .DOB({nb%d, db[%d:%d]}), .DIA(16'd0), .DIB(16'd0), .BLKSELA(3'b000), .BLKSELB(3'b000),\n"
+                        "        .ADA({a, 2'b00}), .ADB({b, 2'b00}), .WREA(1'b0), .WREB(1'b0), .CLKA(clk), .CLKB(clk), .CEA(1'b1), .CEB(1'b1),\n"
+                        "        .OCEA(1'b1), .OCEB(1'b1), .RESETA(1'b0), .RESETB(1'b0));\n" % (p, p, 4 * p + 3, 4 * p, p, 4 * p + 3, 4 * p))
 
 
 if __name__ == "__main__":

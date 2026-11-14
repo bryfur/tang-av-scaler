@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """boardcheck.py [MODE ...] [table=N] [rows=Y0,Y1]: the board's picture against the model's, pixel for pixel, on what the
 console sends now.  The picture is frozen (the link), the four newest fields read out of the DDR3
-(fields.py), and for each deinterlacing mode asked for (default 0 8 4 12: motion adaptive,
-motion compensated, along edges, both) the rows where that mode matters are read back from the
+(fields.py), and for each deinterlacing mode asked for (default 0 8: motion adaptive, motion
+compensated) the rows where that mode matters are read back from the
 output (grab.py) and compared with sim/model.py's frame from the same fields and the board's own
 settings.  A simulation that passes is not the hardware: this is (a synthesis fault in the edge
 search was found this way, 2026-11-13).
@@ -48,7 +48,7 @@ def api(**kw):
 
 
 def main():
-    modes = [int(a) for a in sys.argv[1:] if a.isdigit()] or [0, 8, 4, 12]
+    modes = [int(a) for a in sys.argv[1:] if a.isdigit()] or [0, 8]
     tabset = next((int(a[6:]) for a in sys.argv[1:] if a.startswith("table=")), None)
     rowset = next((tuple(int(v) for v in a[5:].split(",")) for a in sys.argv[1:] if a.startswith("rows=")), None)
     os.makedirs(OUT, exist_ok=True)
@@ -107,7 +107,7 @@ def main():
         def frame(mode, prev=None):
             hist = {"keep": keep, "prev": prev} if prev is not None else None
             rows = model.frame_1080(fields, pars, mode & 3, s["thr"], s["aa_thr"] if s["aa"] else None, s["sharp"], bool(s["aa_dbg"]),
-                                    bool(s["aa_diag"]), bool(s["aa_corner"]), crop, s["nr"], bool(s["dn"]), False, bool(mode & 4),
+                                    bool(s["aa_diag"]), bool(s["aa_corner"]), crop, s["nr"], bool(s["dn"]), False, False,
                                     None, bool(mode & 8) and mode & 3 == 0, first, skip, tab,
                                     bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0, net, hist)
             im = Image.new("RGB", (1920, 1080))
@@ -148,37 +148,41 @@ def main():
             m = avb.Mon()
             t_open = time.time()
             deint = m.r(0x35)
-            if deint >> 7 & 1 != mode >> 2 & 1 or deint >> 3 & 1 != (mode >> 3 & 1 and mode & 3 == 0) or deint & 3 != mode & 3:
+            if deint >> 3 & 1 != (mode >> 3 & 1 and mode & 3 == 0) or deint & 3 != mode & 3:
                 sys.exit("boardcheck: mode %d was not taken (DEINT %08x)" % (mode, deint))
-            got = Image.new("RGB", (1920, y1 - y0))
-            rows, again = [], []
-            for r in range(y0, y1, 2):                  # (the design takes two rows a frame)
-                # (a read that loses bytes on the way is asked again: the picture is frozen)
-                for go in range(4):
-                    try:
-                        rows += grab.rows8(m, r, 1, 1920)[:2]
-                        break
-                    except SystemExit as e:
-                        again.append("row %d, %.1f s after the port was opened: %s" % (r, time.time() - t_open, e))
-                        if go == 3:
-                            raise
+            # (the frame's first rows too, for the first mode: lines that come late show there and nowhere else)
+            spans = [(y0, y1)] + ([(0, 32)] if mode == modes[0] and not rowset and y0 >= 32 else [])
+            again = []
+            for y0, y1 in spans:
+                got = Image.new("RGB", (1920, y1 - y0))
+                rows = []
+                for r in range(y0, y1, 2):                  # (the design takes two rows a frame)
+                    # (a read that loses bytes on the way is asked again: the picture is frozen)
+                    for go in range(4):
                         try:
-                            m.close()
-                        except Exception:
-                            pass
-                        time.sleep(0.5)
-                        m = avb.Mon()
+                            rows += grab.rows8(m, r, 1, 1920)[:2]
+                            break
+                        except SystemExit as e:
+                            again.append("row %d, %.1f s after the port was opened: %s" % (r, time.time() - t_open, e))
+                            if go == 3:
+                                raise
+                            try:
+                                m.close()
+                            except Exception:
+                                pass
+                            time.sleep(0.5)
+                            m = avb.Mon()
+                got.putdata([p for row in rows[:y1 - y0] for p in row])
+                diff = ImageChops.difference(got, want.crop((0, y0, 1920, y1)))
+                n = sum(1 for p in diff.getdata() if p != (0, 0, 0))
+                bad += n
+                got.save(os.path.join(OUT, "board_%d_%d.png" % (mode, y0)))
+                want.crop((0, y0, 1920, y1)).save(os.path.join(OUT, "model_%d_%d.png" % (mode, y0)))
+                print("mode %2d (DEINT %08x): rows %d to %d: %d pixels differ from the model%s  (the mode changes %d pixels of the frame)" % (
+                    mode, deint, y0, y1 - 1, n, "" if n else ": the same", moved), flush=True)
             m.close()
             for t in again:
                 print("  asked again: " + t, flush=True)
-            got.putdata([p for row in rows[:y1 - y0] for p in row])
-            diff = ImageChops.difference(got, want.crop((0, y0, 1920, y1)))
-            n = sum(1 for p in diff.getdata() if p != (0, 0, 0))
-            bad += n
-            got.save(os.path.join(OUT, "board_%d.png" % mode))
-            want.crop((0, y0, 1920, y1)).save(os.path.join(OUT, "model_%d.png" % mode))
-            print("mode %2d (DEINT %08x): rows %d to %d: %d pixels differ from the model%s  (the mode changes %d pixels of the frame)" % (
-                mode, deint, y0, y1 - 1, n, "" if n else ": the same", moved), flush=True)
     finally:
         api(freeze=0, mode=was, osd=s["osd"], table=tabwas)
     bad += frame.bad

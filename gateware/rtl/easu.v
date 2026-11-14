@@ -13,11 +13,19 @@
 // de, x, y: the output's pixel (pattern.v's ox, oy); o_y, o_cb, o_cr are that pixel's LAT clocks
 // later (whatever, outside the 1440 columns).
 
-`ifndef EASU_HEX0
-`define EASU_HEX0 "easu0.hex"
-`define EASU_HEX1 "easu1.hex"
-`define EASU_HEX2 "easu2.hex"
-`define EASU_HEX3 "easu3.hex"
+`ifndef EASU_HEX0_0
+`define EASU_HEX0_0 "easu0_0.hex"
+`define EASU_HEX0_1 "easu0_1.hex"
+`define EASU_HEX0_2 "easu0_2.hex"
+`define EASU_HEX1_0 "easu1_0.hex"
+`define EASU_HEX1_1 "easu1_1.hex"
+`define EASU_HEX1_2 "easu1_2.hex"
+`define EASU_HEX2_0 "easu2_0.hex"
+`define EASU_HEX2_1 "easu2_1.hex"
+`define EASU_HEX2_2 "easu2_2.hex"
+`define EASU_HEX3_0 "easu3_0.hex"
+`define EASU_HEX3_1 "easu3_1.hex"
+`define EASU_HEX3_2 "easu3_2.hex"
 `endif
 
 // a quarter of the table (three of the twelve weights), its address register beside it: the data
@@ -25,7 +33,7 @@
 // table); we writes d at the address given the clock before (no read in that clock: the block
 // RAM's plain write: the place and route has no read-before-write for this device).
 module easu_tab #(
-    parameter FILE = ""
+    parameter FILE0 = "", FILE1 = "", FILE2 = ""
 ) (
     input             clk,
     input      [12:0] a,
@@ -33,18 +41,35 @@ module easu_tab #(
     input      [29:0] d,
     output reg [29:0] q /* synthesis syn_preserve = 1 */
 );
-    reg [29:0] mem [0:8191];
+    // (a weight a RAM of its own, five blocks, with its own address register beside them: fifteen
+    // blocks under one address register lie too far apart for one clock)
+    wire [29:0] q1;
+    easu_tab1 #(.FILE(FILE0)) u0 (.clk(clk), .a(a), .we(we), .d(d[9:0]), .q1(q1[9:0]));
+    easu_tab1 #(.FILE(FILE1)) u1 (.clk(clk), .a(a), .we(we), .d(d[19:10]), .q1(q1[19:10]));
+    easu_tab1 #(.FILE(FILE2)) u2 (.clk(clk), .a(a), .we(we), .d(d[29:20]), .q1(q1[29:20]));
+    // (q: a register of its own beside what uses it; q1 is the block RAM's)
+    always @(posedge clk)
+        q <= q1;
+endmodule
+
+module easu_tab1 #(
+    parameter FILE = ""
+) (
+    input             clk,
+    input      [12:0] a,
+    input             we,
+    input      [9:0]  d,
+    output reg [9:0]  q1
+);
+    reg [9:0]  mem [0:8191];
     initial $readmemh(FILE, mem);
     reg [12:0] a1 /* synthesis syn_preserve = 1 */;
-    reg [29:0] q1;
-    // (q: a register of its own beside what uses it; q1 is the block RAM's)
     always @(posedge clk) begin
         a1 <= a;
         if (we)
             mem[a1] <= d;
         else
             q1 <= mem[a1];
-        q <= q1;
     end
 endmodule
 
@@ -443,10 +468,10 @@ module easu (
         if (t_n == 3'd4)
             t_ack <= t_s[2];
     end
-    easu_tab #(.FILE(`EASU_HEX0)) u_rom0 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[29:0]), .q(wt[29:0]));
-    easu_tab #(.FILE(`EASU_HEX1)) u_rom1 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[59:30]), .q(wt[59:30]));
-    easu_tab #(.FILE(`EASU_HEX2)) u_rom2 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[89:60]), .q(wt[89:60]));
-    easu_tab #(.FILE(`EASU_HEX3)) u_rom3 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[119:90]), .q(wt[119:90]));
+    easu_tab #(.FILE0(`EASU_HEX0_0), .FILE1(`EASU_HEX0_1), .FILE2(`EASU_HEX0_2)) u_rom0 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[29:0]), .q(wt[29:0]));
+    easu_tab #(.FILE0(`EASU_HEX1_0), .FILE1(`EASU_HEX1_1), .FILE2(`EASU_HEX1_2)) u_rom1 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[59:30]), .q(wt[59:30]));
+    easu_tab #(.FILE0(`EASU_HEX2_0), .FILE1(`EASU_HEX2_1), .FILE2(`EASU_HEX2_2)) u_rom2 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[89:60]), .q(wt[89:60]));
+    easu_tab #(.FILE0(`EASU_HEX3_0), .FILE1(`EASU_HEX3_1), .FILE2(`EASU_HEX3_2)) u_rom3 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[119:90]), .q(wt[119:90]));
     reg [287:0] tp [5:18] /* synthesis syn_srlstyle = "registers" */;
     always @(posedge clk) begin
         tp[5] <= taps4;

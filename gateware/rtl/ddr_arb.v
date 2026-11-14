@@ -1,8 +1,9 @@
 // ddr_arb.v: the DDR3 controller's one port (rtl/ddr3/ddr3_top.v: Gowin's DDR3 interface's, a line
 // of 256 bits a command) shared by five users, on its user clock:
 //   a   writes (the capture): first
+//   e   reads and writes (the anti-aliasing's edges of the frame before: smaa_hist.v: twelve a line of
+//       the picture, which waits for them: before the picture's own reads, some hundreds a line)
 //   b   reads (the picture)
-//   e   reads and writes (the anti-aliasing's edges of the frame before: smaa_hist.v)
 //   c   reads and writes (the host's monitor)
 //   d   reads and writes, a write's bytes by a mask (the CPU's data memory: rtl/cpu_ddr.v): last
 // A user holds valid, its line's number and data until ack (a clock: the command was taken the
@@ -68,8 +69,8 @@ module ddr_arb (
     assign wr_mask = h_mask;
     wire free = !h_v && !cmd_en;
     wire a_take = free && a_valid;
-    wire b_take = free && !a_valid && b_valid;
-    wire e_take = free && !a_valid && !b_valid && e_valid;
+    wire e_take = free && !a_valid && e_valid;
+    wire b_take = free && !a_valid && !e_valid && b_valid;
     wire c_take = free && !a_valid && !b_valid && !e_valid && c_valid;
     wire d_take = free && !a_valid && !b_valid && !e_valid && !c_valid && d_valid;
     reg  a_ack_r = 1'b0, b_ack_r = 1'b0, c_ack_r = 1'b0, d_ack_r = 1'b0, e_ack_r = 1'b0;
@@ -101,7 +102,7 @@ module ddr_arb (
         if (a_take || b_take || c_take || d_take || e_take) begin
             h_v <= 1'b1;
             h_wr <= a_take || (c_take && c_wr) || (d_take && d_wr) || (e_take && e_wr);
-            h_line <= a_take ? a_line : b_take ? b_line : e_take ? e_line : c_take ? c_line : d_line;
+            h_line <= a_take ? a_line : e_take ? e_line : b_take ? b_line : c_take ? c_line : d_line;
             h_data <= a_take ? a_data : e_take ? e_data : c_take ? c_data : d_data;
             h_mask <= d_take ? d_mask : 32'd0;
         end
