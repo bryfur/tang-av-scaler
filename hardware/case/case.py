@@ -170,6 +170,7 @@ BACK = [("J1", "Y"), ("J2", "Pb"), ("J3", "Pr"), ("J15", "5V"), ("J4", "L"), ("J
 
 FONT = "DejaVu Sans"
 ENGRAVE = 0.4
+LABELS = False                    # True: engrave the labels (jacks, buttons, LEDs, title)
 
 
 def X(x):
@@ -204,6 +205,8 @@ def cyl_y(x, z, d, y0, y1):
 
 def text_cut(body, txt, size, origin, xdir, normal, depth=ENGRAVE):
     """Engrave txt into body's face at origin (case coordinates), reading along xdir."""
+    if not LABELS:
+        return body
     pl = cq.Plane(origin=origin, xDir=xdir, normal=normal)
     t = cq.Workplane(pl).text(txt, size, -depth, font=FONT, kind="bold", halign="center", valign="center")
     return body.cut(t)

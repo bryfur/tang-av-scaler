@@ -30,7 +30,7 @@ buttons and LEDs from `../av-board/rev-cb/av-board-cb.kicad_pcb` and the SOM's p
 | `button.stl` | 3 | head down |
 
 `out/case.step` is the whole case as fitted, for editing elsewhere. PLA or PETG, 0.2 mm layers,
-3 walls; the labels are engraved 0.4 mm into the faces on the bed. PETG if the case will sit
+3 walls. No labels (`LABELS = True` engraves them: the jacks, buttons, LEDs and a title). PETG if the case will sit
 somewhere warm: the FPGA's heatsink runs warm and the lid is over it.
 
 ## Parts besides the print
