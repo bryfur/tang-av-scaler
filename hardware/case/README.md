@@ -3,7 +3,7 @@
 A 3D-printed case for the scaler: the board, its SOM with heatsink and the XIAO inside; the jacks,
 HDMI and USB-C power through the back panel, the XIAO's USB-C through the front, the three
 buttons and three LEDs on top, and a 40 mm 5 V fan inside, hung under the lid over the SOM's
-memory beside its heatsink. 107 x 109 x 35 mm.
+memory beside its heatsink. 107 x 111 x 35 mm.
 
 ![Closed, from the back](img/case-closed.png)
 
@@ -30,15 +30,16 @@ buttons and LEDs from `../av-board/rev-cb/av-board-cb.kicad_pcb` and the SOM's p
 | `button.stl` | 3 | head down |
 
 `out/case.step` is the whole case as fitted, for editing elsewhere. PLA or PETG, 0.2 mm layers,
-3 walls. No labels (`LABELS = True` engraves them: the jacks, buttons, LEDs and a title). PETG if the case will sit
+3 walls. No wall anywhere is under 1 mm (`walls.py` measures every part). No labels (`LABELS = True` engraves them: the jacks, buttons, LEDs and a title). PETG if the case will sit
 somewhere warm: the FPGA's heatsink runs warm and the lid is over it.
 
 ## Parts besides the print
 
 - 4 x M2.5 x 16 pan or cheese head screws (the board's holes are M2.5)
 - a 5 V fan, 40 x 40 x 10 mm (or 30 / 25 mm: `FAN` in `case.py`; `FAN = 0` for none), with a
-  2-pin 2.54 mm plug, and 4 x M3 x 12 countersunk screws: from the top through the lid, they cut
-  their thread in the fan's corner holes
+  2-pin 2.54 mm plug, and 4 x M3 x 12 countersunk screws: from the top through the lid (the
+  heads sit ~0.4 mm proud: a shallow countersink keeps 1.2 mm of lid), they cut their thread in
+  the fan's corner holes
 - optional: 4 x M2.5 heat-set inserts (3.5 mm, 4 mm long): set `INSERT = True` and rebuild;
   without them the screws cut their own thread in the lid's pillars
 - 3 x 24 mm of clear 1.75 mm filament, as light pipes over the LEDs
@@ -74,8 +75,8 @@ K1, K2 (the scaler's buttons) and RCFG (RECONFIG: reloads the FPGA from flash).
 
 `check.py` tests the case against the board as built: every part's 3D model from KiCad's export,
 plus stand-ins for what KiCad lacks or places wrongly. Last run: no part of the board inside the
-case; the tightest spots 0.4 mm (the HDMI shell in its opening), 0.6 mm (an LED tube beside a
-transistor), 1.0 mm (an LED tube by the SOM's corner). The fan's volume: 2.5 mm from the
+case; the tightest spots 0.4 mm (the HDMI shell in its opening), 0.6 mm (an LED tube above a
+transistor), 0.85 mm (an LED tube by the SOM's corner). The fan's volume: 2.5 mm from the
 heatsink, 2.7 mm from a Dupont plug on J13, 3.5 mm above the RCA jacks.
 
 Taken from the 3D models: the RCA barrels' axis 6.6 mm above the board and 2.06 mm past its
@@ -106,6 +107,7 @@ a wall.
 ```
 ~/tools/cad-venv/bin/python case.py      # out/*.stl, case.step (CadQuery 2.8)
 ~/tools/cad-venv/bin/python check.py     # needs kicad-cli (fpga) for the board's 3D export
+~/tools/cad-venv/bin/python walls.py     # walls under 1 mm (or: walls.py MIN_MM)
 blender -b -P render.py -- BOARD.glb     # img/*.png (bryan-ld); BOARD.glb: the export check.py made
                                          # (--glb FILE, else $TMPDIR/av-board-cb-case.glb)
 ```

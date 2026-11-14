@@ -93,10 +93,10 @@ PANEL_T = 2.0
 PANEL_GAP = 0.2                   # panel to groove, each side
 GROOVE_W = PANEL_T + 2 * PANEL_GAP
 GROOVE_SIDE = 1.5                 # into the side walls
-GROOVE_FLOOR = 1.0
+GROOVE_FLOOR = 0.8
 GROOVE_LID = 1.2
-LIP = 1.5                         # side walls, floor and lid past the panels' outside faces
-CORNER_R = 3.0
+LIP = 2.5                         # side walls, floor and lid past the panels' outside faces
+CORNER_R = 2.0
 BACK_OUT = 47.8                   # back panel's outside face (board y): the HDMI mouth 47.9
 BACK_IN = BACK_OUT + PANEL_T      # 49.8, 0.2 mm in front of the board's edge
 # the XIAO's USB-C reaches ~1-1.5 mm past the board's front edge: the front panel stands clear of
@@ -121,7 +121,7 @@ INSERT = False                    # True: holes for M2.5 heat-set inserts (3.5 x
 PILOT = 2.2                       # self-tapping M2.5 into the plastic
 INSERT_D, INSERT_L = 3.4, 4.5
 PILLAR_D = 6.0
-STANDOFF_D = 6.5
+STANDOFF_D = 7.4
 HOLES = ["H1", "H2", "H3", "H4"]
 
 # buttons: a round plunger in a round guide, a head above the lid and a tab below the guide's end:
@@ -129,13 +129,13 @@ HOLES = ["H1", "H2", "H3", "H4"]
 # (the head stops it falling in, the tab pulling out), so the lid comes off with its buttons
 KEY = 3.4                         # plunger
 KEY_HOLE = KEY + 0.5
-HEAD_D, HEAD_T = 7.0, 1.6         # covers the keyway (switch pitch 8 mm)
-SLEEVE = 7.0                      # guide's outside
+HEAD_D, HEAD_T = 7.4, 1.6         # covers the keyway (switch pitch 8 mm)
+SLEEVE = 8.0                      # the guides' bar: its width (front to back)
 SLEEVE_L = 8.0                    # below the lid
 KEY_PROUD = 0.8                   # head above the lid at rest (the switch travels 0.25)
 KEY_LIFT = 1.0                    # free travel up before the tab meets the guide
-TAB_R, TAB_W, TAB_T = 3.15, 1.8, 1.6
-KEYWAY_R, KEYWAY_W = 3.45, 2.2    # toward +X; the tab rests toward the back
+TAB_R, TAB_W, TAB_T = 3.15, 1.8, 2.4
+KEYWAY_R, KEYWAY_W = 3.6, 2.2     # toward +X, ending inside the bar; the tab rests toward the back
 BUTTONS = [("SW1", "K1"), ("SW2", "K2"), ("SW3", "RCFG")]
 
 # the SOM's heatsink, on the FPGA in the SOM's front half (the board photo, img/av-board-cb-photo.jpg,
@@ -155,10 +155,10 @@ FAN_GRILLE = {25: 23.0, 30: 28.0, 40: 37.0}
 FAN_HUB = {25: 9.0, 30: 11.0, 40: 14.0}        # the motor's hub: no air there
 FAN_GAP = 2.5                     # fan to heatsink, sideways
 FAN_AT = (floor.SOM_AT[0], HEATSINK[2] - FAN_GAP - FAN / 2)
-FAN_SCREW, FAN_CSK = 3.4, 6.6
+FAN_SCREW, FAN_CSK = 3.4, 6.0     # countersink 1.3 deep: 1.2 mm of lid left under it
 
 # LEDs: a tube from the lid to 1 mm above each, for a piece of 1.75 mm clear filament
-PIPE_ID, PIPE_OD = 1.9, 3.6
+PIPE_ID, PIPE_OD = 1.9, 4.0
 LEDS = [("D2", "STAT"), ("D4", "DONE"), ("D5", "RDY")]
 
 # back panel: (ref, label, kind)
@@ -256,7 +256,7 @@ def base():
         for x0 in (X_OUT0 - 1, X_IN1 - 0.1):
             b = b.cut(box(x0, x0 + WALL + 1.1, y - 1.0, y + 1.0, TOP + 3.0, TOP + 12.0))
     # feet: recesses for 10 mm stick-on bumpers
-    for x in (CX - 38, CX + 38):
+    for x in (CX - 35, CX + 35):                 # clear of the screws' counterbores
         for y in (Y_OUT0 + 10, Y_OUT1 - 10):
             b = b.cut(cyl(x, y, 10.5, Z_BOT - 1, Z_BOT + 0.6))
     return b
@@ -284,10 +284,14 @@ def lid():
         l = l.cut(box(x - 1.0, x + 1.0, hy0 + 1.0, hy1 - 2.0, Z_LID - 1, Z_TOP + 1))
     if FAN:
         l = fan_mount(l, *FAN_AT)
-    # buttons: round guides with a keyway
+    # buttons: one bar under the lid holding the three guides (a round guide each, its keyway ending in
+    # the bar, so no thin wall where it would cut a round sleeve)
+    bx = [at(ref)[0] for ref, _ in BUTTONS]
+    by = sum(at(ref)[1] for ref, _ in BUTTONS) / len(BUTTONS)
+    l = l.union(box(min(bx) - SLEEVE / 2, max(bx) + KEYWAY_R + 2.4, by - SLEEVE / 2, by + SLEEVE / 2,
+                    Z_LID - SLEEVE_L, Z_LID + 0.1))
     for ref, _ in BUTTONS:
         x, y = at(ref)
-        l = l.union(cyl(x, y, SLEEVE, Z_LID - SLEEVE_L, Z_LID + 0.1))
         l = l.cut(cyl(x, y, KEY_HOLE, Z_LID - SLEEVE_L - 1, Z_TOP + 1))
         l = l.cut(box(x, x + KEYWAY_R, y - KEYWAY_W / 2, y + KEYWAY_W / 2, Z_LID - SLEEVE_L - 1, Z_TOP + 1))
     # LEDs: light pipes
