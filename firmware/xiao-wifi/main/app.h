@@ -63,6 +63,7 @@ struct scaler_settings {
     uint8_t table;      /* the scaler's table: 0 FSR's, 1 the learnt pair (one for the anti-aliasing off, one
                          * for on), 2 on: the tables sent to the link (slots 3 on: tables.c) */
     bool mv_dbg;        /* the motion compensation's vectors shown in the picture's place */
+    uint8_t net;        /* the scaler's first stage: 0 none, 1 the network (the FPGA's cnn.v) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
@@ -97,6 +98,8 @@ struct scaler_state {
     uint8_t tab_state;  /* LINK_TAB_*: 0 nothing going on, 1 on its way in, 2 read back, 3 the design's own kept, 255: none of it there */
     uint16_t tab_bad;   /* entries that read back other than put */
     uint16_t tab_ms;    /* the time putting it in took */
+    bool net_there;     /* the FPGA's design has the network */
+    uint16_t net_under; /* rows it was late for (counted by the FPGA: none while a picture comes in) */
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
 void link_start(void);

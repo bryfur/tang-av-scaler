@@ -510,14 +510,137 @@ def table_load(path):
     return table_from_words([qs[k][n] for n in range(8192) for k in range(4)])
 
 
+def bicubic_taps():
+    """rtl/bicu.v's table: for each of 32 places between two pixels (k/32 right of the second of four),
+    the four pixels' weights in 256ths, their sum 256: the cubic convolution kernel with a = -0.75
+    (what the networks were trained with: torch's bicubic)"""
+    a = -0.75
+    out = []
+    for k in range(32):
+        f = k / 32
+
+        def wt(d):
+            d = abs(d)
+            return (a + 2) * d ** 3 - (a + 3) * d ** 2 + 1 if d <= 1 else a * d ** 3 - 5 * a * d ** 2 + 8 * a * d - 4 * a
+        q = [int(round(256 * wt(d))) for d in (1 + f, f, 1 - f, 2 - f)]
+        q[max(range(4), key=lambda i: q[i])] += 256 - sum(q)
+        out.append(q)
+    return out
+
+
+def net_load(path):
+    """a network (sim/cnn_ref.py's model: docs/cnn-upscaler.md) from its .json"""
+    import json
+    return json.load(open(path))
+
+
+def net_words(net):
+    """a network (the shape rtl/cnn.v is: 3 x 3, 1 -> 8 -> 8 -> 4) as its registers hold it: a list of
+    (address, value): 8 g + p a multiplier's weight in the phase p (layer 1: g = 2 co + m, the taps
+    3 row + column 0 to 5 in m = 0's phases, 6 to 8 in m = 1's first three; layers 2 and 3: g = 16 +
+    12 co + j and 112 + 12 co + j, j = 4 row + c, the channel 4 h + c of the column kc in the phase
+    2 kc + h); 2048 + n a sum's first value (the bias and half of what the shift drops); 2304 + l
+    the layer l's shift"""
+    ls = net["layers"]
+    if [(l["kh"], l["kw"], l["cin"], l["cout"]) for l in ls] != [(3, 3, 1, 8), (3, 3, 8, 8), (3, 3, 8, 4)] or net.get("in", 1) != 1:
+        raise ValueError("a network of another shape than rtl/cnn.v's")
+    out = []
+    for co in range(8):
+        w = ls[0]["w"][co][0]
+        for p in range(6):
+            out.append((8 * (2 * co) + p, w[p // 3][p % 3] & 255))
+            out.append((8 * (2 * co + 1) + p, w[2][p] & 255 if p < 3 else 0))
+    for l, base, nco in ((1, 16, 8), (2, 112, 4)):
+        for co in range(nco):
+            for j in range(12):
+                for p in range(6):
+                    out.append((8 * (base + 12 * co + j) + p, ls[l]["w"][co][4 * (p & 1) + j % 4][j // 4][p >> 1] & 255))
+    n = 0
+    for l in ls:
+        for b in l["b"]:
+            out.append((2048 + n, (b + ((1 << (l["shift"] - 1)) if l["shift"] else 0)) & 0x3FFFFF))
+            n += 1
+    for k, l in enumerate(ls):
+        out.append((2304 + k, l["shift"]))
+    return out
+
+
+def net_init(net, path):
+    """the build's network: rtl/cnn.v's `CNN_INIT file (its registers' first values)"""
+    wv, bv, sv = [0] * 1280, [0] * 20, [0] * 3
+    for a, v in net_words(net):
+        if a < 1280:
+            wv[a] = v
+        elif a < 2304:
+            bv[a - 2048] = v
+        else:
+            sv[a - 2304] = v
+    big = lambda vals, bits: "%d'h%x" % (bits * len(vals), sum(v << bits * k for k, v in enumerate(vals)))
+    words = [sum(wv[8 * g + p] << 8 * p for p in range(6)) for g in range(160)]
+    open(path, "w").write("localparam [7679:0] CNN_W = %s;\nlocalparam [439:0] CNN_B = %s;\nlocalparam [11:0] CNN_S = %s;\n" % (
+        big(words, 48), big(bv, 22), big(sv, 4)))
+
+
+def scale_net(pix, skip, net, g):
+    """rtl/cnn.v and rtl/bicu.v: the picture's luma made twice the size by the network (cnn_ref.py:
+    the lines from skip on are its picture), then stretched to the output by the bicubic kernel
+    (bicubic_taps(): down first, then across; a place to the nearest 32nd of a pixel of the picture
+    at twice the size, whose pixel k lies at the source's k / 2 - 1/4); the chroma straight from the
+    source: the four round the place, by its sixteenths.  pix: h rows of (y, cb, cr); g: fsr.geom()'s.
+    -> 1080 rows of 1440 (or 1920) (y, cb, cr)"""
+    import cnn_ref
+    import fsr
+    xr, dx, ys, dy, wide = g
+    h, w = len(pix), len(pix[0])
+    y2 = cnn_ref.upscale(net, [[p[0] for p in row] for row in pix[skip:]])
+    taps = bicubic_taps()
+    ow, ox0 = (1920, 0) if wide else (fsr.OW, fsr.OX0)
+    cl = lambda v, lo, hi: lo if v < lo else hi if v > hi else v
+    # (across: the same for every row)
+    cols = []
+    for ox in range(ow):
+        xp = xr + (ox + ox0 + fsr.PRE) * dx - 4096          # (geom()'s place has a sixteenth more, for easu.v)
+        kx = 2 * xp + 32768 + 1024
+        c = kx >> 16
+        cols.append(([cl(c + i, 0, 2 * w - 1) for i in (-1, 0, 1, 2)], taps[kx >> 11 & 31], cl(xp >> 16, 0, w - 1),
+                     cl((xp >> 16) + 1, 0, w - 1), xp >> 12 & 15))
+    out = []
+    for oy in range(fsr.OH):
+        yp = ys + oy * dy
+        ky = 2 * yp + 32768 + 1024
+        ln = ky >> 16
+        rows = [y2[cl(ln + i, 2 * skip, 2 * h - 1) - 2 * skip] for i in (-1, 0, 1, 2)]
+        wy = taps[ky >> 11 & 31]
+        vv = {}
+        r0, r1, qy = pix[cl(yp >> 16, skip, h - 1)], pix[cl((yp >> 16) + 1, skip, h - 1)], yp >> 12 & 15
+        cv = {}
+        line = []
+        for cc, wx, f0, f1, qx in cols:
+            acc = 0
+            for c, k in zip(cc, wx):
+                if c not in vv:
+                    vv[c] = sum(a * r[c] for a, r in zip(wy, rows))
+                acc += k * vv[c]
+            for f in (f0, f1):
+                if f not in cv:
+                    cv[f] = tuple((16 - qy) * r0[f][n] + qy * r1[f][n] for n in (1, 2))
+            line.append((cl((acc + 32768) >> 16, 0, 255),) + tuple(((16 - qx) * cv[f0][n] + qx * cv[f1][n] + 128) >> 8 for n in (0, 1)))
+        out.append(line)
+    return out
+
+
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None, mvdbg=False):
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None, mvdbg=False, net=None):
     """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch);
-    tab: the scaler's table (fsr.table()'s form: table_load()), else FSR's"""
+    tab: the scaler's table (fsr.table()'s form: table_load()), else FSR's; net: the network in the
+    scaler's place (net_load(): scale_net())"""
     import fsr
     pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip, mvdbg)
     w, h = len(pix[0]), len(pix)
     ana = [[(0, 0, 0)] * w] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], w, h - skip)
-    out = fsr.rcas(fsr.scale_hw(pix, ana, w, h, tab or fsr.table(), fsr.geom(*crop)), sharp, dn)
+    if net:
+        out = fsr.rcas(scale_net(pix, skip, net, fsr.geom(*crop)), sharp, dn)
+    else:
+        out = fsr.rcas(fsr.scale_hw(pix, ana, w, h, tab or fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2
     return [[(0, 0, 0)] * side + [rgb(*p) for p in row] + [(0, 0, 0)] * side for row in out]

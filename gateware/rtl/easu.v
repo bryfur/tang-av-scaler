@@ -163,6 +163,16 @@ module easu (
     output reg        t_ack = 1'b0,
     output reg [119:0] t_q = 120'd0,
 
+    // the ring's lines for the network (cnn.v), when it is the scaler's first stage (n_on: the ring is
+    // read at its column; this scaler's own picture is not shown then): five lines, by their places
+    // in the ring (n_sel: three bits each; they stay as they are while a column is read); n_rows:
+    // their lumas, the first lowest, and above them the second's chroma {cb, cr}: three clocks after
+    // the address register, i.e. four after n_col
+    input             n_on,
+    input      [9:0]  n_col,
+    input      [14:0] n_sel,
+    output reg [55:0] n_rows,
+
     output     [7:0]  o_y,
     output     [7:0]  o_cb,
     output     [7:0]  o_cr
@@ -264,12 +274,18 @@ module easu (
             end
             reg [53:0] q1;
             always @(posedge clk) begin
-                ra <= ra_n;
+                ra <= n_on ? n_col : ra_n;
                 q1 <= {m2[ra], m1[ra], m0[ra]};         // 3 (the RAM's own register)
                 q[k] <= q1;                             // 4
             end
         end
     endgenerate
+    reg [14:0] n_sl /* synthesis syn_preserve = 1 */;
+    always @(posedge clk) begin
+        n_sl <= n_sel;
+        n_rows <= {q[n_sl[5:3]][17:2], q[n_sl[14:12]][25:18], q[n_sl[11:9]][25:18], q[n_sl[8:6]][25:18], q[n_sl[5:3]][25:18],
+                   q[n_sl[2:0]][25:18]};
+    end
 
     // 3: the four rows' words; 4: the window, four columns of four rows, a new column at each odd pixel
     reg [53:0] cd [0:3] /* synthesis syn_ramstyle = "registers" */;

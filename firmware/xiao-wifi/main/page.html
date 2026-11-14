@@ -62,6 +62,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f sub crop" id="c_man"><span>From / size</span><span class="rg"><input type="number" name="crop_x" min="0" max="719"><input type="number" name="crop_y" min="0" max="479"><input type="number" name="crop_w" min="64" max="720"><input type="number" name="crop_h" min="64" max="480"></span></div>
 <div class="f"><span>Widescreen (16:9)<small>for a game set to widescreen</small></span><input class="sw" type="checkbox" name="wide"></div>
 <div class="f"><span>Noise reduction<small>averages frames where the picture is still</small></span><span class="seg"><label><input type="radio" name="nr" value="0"><span>Off</span></label><label><input type="radio" name="nr" value="1"><span>Low</span></label><label><input type="radio" name="nr" value="2"><span>Medium</span></label><label><input type="radio" name="nr" value="3"><span>High</span></label></span></div>
+<div class="f" id="ntr"><span>Upscaler<small id="ntt"></small></span><span class="seg"><label><input type="radio" name="net" value="0"><span>Kernel</span></label><label><input type="radio" name="net" value="1"><span>Network</span></label></span></div>
 <div class="f" id="tbr"><span>Scaling kernel<small id="tbt"></small></span><select name="table"><option value="0">FSR</option></select></div>
 <div class="f sub" id="tbu"><span style="flex:0 1 auto"><small>your own (.tab)</small></span><input type="file" id="tbf" accept=".tab" style="flex:1 1 6em;font-size:.9em;min-width:0"><button type="button" onclick="tabUp()">Add</button><button type="button" id="tbd" onclick="tabDrop()">Remove</button></div>
 <div class="f"><span>Sharpening</span><span class="rg"><input type="range" name="sharp" min="0" max="16"><output></output></span></div>
@@ -139,7 +140,10 @@ function modeTake(){const f=vf.elements,b=+f._m.value;
 // off: the scaler takes the one that fits), and tables sent here (slots 3 to 7: the setting 2 to 6)
 let tkey='',tab=null;
 function tabShow(v){const t=tab=v.tab,s=vf.elements.table,ok=!!t&&t.state>=0,key=ok?t.names.join('|'):'-';
-  $('tbr').classList.toggle('na',!ok);$('tbu').style.display=ok?'':'none';s.disabled=!ok;
+  const nt=!!(v.net&&v.net.there),non=nt&&+v.set.net==1;
+  $('ntr').classList.toggle('na',!nt);for(const e of vf.elements.net)e.disabled=!nt;
+  $('ntt').textContent=!nt?'this FPGA image has the kernel scaler only':non?'a small network makes the picture twice the size, then a plain stretch (the kernel table is not used)':'the edge-adaptive kernel from the table below';
+  $('tbr').classList.toggle('na',!ok||non);$('tbu').style.display=ok?'':'none';s.disabled=!ok;
   if(key!=tkey){tkey=key;const c=s.value;
     s.innerHTML='<option value="0">FSR</option>'+(ok&&t.names[1]&&t.names[2]?'<option value="1">Learnt</option>':'')+
       (ok?t.names.slice(3).map((n,i)=>n?'<option value="'+(i+2)+'">'+esc(n)+'</option>':'').join(''):'');s.value=c}

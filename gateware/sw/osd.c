@@ -174,8 +174,11 @@ void osd_update(void)
         str("off");
 
     line(5);
-    /* (the scaler's table: FSR's own, the learnt pair's, or one sent to the board, by its slot) */
-    if (st.tab_slot == 0 || st.tab_slot >= LINK_TABLES)
+    /* (the network, or the scaler's table: FSR's own, the learnt pair's, or one sent to the board, by
+     * its slot) */
+    if (s->net && st.net_there)
+        str("NETWORK x2 + RCAS ");
+    else if (st.tab_slot == 0 || st.tab_slot >= LINK_TABLES)
         str("FSR 1  EASU + RCAS ");
     else if (st.tab_slot < 3)
         str("EASU learnt + RCAS ");

@@ -430,7 +430,7 @@ static struct link_settings to_link(const struct scaler_settings *v)
                               .aa_thr = v->aa_thr, .sharp = v->sharp, .swap = v->swap, .top1 = v->top1,
                               .pattern = v->pattern, .freeze = v->freeze, .audio = v->audio, .aa_dbg = v->aa_dbg,
                               .aa_diag = v->aa_diag, .aa_corner = v->aa_corner, .crop = v->crop, .wide = v->wide,
-                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat, .surround = v->surround, .table = v->table, .mv_dbg = v->mv_dbg,
+                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat, .surround = v->surround, .table = v->table, .mv_dbg = v->mv_dbg, .net = v->net,
                               .crop_x = v->crop_x, .crop_w = v->crop_w, .crop_y = v->crop_y, .crop_h = v->crop_h};
     return l;
 }
@@ -441,7 +441,7 @@ static struct scaler_settings from_link(const struct link_settings *l)
                                 .aa_thr = l->aa_thr, .sharp = l->sharp, .swap = l->swap, .top1 = l->top1,
                                 .pattern = l->pattern, .freeze = l->freeze, .audio = l->audio, .aa_dbg = l->aa_dbg,
                                 .aa_diag = l->aa_diag, .aa_corner = l->aa_corner, .crop = l->crop, .wide = l->wide,
-                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround, .table = l->table, .mv_dbg = l->mv_dbg,
+                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround, .table = l->table, .mv_dbg = l->mv_dbg, .net = l->net,
                                 .crop_x = l->crop_x, .crop_w = l->crop_w, .crop_y = l->crop_y, .crop_h = l->crop_h};
     return v;
 }
@@ -609,6 +609,7 @@ static bool cpu_second(struct scaler_state *s)
     s->in_std = ls.in_std, s->in_ok = ls.in_ok, s->in_lines = ls.in_lines, s->in_hz100 = ls.in_hz100;
     s->pan = ls.pan, s->pan_dx = ls.pan_dx, s->pan_dy = ls.pan_dy, s->pan_ms10 = ls.pan_ms10;
     s->tab_have = ls.tab_have, s->tab_slot = ls.tab_slot, s->tab_state = ls.tab_state, s->tab_bad = ls.tab_bad, s->tab_ms = ls.tab_ms;
+    s->net_there = ls.net_there, s->net_under = ls.net_under;
     tables_second(ls.tab_have, ls.tab_state);
     return true;
 }

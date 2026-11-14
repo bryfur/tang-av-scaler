@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mvdbg] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [mvdbg] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE] [net[=MODEL.json]]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
 pic=FILE: a still picture's fields in the moving test picture's place; ll=N: the frame made from the field still coming in, N of its lines in (with 6 fields: the one coming in must be a bottom one); pg: what comes in is progressive (480p: each field a whole frame); tab=TABLE: the scaler's table is another one
-(model.table_load()), put into its RAM through the register port as the CPU's program does while the frames before go by."""
+(model.table_load()), put into its RAM through the register port as the CPU's program does while the frames before go by;
+net: the network is the scaler's first stage (rtl/cnn.v, bicu.v; the model: sim/cnn/t8s.json, or the one named)."""
 import os
 import subprocess
 import sys
@@ -58,6 +59,8 @@ def main():
     prog = "pg" in args                 # 480p: each "field" a whole frame, F always 0
     edi = "edi" in args                 # the lines made go along the picture's edges
     mvdbg = "mvdbg" in args             # the vectors' view (with mc)
+    netf = next((a[4:] or os.path.join(HERE, "cnn/t8s.json") for a in args if a == "net" or a.startswith("net=")), None)
+    net = model.net_load(netf) if netf else None
     tabf = next((a[4:] for a in args if a.startswith("tab=")), None)
     tab = model.table_load(tabf) if tabf else None
     # mc: motion compensation (the vectors found by the design itself); mv=DX,DYR: the picture pans (model.pan_field);
@@ -93,8 +96,10 @@ def main():
         tag += "_t"
     if mvdbg:
         tag += "_v"
+    if net:
+        tag += "_n"
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
-    n_out = 2200 * 1125 + 2200 * 60
+    n_out = 2200 * 1125 + 2200 * 90
     import fsr
     geo = fsr.geom(*crop)
     # (ll: the samples before the last field; and how long after a frame's start the last field begins: a frame's
@@ -102,6 +107,8 @@ def main():
     per_field = len(data) // nf
     last_before = len(data) - per_field - 1 if ll else len(data) - 1
     ll_wait = int(2200 * 1125 * 6.74 - (3 + ll) * 740 * 16)
+    if net:                             # (its frames' lines begin some twelve rows early: that much sooner)
+        ll_wait -= int(12 * 2200 * 6.74)
     tb = '''`timescale 1ns/1ps
 module tb;
     reg llc = 0; always #8 llc = ~llc;
@@ -155,9 +162,39 @@ module tb;
     pattern u_pat (.clk(clk), .ce(1'b1), .hd(1'b0), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr), .g(pg), .b(pb),
                    .ox(ox), .oy(oy));
     wire [7:0] e_y, e_cb, e_cr; wire [24:0] e_xy;
-    easu u_easu (.g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
+    // the scaler: easu.v, or the network and its stretch (as rtl/top.v has them)
+    localparam NET = %(net_on)d;
+    wire [7:0] a_y, a_cb, a_cr, b_y, b_cb, b_cr; wire a_ev, a_first, b_ev, b_first; wire [9:0] a_goal, b_goal, n_col; wire [55:0] n_rows;
+    easu u_easu (.g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(a_ev), .ev_first(a_first), .ev_goal(a_goal),
                  .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d),
-                 .t_req(tab_req), .t_wr(tab_wr), .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack), .t_q(tab_q), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
+                 .t_req(tab_req), .t_wr(tab_wr), .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack), .t_q(tab_q),
+                 .n_on(NET[0]), .n_col(n_col), .n_sel({c_sline[42:40], c_sline[32:30], c_sline[22:20], c_sline[12:10], c_sline[2:0]}), .n_rows(n_rows), .o_y(a_y), .o_cb(a_cb), .o_cr(a_cr));
+    reg nf_t = 0, nm_t = 0; reg [9:0] nf_skip = 0, nm_made = 0;
+    always @(posedge pclk) begin
+        if (fstart) begin nf_t <= !nf_t; nf_skip <= 10'd%(skip)d; nm_made <= 10'd%(skip)d; nm_t <= !nm_t; end
+        else if (w_we && w_x == 10'd719 && nm_made != 10'd480) begin nm_made <= nm_made + 10'd1; nm_t <= !nm_t; end
+    end
+    wire c_go, c_busy, c_owe, c_cwe, c_quiet, c_rdy; wire signed [10:0] c_n; wire [9:0] c_first, c_last, c_cline, c_ccol; wire [49:0] c_sline;
+    wire [10:0] c_oline, c_ocol; wire [7:0] c_od; wire [15:0] c_cd; wire [15:0] n_under; wire l_ack;
+    cnn u_cnn (.clk(clk), .go(c_go), .n(c_n), .quiet(c_quiet), .first(c_first), .last(c_last), .busy(c_busy), .rdy(c_rdy), .s_col(n_col), .s_line(c_sline), .s_r(n_rows),
+               .o_we(c_owe), .o_line(c_oline), .o_col(c_ocol), .o_d(c_od), .c_we(c_cwe), .c_line(c_cline), .c_col(c_ccol), .c_d(c_cd),
+               .l_req(1'b0), .l_a(12'd0), .l_d(22'd0), .l_ack(l_ack));
+    bicu u_bicu (.clk(clk), .on(NET[0]), .de(de), .x(ox), .y(oy), .g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d),
+                 .ev(b_ev), .ev_first(b_first), .ev_goal(b_goal), .f_t(nf_t), .f_skip(nf_skip), .m_t(nm_t), .m_made(nm_made), .go(c_go), .n(c_n), .quiet(c_quiet),
+                 .first(c_first), .last(c_last), .busy(c_busy), .rdy(c_rdy), .o_we(c_owe), .o_line(c_oline), .o_col(c_ocol), .o_d(c_od), .c_we(c_cwe),
+                 .c_line(c_cline), .c_col(c_ccol), .c_d(c_cd), .o_y(b_y), .o_cb(b_cb), .o_cr(b_cr), .under(n_under));
+    assign e_y = NET ? b_y : a_y; assign e_cb = NET ? b_cb : a_cb; assign e_cr = NET ? b_cr : a_cr;
+    assign ev = NET ? b_ev : a_ev; assign ev_first = NET ? b_first : a_first; assign ev_goal = NET ? b_goal : a_goal;
+    integer n_pass = 0, under0 = 0; always @(posedge clk) if (c_go) n_pass <= n_pass + 1;
+    reg pre_q = 0, fnew_q = 0, fok_q = 0;
+    always @(posedge clk) begin
+        pre_q <= u_bicu.pre; fnew_q <= u_bicu.f_new; fok_q <= u_bicu.f_ok;
+        if (NET && u_bicu.pre && !pre_q) $display("network: the next frame begun early at row %%0d, column %%0d (lines made %%0d, the last one wanted %%0d)", oy, ox, u_bicu.made, u_bicu.n_fin);
+        if (NET && u_bicu.f_new && !fnew_q) $display("network: its lines begin at row %%0d (from line %%0d)", oy, u_bicu.sk_new);
+        if (NET && u_bicu.f_ok && !fok_q) $display("network: its passes begin at row %%0d, column %%0d (lines made %%0d; from pass %%0d)", oy, ox, u_bicu.made, u_bicu.n_next);
+    end
+    always @(posedge clk) if (NET && dumping && de && ox == 0 && (oy == 0 || oy == 1 || oy == 540))
+        $display("network: row %%0d: lines made %%0d, passes done to %%0d (first %%0d), wanted now %%0d, three rows on %%0d, the goal %%0d, under %%0d", oy, u_bicu.made, u_bicu.n_done, u_bicu.first, u_bicu.need, u_bicu.n_req, u_bicu.ev_goal, n_under);
     // the table's port, a register bus as the CPU's: another table put in, some of it read back
     reg sclk = 0; always #10 sclk = ~sclk;
     reg b_we = 0; reg [7:0] b_addr = 0; reg [31:0] b_wd = 0;
@@ -230,6 +267,9 @@ module tb;
         if (%(ll_on)d) begin
             // the last field begun so that some lines of it are in when a frame begins: that frame
             @(posedge ev_first);
+            // (the network: a frame's lines are begun some twelve rows before the frame before is over,
+            // from the second frame on: counted from such a start)
+            if (NET) begin @(negedge ev_first); @(posedge ev_first); end
             #(%(ll_wait)d);
             fork
                 for (j = %(last_before)d + 1; j <= %(last)d; j = j + 1) begin
@@ -243,8 +283,12 @@ module tb;
         // the frame that begins after the fields are in (or: as the last comes in): from the next end of row 1079
         wait (tab_done);
         @(posedge ev_first);
+        // (the network: a frame that follows one of its own, as every frame on the board does: its lines
+        // are begun before the frame before is over)
+        if (NET && !%(ll_on)d) begin @(negedge ev_first); @(posedge ev_first); end
         if (%(ll_on)d) $display("as the frame begins: %%0d lines of the field in slot %%0d are in (latest %%0d)", f_prog, f_pslot, latest);
         dumping = 1;
+        under0 = n_under;
         f = $fopen("%(work)s/%(tag)s_out.bin", "wb");
         for (i = 0; i < %(n_out)d; i = i + 1) begin
             @(posedge clk); #0.1;
@@ -256,17 +300,21 @@ module tb;
         $display("ll %%0d", llbit);
         $display("border %%0d %%0d %%0d %%0d %%0d", bd_any, bd_x0, bd_x1, bd_l0, bd_l1);
         $display("focus %%0d %%0d", fo_n, fo_sum);
+        if (NET) $display("network: %%0d passes, %%0d rows of this frame begun before their lines", n_pass, n_under - under0);
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, net_on=1 if net else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     if tab:
         open(os.path.join(WORK, tag + "_tab.hex"), "w").write("".join("%08x\n" % v for v in model.table_words(tab)))
-    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint_edi.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
+    rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint_edi.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "cnn.v", "bicu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
+    cnn_inc = os.path.join(WORK, tag + "_inc")
+    os.makedirs(cnn_inc, exist_ok=True)
+    model.net_init(net or model.net_load(os.path.join(HERE, "cnn/t8s.json")), os.path.join(cnn_inc, "cnn_init.vh"))
     subprocess.check_call([sys.executable, os.path.join(HERE, "fsr.py"), "table", hexf], stdout=subprocess.DEVNULL)
     subprocess.check_call([sys.executable, os.path.join(HERE, "smaa.py"), "table", os.path.join(WORK, "smaa.hex"),
                            os.path.join(WORK, "smaad.hex"), os.path.join(WORK, "smaah.hex")])
@@ -275,7 +323,7 @@ endmodule
     subprocess.check_call(["verilator", "--binary", "--timing", "-j", "16", "-Wno-fatal", "-Wno-WIDTH", "-Wno-UNUSED",
                            "-Wno-DECLFILENAME", "-Wno-STMTDLY", "-Wno-INITIALDLY", "-Wno-MULTIDRIVEN", "-Wno-TIMESCALEMOD",
                            "--top-module", "tb", "--Mdir", mdir, "-o", tag] +
-                          ['-DEASU_HEX%d="%s%d.hex"' % (k, hexf, k) for k in range(4)] +
+                          ['-DEASU_HEX%d="%s%d.hex"' % (k, hexf, k) for k in range(4)] + ["-I" + cnn_inc] +
                           ['-DSMAA_HEX="%s"' % os.path.join(WORK, "smaa.hex"), '-DSMAA_DHEX="%s"' % os.path.join(WORK, "smaad.hex"),
                            '-DSMAA_HHEX="%s"' % os.path.join(WORK, "smaah.hex")] +
                           [os.path.join(WORK, tag + "_tb.v"), os.path.join(HERE, "ddr_model.v")] + rtl,
@@ -290,10 +338,18 @@ endmodule
     print("border: %s" % ("as the model's" if (tuple(bd[1:]) if bd[0] else None) == bw else "got %s want %s" % (bd, bw)))
     s = open(os.path.join(WORK, tag + "_out.bin"), "rb").read()
     de = [s[4 * k] - 65 for k in range(len(s) // 4)]
-    # (the dump begins at the end of the frame before: its last row is still coming out)
-    first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
-    start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab, mvdbg)
+    # (the dump begins at the end of the frame before, or some rows before that: the frame's first row is
+    # the first after twenty lines with none)
+    gap, start = 0, None
+    for k in range(len(de)):
+        if de[k]:
+            if gap > 2200 * 20:
+                start = k
+                break
+            gap = 0
+        else:
+            gap += 1
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab, mvdbg, net)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
     pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip, mvdbg)

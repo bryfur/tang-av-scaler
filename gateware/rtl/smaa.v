@@ -79,7 +79,7 @@ module smaa #(
     output reg        o_last,
     output reg [7:0]  o_y,
     output reg [7:0]  o_c
-);
+) /* synthesis syn_srlstyle = "registers" */;        // (its delays are registers: as block RAM each is two sites, 36 bits wide)
     localparam K = NH + 4;
     localparam M = NH + 1;              // the middle column: this many behind the newest (hk, cv)
     integer i;

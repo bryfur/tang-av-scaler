@@ -101,6 +101,11 @@
 //                    (signed: lines of the field), 10 it is known; 17:11 the frame's first line made, in
 //                    eights (deint.v, lstream.v skip: the lines above the part shown, less some, are
 //                    not made); 27:18 the first line that wants vectors (deint.v first)
+//   44 RW  NET       the network as the scaler's first stage (cnn.v, bicu.v): 0 it is on; read: 30 it
+//                    is there, 31 a weight is on its way in (NETD: wait)
+//   45 W   NETA, 46 W NETD   the network's weights (cnn.v's l_a, l_d): NETA an address, NETD the value
+//                    for it (22 bits), and the address is then one on
+//   47 R   NETS      15:0 rows begun before the network had made their lines (there should be none)
 //   58 RW  TABA, 59 W TABD, 5C-5F R TABQ   the scaler's table (easu.v easu_port): the CPU's program
 //                    puts the table wanted into the scaler's RAM, and reads it back (sw/table.c)
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
@@ -671,6 +676,34 @@ module top (
     wire [119:0] tab_d, tab_q;
     easu_port #(.A(8'h58)) u_tabp (.clk(clk), .we(we), .addr(addr), .wdata(wdata), .q_a(tab_qa), .t_req(tab_req), .t_wr(tab_wr),
                                    .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack));
+    // the network (cnn.v): on, and its weights' port
+    reg          net_on = 1'b0;
+    reg  [11:0]  net_a = 12'd0;
+    reg  [21:0]  net_d = 22'd0;
+    reg          net_req = 1'b0;
+    reg  [2:0]   net_ak = 3'd0;
+    wire         net_ack;
+    wire [15:0]  net_under;
+    reg  [15:0]  net_u0, net_u;
+    reg          net_step = 1'b0;
+    always @(posedge clk) begin
+        net_ak <= {net_ak[1:0], net_ack};
+        net_u0 <= net_under;
+        net_u <= net_u0;
+        if (we && addr == 8'h44)
+            net_on <= wdata[0];
+        if (we && addr == 8'h45) begin
+            net_a <= wdata[11:0];
+            net_step <= 1'b0;
+        end
+        if (we && addr == 8'h46) begin
+            net_d <= wdata[21:0];
+            if (net_step)
+                net_a <= net_a + 12'd1;
+            net_step <= 1'b1;
+            net_req <= !net_req;
+        end
+    end
     reg  [27:0]  g_xr = -28'sd11808768;
     reg          g_wide = 1'b0;
     reg  [16:0]  g_dx = 17'd32768;
@@ -740,6 +773,22 @@ module top (
                     .a_line(ca_line), .a_data(ca_data), .a_ack(ca_ack), .latest(c_latest), .par(c_par),
                     .nfields(c_n), .flines(c_lines), .prog(c_prog), .prog_slot(c_pslot));
     assign d_hold = hd_p ? pt_hold : ls_hold;
+    // what the network's side (bicu.v, on the word clock) is told of the scaler's ring: a frame's
+    // lines begin (nf_t changes: its first line), and each line's end (nm_t: the next line's number)
+    reg          nf_t = 1'b0, nm_t = 1'b0;
+    reg  [9:0]   nf_skip = 10'd0, nm_made = 10'd0;
+    wire [9:0]   ls_skip = pg_p ? 10'd0 : {mv_p[17:11], 3'b000};
+    always @(posedge pclk) begin
+        if (d_fstart) begin
+            nf_t <= !nf_t;
+            nf_skip <= ls_skip;
+            nm_made <= ls_skip;
+            nm_t <= !nm_t;
+        end else if (w_we && w_x == 10'd719 && nm_made != 10'd480) begin
+            nm_made <= nm_made + 10'd1;
+            nm_t <= !nm_t;
+        end
+    end
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
                    .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .edi(dcfg[7]), .mc(dcfg[3]), .mvdbg(dcfg[20]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
@@ -748,7 +797,7 @@ module top (
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
                    .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
                    .state_o(d_state));
-    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .skip(pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .hold(ls_hold), .r_we(r_we),
+    lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .skip(ls_skip), .hold(ls_hold), .r_we(r_we),
                   .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),
                   .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa[8:0]), .r_wd_d(r_wd_d), .r_wd_i(r_wd_i),
                   .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d));
@@ -785,10 +834,47 @@ module top (
                 geo0 <= {g_wide, g_xr, g_dx, g_ys, g_dy};
                 geo <= geo0;
             end
+            // the scaler: easu.v, or (n_on) the network and the stretch after it (cnn.v, bicu.v): the
+            // same raster in, the same clocks to the pixel, the same events to the lines' side
+            reg         n_on0 = 1'b0, n_on = 1'b0;
+            always @(posedge tx_clk) begin
+                n_on0 <= net_on;
+                n_on <= n_on0;
+            end
+            wire [7:0]  a_y, a_cb, a_cr, b_y, b_cb, b_cr;
+            wire        a_ev, a_first, b_ev, b_first;
+            wire [9:0]  a_goal, b_goal;
+            wire [9:0]  n_col;
+            wire [55:0] n_rows;
             easu u_easu (.g_wide(geo[89]), .g_xr(geo[88:61]), .g_dx(geo[60:44]), .g_ys(geo[43:17]), .g_dy(geo[16:0]),
-                         .clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
-                         .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
-                         .t_req(tab_req), .t_wr(tab_wr), .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack), .t_q(tab_q), .o_cr(e_cr));
+                         .clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(a_ev), .ev_first(a_first), .ev_goal(a_goal),
+                         .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(a_y), .o_cb(a_cb),
+                         .t_req(tab_req), .t_wr(tab_wr), .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack), .t_q(tab_q),
+                         .n_on(n_on), .n_col(n_col), .n_sel({c_sline[42:40], c_sline[32:30], c_sline[22:20], c_sline[12:10], c_sline[2:0]}),
+                         .n_rows(n_rows), .o_cr(a_cr));
+            wire        c_go, c_busy, c_owe, c_cwe, c_quiet, c_rdy;
+            wire signed [10:0] c_n;
+            wire [9:0]  c_first, c_last, c_cline, c_ccol;
+            wire [49:0] c_sline;
+            wire [10:0] c_oline, c_ocol;
+            wire [7:0]  c_od;
+            wire [15:0] c_cd;
+            cnn u_cnn (.clk(tx_clk), .go(c_go), .n(c_n), .quiet(c_quiet), .first(c_first), .last(c_last), .busy(c_busy), .rdy(c_rdy), .s_col(n_col),
+                       .s_line(c_sline), .s_r(n_rows), .o_we(c_owe), .o_line(c_oline), .o_col(c_ocol), .o_d(c_od),
+                       .c_we(c_cwe), .c_line(c_cline), .c_col(c_ccol), .c_d(c_cd), .l_req(net_req), .l_a(net_a),
+                       .l_d(net_d), .l_ack(net_ack));
+            bicu u_bicu (.clk(tx_clk), .on(n_on), .de(p_de[0]), .x(p_x), .y(p_y), .g_wide(geo[89]), .g_xr(geo[88:61]),
+                         .g_dx(geo[60:44]), .g_ys(geo[43:17]), .g_dy(geo[16:0]), .ev(b_ev), .ev_first(b_first),
+                         .ev_goal(b_goal), .f_t(nf_t), .f_skip(nf_skip), .m_t(nm_t), .m_made(nm_made), .go(c_go), .n(c_n), .quiet(c_quiet),
+                         .first(c_first), .last(c_last), .busy(c_busy), .rdy(c_rdy), .o_we(c_owe), .o_line(c_oline), .o_col(c_ocol),
+                         .o_d(c_od), .c_we(c_cwe), .c_line(c_cline), .c_col(c_ccol), .c_d(c_cd), .o_y(b_y), .o_cb(b_cb),
+                         .o_cr(b_cr), .under(net_under));
+            assign e_y = n_on ? b_y : a_y;
+            assign e_cb = n_on ? b_cb : a_cb;
+            assign e_cr = n_on ? b_cr : a_cr;
+            assign l_ev = n_on ? b_ev : a_ev;
+            assign l_first = n_on ? b_first : a_first;
+            assign l_goal = n_on ? b_goal : a_goal;
             pthru u_pt (.w_clk(pclk), .r_we(r_we), .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa),
                         .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .hold(pt_hold), .goal(pt_goal), .clk(tx_clk),
                         .ce(pcev[10]), .swap(swap), .x(p_x), .y(p_y), .ev(pt_ev), .ev_first(pt_first), .rgb(pt_rgb));
@@ -796,6 +882,8 @@ module top (
             rcas u_rcas (.dn(dn), .wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
                          .cri(swap ? e_cb : e_cr), .sharp(sharp), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
+            assign net_ack = net_req;
+            assign net_under = 16'd0;
             assign tab_ack = tab_req;
             assign tab_q = 120'd0;
             assign l_r = 8'd0;
@@ -916,6 +1004,8 @@ module top (
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
             8'h53: rdata <= mv_r;
+            8'h44: rdata <= {net_req != net_ak[2], 1'b1, 29'd0, net_on};
+            8'h47: rdata <= {16'd0, net_u};
             8'h58: rdata <= tab_qa;
             8'h5C: rdata <= {2'd0, tab_q[29:0]};
             8'h5D: rdata <= {2'd0, tab_q[59:30]};

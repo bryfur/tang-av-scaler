@@ -9,11 +9,11 @@
 
 #include <stdint.h>
 
-/* "AVC4": the program speaks this.  A change to the messages, the settings or the status below is a
+/* "AVC5": the program speaks this.  A change to the messages, the settings or the status below is a
  * new number: a link whose firmware has another gives the CPU its own program (2026-11-13: without
  * that, a firmware from before the tables read this status as its own shorter one, took what lay
  * where its settings had been for the settings, and kept them) */
-#define LINK_MAGIC   0x34435641u
+#define LINK_MAGIC   0x35435641u
 
 enum {
     LINK_STATUS = 0x01,                 /* -> struct link_status */
@@ -86,11 +86,15 @@ struct link_settings {
                              * that holds none: the design's own */
     uint8_t mv_dbg;         /* the motion compensation's vectors shown (rtl/deint.v mvdbg; with mode 8): the
                              * picture grey, each block of eight pixels the colour of its vector */
+    uint8_t net;            /* the scaler's first stage: 0 none (the table's kernel does it all: rtl/easu.v), 1 the
+                             * network (rtl/cnn.v: the picture's luma made twice the size by it, then a
+                             * bicubic stretch: rtl/bicu.v; the table is not used then) */
+    uint8_t pad;            /* 0 */
     /* (No gaps in this: the two sides compare theirs byte for byte.  With one the link found the CPU's
      * "changed" each second, by whatever lay in the gap, and kept them in flash again each time) */
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
-_Static_assert(sizeof(struct link_settings) == 26 + 8, "link_settings: a gap, or a new member not counted here");
+_Static_assert(sizeof(struct link_settings) == 28 + 8, "link_settings: a gap, or a new member not counted here");
 
 #define LINK_SETTINGS_DEFAULT { .on = 1, .ntsc = 1, .thr = 6, .aa = 1, .aa_thr = 12, .sharp = 8, .audio = 1, \
                                 .aa_diag = 1, .aa_corner = 1, .crop = 1, .nr = 2, .dn = 1, .flock = 1, .crop_w = 720, .crop_h = 480 }
@@ -133,9 +137,14 @@ struct link_status {
     uint8_t tab_pad;
     uint16_t tab_bad;       /* entries that read back other than put, the last time (0: as it should be) */
     uint16_t tab_ms;        /* the time putting it in took */
+    uint8_t net_there;      /* the design has the network (rtl/cnn.v) */
+    uint8_t net_pad;
+    uint16_t net_under;     /* rows the network was late for, since the program began (there should be none
+                             * while a picture comes in) */
+    uint16_t pad2;          /* 0 (no gap before the settings, none at the end) */
     struct link_settings set;
 };
-_Static_assert(sizeof(struct link_status) == 78 + sizeof(struct link_settings), "link_status: a gap, or a new member not counted here");
+_Static_assert(sizeof(struct link_status) == 84 + sizeof(struct link_settings), "link_status: a gap, or a new member not counted here");
 
 /* what comes in */
 enum { LINK_IN_NONE, LINK_IN_240P, LINK_IN_480I, LINK_IN_288P, LINK_IN_576I, LINK_IN_480P, LINK_IN_576P,

@@ -54,7 +54,7 @@ module spis (
     wire start = cs[2:1] == 2'b10, stop = cs[2:1] == 2'b01;
 
     // the messages' memories
-    reg [31:0] rxm [0:63];
+    reg [31:0] rxm [0:63] /* synthesis syn_ramstyle = "distributed_ram" */;      // (64 words: LUT RAM, not two block RAMs)
     reg [31:0] txm [0:511];
     reg [5:0]  rxa = 6'd0;
     reg [8:0]  txa = 9'd0, tra;

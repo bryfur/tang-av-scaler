@@ -126,3 +126,33 @@ Two things learnt on the way that matter to anyone repeating it: a test on seque
 as the training ones flatters every network, the large ones most (the history variant looked worth +0.3
 to +0.5 dB that way and was worth under 0.1 on new games); and training on through the rounding made the
 networks worse: the weights here are the floating-point ones rounded, which loses 0.01 dB.
+
+## In the design
+
+Built on 2026-11-14 (gateware side): `rtl/cnn.v` is the network, `rtl/bicu.v` the stretch after it; the
+setting `net` (the web page's "Upscaler": Kernel or Network) puts them in `easu.v`'s place.
+
+- **Where.** After SMAA, as the note says: the network reads the same eight-line ring `lstream.v` fills
+  for `easu.v` (five of its lines at once), on the output's clock, a source line at a time (a pass). A
+  source pixel takes six clocks, so each of the 192 multipliers (9 x 8 bits) does six products a pixel:
+  1,080 a pixel in all, because layer 1 is computed three times over rather than kept (it is small; its
+  two lines of eight channels would have cost eight more block RAMs). Layer 2's two lines are kept
+  (eight block RAMs).
+- **The last stretch.** The picture at twice the size goes to a ring of eight lines; `bicu.v` reads four
+  of them by the bicubic kernel torch uses (a = -0.75), a place to the nearest 32nd of a pixel, down
+  first and then across, to 1440 x 1080 or whatever the crop and the wide setting ask. The chroma is not
+  stretched twice: it goes from the source to the output directly, the four nearest by sixteenths. The
+  sharpening after it is still there and still follows its setting (0 turns it off).
+- **The weights** are in LUT RAM, the design's own `sim/cnn/t8s.json` (`sim/model.py net_init()` at build
+  time); another network of the same shape (3 x 3, 1 -> 8 -> 8 -> 4: `t8.json` is one) can be put in while
+  the picture runs: registers 45, 46 (`tools/net.py load MODEL.json`, through the monitor; it lasts until
+  the FPGA is loaded again). `f16s` is another shape and would be another build.
+- **A frame's start** was the hard part: the network wants the first lines some ten rows before
+  `easu.v` does. Its passes begin two lines above the first line shown, and the lines' side is told to
+  begin the next frame before the frame now shown is over (it reads ahead; nothing reaches the ring
+  until the last row is done). Register 47 counts rows begun before their lines were made.
+- **Checked.** `sim/cnn_tb.py`: `cnn.v` against the four test pictures here, every pixel (and its
+  synthesized netlist: `cnn_tb.py synth`). `sim/deint_tb.py ... net`: a whole frame through the
+  deinterlacer, SMAA, the network, the stretch and the sharpening against `sim/model.py scale_net()`:
+  the same on every pixel, with crops, widescreen, 480p, the low latency mode, motion compensation and
+  the edges on. `tools/boardcheck.py` compares the board's output with the model the same way.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""boardcheck.py [MODE ...] [table=N]: the board's picture against the model's, pixel for pixel, on what the
+"""boardcheck.py [MODE ...] [table=N] [rows=Y0,Y1]: the board's picture against the model's, pixel for pixel, on what the
 console sends now.  The picture is frozen (the link), the four newest fields read out of the DDR3
 (fields.py), and for each deinterlacing mode asked for (default 0 8 4 12: motion adaptive,
 motion compensated, along edges, both) the rows where that mode matters are read back from the
@@ -9,7 +9,11 @@ search was found this way, 2026-11-13).
 
 The scaler's table is the one the board says it has (the design's own, or the learnt ones in
 gateware/tables; another: TABLE=its file); table=N: the setting changed to N for the check (0 FSR's,
-1 the learnt pair, ...: tools/table.py), and many more rows compared.
+1 the learnt pair, ...: tools/table.py), and many more rows compared.  The network (the setting net,
+tools/net.py): the model's is sim/cnn/t8s.json, the design's own (another put in: NET=its file).
+
+rows=Y0,Y1: these rows of the output compared (for the first mode), whatever the modes change: e.g. 0,120
+for a frame's first rows.
 
 It needs something moving in the picture for the modes to differ from plain motion adaptive (it
 says how many pixels do).  AV_HOST (default 192.168.1.112), AVB_TTY (default the link's console).
@@ -46,6 +50,7 @@ def api(**kw):
 def main():
     modes = [int(a) for a in sys.argv[1:] if a.isdigit()] or [0, 8, 4, 12]
     tabset = next((int(a[6:]) for a in sys.argv[1:] if a.startswith("table=")), None)
+    rowset = next((tuple(int(v) for v in a[5:].split(",")) for a in sys.argv[1:] if a.startswith("rows=")), None)
     os.makedirs(OUT, exist_ok=True)
     v = api()
     s, was = v["set"], v["set"]["mode"]
@@ -70,6 +75,10 @@ def main():
     if tabfile == "":
         sys.exit("boardcheck: the scaler has the table in slot %d (%s): TABLE=its file" % (slot, t["names"][slot]))
     tab = model.table_load(tabfile) if tabfile else None
+    net = None
+    if s.get("net") and v.get("net", {}).get("there"):
+        net = model.net_load(os.environ.get("NET") or os.path.join(HERE, "../sim/cnn/t8s.json"))
+        print("the network is the scaler's first stage (rows it was late for so far: %d)" % v["net"]["under"], flush=True)
     print("the scaler's table: slot %d (%s)%s" % (slot, t.get("names", ["FSR"])[slot], ", %d entries read back wrong" % t["bad"] if t.get("bad") else ""), flush=True)
     if v["in"] != "480i" or not v["hist"]:
         sys.exit("boardcheck: 480i with four fields in order is wanted (in %s, hist %s)" % (v["in"], v["hist"]))
@@ -94,7 +103,7 @@ def main():
             rows = model.frame_1080(fields, pars, mode & 3, s["thr"], s["aa_thr"] if s["aa"] else None, s["sharp"], bool(s["aa_dbg"]),
                                     bool(s["aa_diag"]), bool(s["aa_corner"]), crop, s["nr"], bool(s["dn"]), False, bool(mode & 4),
                                     None, bool(mode & 8) and mode & 3 == 0, first, skip, tab,
-                                    bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0)
+                                    bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0, net)
             im = Image.new("RGB", (1920, 1080))
             im.putdata([p for row in rows for p in row])
             return im
@@ -106,6 +115,8 @@ def main():
             y0, y1 = (max(0, box[1] - 8), min(1080, box[3] + 8)) if box else (500, 580)
             if tabset is not None and mode == modes[0]:
                 y0, y1 = 300, 780
+            if rowset and mode == modes[0]:
+                y0, y1 = rowset
             moved = sum(1 for p in ImageChops.difference(want, plain).getdata() if p != (0, 0, 0))
             api(mode=mode)
             time.sleep(1.5)

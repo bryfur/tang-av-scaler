@@ -181,6 +181,7 @@ static void picture(void)
                    (s->aa_dbg ? 1u : 0) << 17 | (s->aa ? 1u : 0) << 16 | (uint32_t)s->thr << 8 |
                    (s->mode & 4 ? 1u : 0) << 7 | (s->lowlat ? 1u : 0) << 6 | (uint32_t)(s->nr & 3) << 4 |
                    ((s->mode & 8) && (s->mode & 3) == 0 ? 8 : 0) | (s->top1 ? 4 : 0) | (s->mode & 3);
+    REG(R_NET) = s->net ? 1 : 0;
     bool no_mem = REG(R_DDR) & 2;       /* (the memory's calibration failed: the test picture and the text say so) */
     REG(R_OSD) = s->osd || !st.in_ok || no_mem ? 1 : 0;
     /* the video guard band and the data islands (the sound's CTS for 148.5 MHz), or DVI's blanking */
@@ -361,7 +362,10 @@ static int settle;                      /* seconds until the decoder's picture i
 #define LL_BLANK   (hd ? 67 : 143)
 static int ll_min(void)
 {
-    return hd ? 6 : ed ? st.show_y + 20 : st.show_y / 2 + 10;
+    /* (the network wants its lines sooner than the plain scaler: three more of the frame's, its passes'
+     * time, and the next frame's lines are begun some eleven to twenty rows before this one's end) */
+    int net = set.net && !hd && (REG(R_NET) >> 30 & 1) ? 8 : 0;
+    return hd ? 6 : ed ? st.show_y + 20 + 2 * net : st.show_y / 2 + 10 + net;
 }
 /* (when a frame is begun after the last field's end, made from the one coming in: in 10 us) */
 static int32_t ll_at(void)
@@ -589,6 +593,8 @@ void board_second(void)
         st.delay_us10 = hd ? (st.ll ? (lat & 0xFFF) + 7 - LL_BLANK : (lat & 0xFFF) + 1608) :
                         st.ll ? (lat & 0xFFF) + 67 - LL_BLANK : (lat & 0xFFF) + 1630;
         REG(R_LLMIN) = ll_min();
+        st.net_there = REG(R_NET) >> 30 & 1;
+        st.net_under = REG(R_NETS);
     }
 
     if (grabbing && ms() - grab_ms > 3000) {

@@ -38,7 +38,9 @@ them to the FPGA's CPU at each start; `POST /api/table?slot=3&name=mine` (the bo
 131072 bytes) keeps one more in the flash's free end (slots 3 to 7) and gives it too,
 `POST /api/table?slot=3&drop=1` empties the slot; the setting `table` chooses which the scaler has
 (0 FSR's, 1 the learnt pair, 2 on: slot 3 on), and `GET /api/video` says under `tab` which slots
-hold a table, their names and which one is in the scaler.
+hold a table, their names and which one is in the scaler. The setting `net` (1) puts the FPGA's
+network in the kernel's place (`GET /api/video`: `net`: whether the design has one, and the rows it
+was late for).
 
 While a host is on the console port (`gateware/tools/*.py`), the link leaves the scaler to it.
 
