@@ -29,6 +29,10 @@ stretch, where FSR's own table gives 0 to +0.05 ([docs/cnn-upscaler.md](../docs/
 Options to look at, not the default. The link's firmware carries both and gives them to the CPU at
 each start.
 
+`learnt-11games-aa10k3.tab`: the same fit for the anti-aliasing as it is now: SMAA at threshold 10
+with the edges of the frame before kept (keep 3: `rtl/smaa_hist.v`), the games' sequences run through
+it in order. Not in the firmware: `tools/table.py send` puts it in a slot (setting `table` 2 for slot 3).
+
 ## A table file (.tab)
 
 131072 bytes: the 8192 entries in the order {place below 0-3, place right 0-7, direction 0-31,
