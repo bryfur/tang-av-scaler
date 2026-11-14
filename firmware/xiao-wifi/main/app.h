@@ -100,6 +100,9 @@ struct scaler_state {
     uint16_t tab_bad;   /* entries that read back other than put */
     uint16_t tab_ms;    /* the time putting it in took */
     bool net_there;     /* the FPGA's design has the network */
+    uint8_t net_state;  /* whose weights it has (link.h LINK_NET_*): 0 the design's, 1 given since, 2 the ones the board keeps */
+    uint8_t store;      /* the board's own storage (link.h LINK_STORE_*): 1 its flash answers, 2 it keeps the
+                         * settings, 4 something waits to be kept, 8 something could not be */
     uint16_t net_under; /* rows it was late for (counted by the FPGA: none while a picture comes in) */
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
@@ -122,10 +125,15 @@ void scaler_tune(void);         /* the decoder's sampling phase: each tried (on 
 void *big(size_t n);
 
 /* tables.c: the scaler's tables: the link's own two, and the ones sent to it (kept in flash), given
- * to the FPGA's CPU when it lacks them */
+ * to the FPGA's CPU when it lacks them or keeps another (the board keeps what it is given in its own
+ * flash: gateware/sw/store.c); the network's weights passed on to it */
 #define TABLE_NAME 24
 void tables_start(void);
-void tables_second(uint8_t have, uint8_t tab_state);    /* (the scaler's task, each second the CPU answers) */
+void tables_second(uint8_t have, uint8_t tab_state, bool cpu_new, uint8_t net_state);    /* (the scaler's task, each second the CPU answers) */
+void tables_net_name(char *name);                       /* (TABLE_NAME bytes) the kept weights' name; "": none kept */
+/* the network's weights to the board (n values of {address u16, value u32}, 6 bytes each): put in, and
+ * kept in its flash (keep) ; n 0: the kept ones forgotten.  NULL, or what went wrong */
+const char *tables_net(const uint8_t *pairs, int n, bool keep, const char *name);
 void tables_name(int slot, char *name);                 /* (TABLE_NAME bytes) "": the slot holds none */
 const char *tables_store(int slot, const char *name, int (*more)(void *ctx, uint8_t *buf, size_t n), void *ctx);
 const char *tables_drop(int slot);

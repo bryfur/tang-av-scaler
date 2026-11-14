@@ -62,6 +62,7 @@ stretched the plain way, then the scaler's output; the corner says which.
 | Timing | The output's frames are kept in step with the input's fields (the CPU trims the clock generator: within 10 us, no field shown twice or left out). A frame is made from the field that is still coming in: about 2 ms from a line captured to it sent (2.4 ms with the network; 16.8 ms with whole fields). |
 | Output | 1080p60 (59.94 Hz) HDMI from the FPGA's own transceivers; the console's sound as HDMI audio (two channels of L-PCM at 48 kHz, its clock from the PLL the pixel clock comes from); AVI and audio InfoFrames. Runs a display, a capture device and an AV receiver (picture and sound). |
 | On screen | An on-screen display: what comes in and goes out, what is done to the picture, the delay, the lock, the FPGA's temperature. |
+| Storage | The board keeps its own settings, scaler tables and network weights, in the upper half of the SOM's configuration flash: it starts as it was left, with or without the XIAO ([gateware/docs/storage.md](gateware/docs/storage.md)). The design can write only above the bitstream. |
 | Control | A web page on the XIAO: every setting (applied as it is changed, kept across power cycles), status, a screen capture of the output read back from the FPGA, firmware update over Wi-Fi. |
 
 ## What it looks like
@@ -107,8 +108,9 @@ The pictures themselves, in [`docs/compare/`](docs/compare/):
   the CPU: a matrix decoder of our own (`gateware/sw/surround.c`) makes five channels of a game's
   Pro Logic II mix, sent as 5.1 PCM.
 - **The XIAO ESP32-C5** (`firmware/xiao-wifi/`) is the way in: Wi-Fi, the web page, updates, and
-  JTAG to load bitstreams. It talks to the CPU over SPI in small messages, keeps the settings for
-  when the power is off, and carries the CPU's program.
+  JTAG to load bitstreams. It talks to the CPU over SPI in small messages and carries the CPU's
+  program. What must outlast the power (settings, tables, weights) the board keeps itself, in the
+  SOM's flash; the XIAO passes changes on and holds a copy.
 
 The design uses 42 % of the FPGA's logic, 85 % of its block RAM and 54 % of its multipliers (the
 network's 192 are most of those).
@@ -132,8 +134,7 @@ network's 192 are most of those).
 - Inputs: 480i is the one in use; 720p goes out as it came, 720p; 480p is taken as the progressive
   picture it is and scaled like the rest, but only in simulation so far (not yet tried from a
   console); 576i and 1080i need the decoder's settings and the capture's timing for each.
-- The network: one shape is built; the weights a power cycle brings back are the bitstream's own
-  (a newer set is loaded from a host and not kept); how it does in motion is not measured. The
+- The network: one shape is built; how it does in motion is not measured. The
   edges SMAA keeps are held by screen position, so they steady a still picture, not edges that
   move across it.
 - The surround decoding runs on the board (the CPU keeps up, nothing lost), but has not been
@@ -141,7 +142,8 @@ network's 192 are most of those).
 - 4K output: a 2160p30 test picture is clean on a display; at 2160p60 the link runs and the display
   sees scrambling but shows nothing; the scaler's own path ends at 1080p.
 - The board's other inputs (S/PDIF, VGA, RGB with SCART sync) are wired but not used.
-- Without the XIAO the CPU starts with its built-in settings: it has no storage of its own.
+- Without the XIAO the board starts as it was left (its settings, tables and weights are in its own
+  flash), but nothing can be changed: the page is the only control in use.
 - At power-on the FPGA loads its image twice, some 20 s more before there is a picture: configured
   before the clock generator runs, one transceiver lane's clock comes up wrong and the lanes'
   resets do not clear it; the XIAO sees that and has the FPGA load again. The right reset is not

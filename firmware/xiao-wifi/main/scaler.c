@@ -524,6 +524,7 @@ static bool cpu_second(struct scaler_state *s)
     static uint32_t up_was;
     static int silent;
     static bool given;                  /* this CPU run has our settings */
+    static bool seen_cpu;
     const uint8_t rq = LINK_STATUS;
     uint8_t a[1 + sizeof(struct link_status) + 8];      /* (room for more: a longer status is not ours) */
     struct link_status ls;
@@ -546,6 +547,7 @@ static bool cpu_second(struct scaler_state *s)
         link_program(cpu_bin_start, cpu_bin_end - cpu_bin_start);
         silent = 0;
         given = false;
+        seen_cpu = false;
         return true;
     }
     if (!alive)
@@ -560,10 +562,15 @@ static bool cpu_second(struct scaler_state *s)
     redo = again, meas = measure, tun = tune;
     again = measure = tune = false;
     xSemaphoreGive(lock);
-    if (!given || ls.up_s < up_was || ls.gen == 0) {
+    /* (a board that keeps its own settings, gateware/sw/store.c: those count from its start, and ours
+     * are only a copy; one that keeps none yet, or has no flash of its own: ours, as before) */
+    bool cpu_new = ls.up_s < up_was || !seen_cpu;
+    seen_cpu = true;
+    if (!(ls.store & LINK_STORE_SET) && (!given || ls.up_s < up_was || ls.gen == 0)) {
         given = set_all(&mine);
         ESP_LOGI(TAG, "the CPU (program %u): the settings %s", (unsigned)ls.build, given ? "given" : "NOT taken");
     } else {
+        given = true;
         struct link_settings l = to_link(&mine);
         if (memcmp(&l, &ls.set, sizeof l)) {
             mine = from_link(&ls.set);
@@ -609,8 +616,8 @@ static bool cpu_second(struct scaler_state *s)
     s->in_std = ls.in_std, s->in_ok = ls.in_ok, s->in_lines = ls.in_lines, s->in_hz100 = ls.in_hz100;
     s->pan = ls.pan, s->pan_dx = ls.pan_dx, s->pan_dy = ls.pan_dy, s->pan_ms10 = ls.pan_ms10;
     s->tab_have = ls.tab_have, s->tab_slot = ls.tab_slot, s->tab_state = ls.tab_state, s->tab_bad = ls.tab_bad, s->tab_ms = ls.tab_ms;
-    s->net_there = ls.net_there, s->net_under = ls.net_under;
-    tables_second(ls.tab_have, ls.tab_state);
+    s->net_there = ls.net_there, s->net_under = ls.net_under, s->net_state = ls.net_state, s->store = ls.store;
+    tables_second(ls.tab_have, ls.tab_state, cpu_new, ls.net_state);
     return true;
 }
 

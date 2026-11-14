@@ -515,6 +515,9 @@ static esp_err_t get_video(httpd_req_t *req)
             names[nn++] = ',';
     }
     names[nn] = 0;
+    char netname[TABLE_NAME], nn2[2 * TABLE_NAME];
+    tables_net_name(nn2);
+    esc(netname, sizeof netname, nn2);
 #define B(x) ((x) ? "true" : "false")
     int n = snprintf(out, OUT,
                      "{\"host\":%s,\"fpga\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
@@ -522,13 +525,13 @@ static esp_err_t get_video(httpd_req_t *req)
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
                      "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
                      "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
-                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d,\"surround\":%d,\"table\":%u,\"mv_dbg\":%d,\"net\":%u,\"aa_keep\":%u},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f],\"tab\":{\"have\":%u,\"slot\":%d,\"state\":%d,\"bad\":%u,\"ms\":%u,\"names\":[%s]},\"net\":{\"there\":%s,\"under\":%u}}",
+                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d,\"surround\":%d,\"table\":%u,\"mv_dbg\":%d,\"net\":%u,\"aa_keep\":%u},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f],\"tab\":{\"have\":%u,\"slot\":%d,\"state\":%d,\"bad\":%u,\"ms\":%u,\"names\":[%s]},\"net\":{\"there\":%s,\"under\":%u,\"state\":%u,\"name\":\"%s\"},\"store\":{\"there\":%s,\"set\":%s,\"busy\":%s,\"failed\":%s}}",
                      B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      in_names[t.in_std < sizeof in_names / sizeof in_names[0] ? t.in_std : 0], B(t.in_ok || !t.cpu), t.in_lines, t.in_hz100 / 100.0,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
                      v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
                      v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, !v.nolock, v.lowlat, v.surround, v.table, v.mv_dbg, v.net, v.aa_keep, t.ll ? "true" : "false", t.ll_lines, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h, t.pan, t.pan_dx, t.pan_dy, t.pan_ms10 / 10.0,
-                     t.tab_have, t.tab_slot == 255 ? -1 : t.tab_slot, t.tab_state == 255 ? -1 : t.tab_state, t.tab_bad, t.tab_ms, names, B(t.net_there), t.net_under);
+                     t.tab_have, t.tab_slot == 255 ? -1 : t.tab_slot, t.tab_state == 255 ? -1 : t.tab_state, t.tab_bad, t.tab_ms, names, B(t.net_there), t.net_under, t.net_state, netname, B(t.store & 1), B(t.store & 2), B(t.store & 4), B(t.store & 8));
 #undef B
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, out, n);
@@ -641,6 +644,47 @@ static esp_err_t post_table(httpd_req_t *req)
     return httpd_resp_sendstr(req, out);
 }
 
+/* POST /api/net?name=mine: the network's weights (gateware/tools/net.py: sim/model.py net_words(), each
+ * {address u16, value u32}, six bytes), put into the network and kept in the board's flash; &keep=0: put
+ * in only (until the board starts again); POST /api/net?drop=1: the kept ones forgotten */
+static esp_err_t post_net(httpd_req_t *req)
+{
+    static uint8_t *buf;
+    char q[120], v[16], name[TABLE_NAME] = "weights", out[80];
+    bool drop = false, keep = true;
+    const char *err;
+    size_t got = 0;
+    if (!buf)
+        buf = big(6 * 1024);
+    if (httpd_req_get_url_query_str(req, q, sizeof q) == ESP_OK) {
+        if (httpd_query_key_value(q, "drop", v, sizeof v) == ESP_OK)
+            drop = atoi(v);
+        if (httpd_query_key_value(q, "keep", v, sizeof v) == ESP_OK)
+            keep = atoi(v);
+        httpd_query_key_value(q, "name", name, sizeof name);
+    }
+    for (char *c = name; *c; c++)
+        if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '.' || *c == '_' || *c == '-'))
+            *c = '_';
+    if (drop)
+        err = tables_net(buf, 0, false, "");
+    else if (req->content_len < 6 || req->content_len > 6 * 1024 || req->content_len % 6)
+        err = "the body: the weights, six bytes each, 1024 at most";
+    else {
+        while (got < req->content_len) {
+            int r = httpd_req_recv(req, (char *)buf + got, req->content_len - got);
+            if (r <= 0)
+                break;
+            got += r;
+        }
+        err = got == req->content_len ? tables_net(buf, got / 6, keep, name) : "the weights did not all come";
+    }
+    if (err)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err);
+    snprintf(out, sizeof out, "%s\n", drop ? "the kept weights forgotten" : keep ? "put in and kept" : "put in");
+    return httpd_resp_sendstr(req, out);
+}
+
 static esp_err_t post_restart(httpd_req_t *req)
 {
     httpd_resp_sendstr(req, "restarting\n");
@@ -678,6 +722,7 @@ void web_start(void)
         {.uri = "/api/grab", .method = HTTP_GET, .handler = get_grab},
         {.uri = "/api/video", .method = HTTP_POST, .handler = post_video},
         {.uri = "/api/table", .method = HTTP_POST, .handler = post_table},
+        {.uri = "/api/net", .method = HTTP_POST, .handler = post_net},
     };
     for (size_t k = 0; k < sizeof uris / sizeof uris[0]; k++)
         httpd_register_uri_handler(srv, &uris[k]);

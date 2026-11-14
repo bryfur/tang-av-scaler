@@ -1,6 +1,7 @@
 /* tables.c: the scaler's tables (gateware/sw/table.c: the FPGA's CPU keeps them in its memory, in
- * slots, and puts the one the settings ask for into the scaler).  Its memory is empty after a
- * power-on, so the link holds them and gives the CPU the ones it lacks:
+ * slots, and puts the one the settings ask for into the scaler).  The board keeps what it is given
+ * in its own flash (gateware/sw/store.c) and has it again at each start, link or no link; the link
+ * holds the ones below and gives the board those it lacks or keeps another of:
  *   slot 0      the design's own (FSR's): the CPU has it from the design
  *   slots 1, 2  the pair the setting 1 chooses between by the anti-aliasing, off and on: two tables
  *               learnt from games' pictures (gateware/tables), part of this firmware
@@ -38,6 +39,11 @@ struct stored {
 static SemaphoreHandle_t lock;
 static struct stored kept[LINK_TABLES];         /* (3 on: what the flash holds) */
 static bool resend[LINK_TABLES];                /* the CPU's copy is not ours: again */
+static bool check[LINK_TABLES];                 /* the board's kept copy to be compared with ours */
+static bool dropped[LINK_TABLES];               /* emptied here: to be emptied in the board */
+static char theirs[LINK_TABLES + 1][TABLE_NAME];/* the names of what the board keeps and we do not (8: the network's weights) */
+static uint8_t asked;                           /* (the slots whose name has been asked for) */
+static uint8_t net_was = 255;
 static uint32_t sums[3];
 
 static uint32_t flash_at(int slot)
@@ -69,9 +75,28 @@ void tables_start(void)
         if (held(s))
             ESP_LOGI(TAG, "slot %d: \"%s\"", s, kept[s].name);
     }
-    /* (the CPU may hold tables from a firmware before this one: each of ours is given once again) */
+    /* (the board may keep tables from a firmware before this one: each of ours is compared with its) */
     for (int s = 1; s < LINK_TABLES; s++)
-        resend[s] = held(s);
+        check[s] = held(s);
+}
+
+/* what the board's flash holds of a slot (8: the network's weights): kept, its sum, its name */
+static bool about(int what, uint32_t *sum, char *name)
+{
+    uint8_t rq[2] = {LINK_STORE, what}, a[1 + 5 + LINK_NAME + 2];
+    if (link_msg(rq, 2, a, sizeof a, 300) != 1 + 5 + LINK_NAME || a[0] != (LINK_STORE | 0x80))
+        return false;
+    memcpy(sum, a + 2, 4);
+    memcpy(name, a + 6, TABLE_NAME);
+    name[TABLE_NAME - 1] = 0;
+    return a[1] != 0;
+}
+
+void tables_net_name(char *name)
+{
+    xSemaphoreTake(lock, portMAX_DELAY);
+    strcpy(name, theirs[LINK_TABLES]);
+    xSemaphoreGive(lock);
 }
 
 void tables_name(int slot, char *name)
@@ -87,6 +112,8 @@ void tables_name(int slot, char *name)
         xSemaphoreTake(lock, portMAX_DELAY);
         if (held(slot))
             strcpy(name, kept[slot].name[0] ? kept[slot].name : "table");
+        else                            /* (one the board keeps and we do not) */
+            strcpy(name, theirs[slot]);
         xSemaphoreGive(lock);
     }
 }
@@ -114,10 +141,13 @@ static bool give(int slot)
                 return false;
         }
     }
+    char nm[TABLE_NAME];
+    tables_name(slot, nm);
     rq[0] = LINK_TABLE_END;
     rq[1] = slot;
     memcpy(rq + 2, &sum, 4);
-    return link_msg(rq, 6, a, sizeof a, 1000) == 2 && a[0] == (LINK_TABLE_END | 0x80) && a[1];
+    memcpy(rq + 6, nm, strlen(nm));      /* (the board keeps it under this name) */
+    return link_msg(rq, 6 + strlen(nm), a, sizeof a, 1000) == 2 && a[0] == (LINK_TABLE_END | 0x80) && a[1];
 }
 
 /* (the slot emptied in the CPU's memory) */
@@ -128,8 +158,24 @@ static bool take_away(int slot)
 }
 
 /* each second, the CPU's status in hand: a table it lacks (or has an old one of) given, one a time */
-void tables_second(uint8_t have, uint8_t tab_state)
+void tables_second(uint8_t have, uint8_t tab_state, bool cpu_new, uint8_t net_state)
 {
+    char nm[TABLE_NAME];
+    uint32_t sum;
+    if (cpu_new) {                      /* (a CPU that has just begun: what it keeps looked at again) */
+        asked = 0;
+        net_was = 255;
+        for (int s = 1; s < LINK_TABLES; s++)
+            check[s] = held(s);
+    }
+    /* the name of the weights the board keeps */
+    if (net_state != net_was) {
+        bool k = about(8, &sum, nm);
+        xSemaphoreTake(lock, portMAX_DELAY);
+        strcpy(theirs[LINK_TABLES], k ? (nm[0] ? nm : "weights") : "");
+        xSemaphoreGive(lock);
+        net_was = net_state;
+    }
     if (tab_state == LINK_TAB_NONE)
         return;
     for (int s = 1; s < LINK_TABLES; s++) {
@@ -139,6 +185,26 @@ void tables_second(uint8_t have, uint8_t tab_state)
         again = resend[s];
         resend[s] = false;
         xSemaphoreGive(lock);
+        /* (ours against the one the board keeps: given again only if it keeps none or another) */
+        if (mine && check[s] && !again) {
+            check[s] = false;
+            if (!about(s, &sum, nm) || sum != (s < 3 ? sums[s] : kept[s].sum))
+                again = true;
+        }
+        /* (one the board has and we do not: its name, for the page) */
+        if (!mine && have >> s & 1 && !(asked >> s & 1)) {
+            bool k = about(s, &sum, nm);
+            asked |= 1u << s;
+            xSemaphoreTake(lock, portMAX_DELAY);
+            strcpy(theirs[s], k && nm[0] ? nm : "table");
+            xSemaphoreGive(lock);
+        }
+        if (!(have >> s & 1) && theirs[s][0]) {
+            xSemaphoreTake(lock, portMAX_DELAY);
+            theirs[s][0] = 0;
+            xSemaphoreGive(lock);
+            asked &= ~(1u << s);
+        }
         if (mine && (again || !(have >> s & 1))) {
             int64_t t0 = esp_timer_get_time();
             bool ok = give(s);
@@ -147,8 +213,11 @@ void tables_second(uint8_t have, uint8_t tab_state)
                 resend[s] = true;
             return;
         }
-        if (!mine && (again || (s >= 3 && have >> s & 1))) {
-            ESP_LOGI(TAG, "slot %d: %s", s, take_away(s) ? "emptied in the CPU" : "the CPU did not empty it");
+        /* (emptied here: emptied in the board.  One the board keeps and we never had is left alone:
+         * the board's tables are its own) */
+        if (!mine && dropped[s]) {
+            dropped[s] = false;
+            ESP_LOGI(TAG, "slot %d: %s", s, take_away(s) ? "emptied in the board" : "the board did not empty it");
             return;
         }
     }
@@ -197,7 +266,37 @@ const char *tables_drop(int slot)
     memset(&kept[slot], 0, sizeof kept[slot]);
     if (esp_flash_erase_region(NULL, flash_at(slot), 4096) != ESP_OK)
         err = "the flash would not erase";
-    resend[slot] = true;
+    dropped[slot] = true;
+    theirs[slot][0] = 0;
     xSemaphoreGive(lock);
     return err;
+}
+
+/* the network's weights passed on to the board's CPU (gateware/sw/store.c) */
+const char *tables_net(const uint8_t *pairs, int n, bool keep, const char *name)
+{
+    uint8_t rq[8 + TABLE_NAME], a[4];
+    uint32_t sum = LINK_TABLE_SUM0;
+    for (int at = 0; at < n; at += 41) {
+        int m = n - at < 41 ? n - at : 41;
+        uint8_t part[3 + 6 * 41] = {LINK_NET, at, at >> 8};
+        memcpy(part + 3, pairs + 6 * at, 6 * m);
+        if (link_msg(part, 3 + 6 * m, a, sizeof a, 300) != 2 || a[0] != (LINK_NET | 0x80) || !a[1])
+            return "the board did not take them (an older program, or its memory is not up)";
+    }
+    for (int k = 0; k < n; k++) {
+        const uint8_t *p = pairs + 6 * k;
+        sum = link_table_sum(sum, p[0] | p[1] << 8);
+        sum = link_table_sum(sum, p[2] | (uint32_t)p[3] << 8 | (uint32_t)p[4] << 16 | (uint32_t)p[5] << 24);
+    }
+    rq[0] = LINK_NET_END;
+    rq[1] = n, rq[2] = n >> 8;
+    memcpy(rq + 3, &sum, 4);
+    rq[7] = n ? (keep ? LINK_NET_KEEP : 0) : LINK_NET_FORGET;
+    size_t l = strlen(name) < TABLE_NAME - 1 ? strlen(name) : TABLE_NAME - 1;
+    memcpy(rq + 8, name, l);
+    if (link_msg(rq, 8 + l, a, sizeof a, 2000) != 2 || a[0] != (LINK_NET_END | 0x80) || !a[1])
+        return "the board did not put them in (no network in this design, or the output is not running)";
+    net_was = 255;                      /* (the name asked for again) */
+    return NULL;
 }

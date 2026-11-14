@@ -1,6 +1,6 @@
 /* The scaler's CPU (the SOM's hard core, an Andes A25: rtl/cpu.v): what need not be logic.  It
- * brings the board up and looks after it (board.c), holds the settings (the link keeps a copy for
- * when the power is off), writes the on-screen text (osd.c), and answers the link (the XIAO, over
+ * brings the board up and looks after it (board.c), holds the settings and keeps them, the tables
+ * and the network's weights in the board's flash (store.c), writes the on-screen text (osd.c), and answers the link (the XIAO, over
  * rtl/spis.v's SPI port: link.h).  No operating system: a loop, and waits that keep answering.
  *
  * For a host on the monitor: register 64 counts up while this runs, 65 says what it is, 66 and 67
@@ -126,7 +126,22 @@ void service(void)
         tx(n >= 4 && !(n & 3) && table_part(rq[1], rq[2] | rq[3] << 8, rq + 4, n / 4 - 1));   /* (no words: the slot emptied) */
         break;
     case LINK_TABLE_END:
-        tx(n == 6 && table_end(rq[1], rq[2] | (uint32_t)rq[3] << 8 | (uint32_t)rq[4] << 16 | (uint32_t)rq[5] << 24));
+        tx(n >= 6 && n < 6 + LINK_NAME &&
+           table_end(rq[1], rq[2] | (uint32_t)rq[3] << 8 | (uint32_t)rq[4] << 16 | (uint32_t)rq[5] << 24, (const char *)rq + 6, n - 6));
+        break;
+    case LINK_NET:
+        tx(n >= 3 && (n - 3) % 6 == 0 && store_net_part(rq[1] | rq[2] << 8, rq + 3, (n - 3) / 6));
+        break;
+    case LINK_NET_END:
+        tx(n >= 8 && n < 8 + LINK_NAME &&
+           store_net_end(rq[1] | rq[2] << 8, rq[3] | (uint32_t)rq[4] << 8 | (uint32_t)rq[5] << 16 | (uint32_t)rq[6] << 24, rq[7],
+                         (const char *)rq + 8, n - 8));
+        break;
+    case LINK_STORE:
+        if (n == 2) {
+            uint8_t a[5 + LINK_NAME];
+            tx_bytes(a, store_about(rq[1], a));
+        }
         break;
     default:
         tx_begin();
@@ -143,6 +158,21 @@ void *memcpy(void *d, const void *s, size_t n)
     return d;
 }
 
+void *memset(void *d, int c, size_t n)
+{
+    for (size_t k = 0; k < n; k++)
+        ((uint8_t *)d)[k] = c;
+    return d;
+}
+
+int memcmp(const void *a, const void *b, size_t n)
+{
+    for (size_t k = 0; k < n; k++)
+        if (((const uint8_t *)a)[k] != ((const uint8_t *)b)[k])
+            return ((const uint8_t *)a)[k] - ((const uint8_t *)b)[k];
+    return 0;
+}
+
 int main(void)
 {
     uint32_t t_sec, t_osd, t_lock, n = 0;
@@ -151,6 +181,7 @@ int main(void)
     REG(R_SPIS) = 1;                    /* (a request from before this began: gone) */
     st.build = BUILD;
     osd_init();
+    store_init();                       /* (the settings the board keeps, before they are used) */
     board_init();
     t_sec = t_osd = t_lock = ms();
     for (;;) {
@@ -158,6 +189,7 @@ int main(void)
         audio_service();
         board_field();
         table_service();
+        store_service();
         if (ms() - t_lock >= 100) {
             t_lock = ms();
             board_lock();

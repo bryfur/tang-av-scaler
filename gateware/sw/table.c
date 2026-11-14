@@ -8,7 +8,9 @@
  *
  * Slot 0 is the design's own table: read out of the RAM into the memory before anything else is
  * written there.  The others are the link's to fill (LINK_TABLE, LINK_TABLE_END): 1 and 2 the pair
- * the setting 1 chooses between by the anti-aliasing (off, on), 3 on by the settings 2 on.
+ * the setting 1 chooses between by the anti-aliasing (off, on), 3 on by the settings 2 on.  A
+ * table the link gives is kept in the board's flash (store.c), and is there again at the next
+ * start, link or no link.
  *
  * A slot: TAB_STEP of the memory from TAB_AT (bank 0, above the picture's field), a head (it holds
  * a table: the magic, the design's build for slot 0, the words' sum) and from TAB_DATA the 8192
@@ -54,6 +56,11 @@ static volatile uint32_t *words(int s)
     return (volatile uint32_t *)(TAB_AT + (uint32_t)s * TAB_STEP + TAB_DATA);
 }
 
+volatile uint32_t *table_words(int slot)
+{
+    return words(slot);
+}
+
 static uint32_t sum_of(int s)
 {
     volatile uint32_t *w = words(s);
@@ -97,6 +104,7 @@ bool table_part(int slot, uint32_t at, const uint8_t *d, int n)
         head(slot)->magic = 0;
         have &= ~(1u << slot);
     }
+    store_table_gone(slot, n == 0);     /* (no words: the slot emptied, in the flash too) */
     w = words(slot) + at;
     for (int k = 0; k < n; k++)
         w[k] = d[4 * k] | (uint32_t)d[4 * k + 1] << 8 | (uint32_t)d[4 * k + 2] << 16 | (uint32_t)d[4 * k + 3] << 24;
@@ -105,7 +113,7 @@ bool table_part(int slot, uint32_t at, const uint8_t *d, int n)
 }
 
 /* ... and all of it there: the slot holds a table, if its words' sum is this */
-bool table_end(int slot, uint32_t sum)
+bool table_end(int slot, uint32_t sum, const char *name, int n)
 {
     if (mem_state != MEM_GOOD || slot < 1 || slot >= LINK_TABLES || scan < LINK_TABLES || sum_of(slot) != sum)
         return false;
@@ -117,6 +125,7 @@ bool table_end(int slot, uint32_t sum)
         in_ram = -1;
     if (state != T_KEEP && going == slot)
         state = T_IDLE;
+    store_table_keep(slot, sum, name, n);
     report();
     return true;
 }
@@ -176,8 +185,15 @@ void table_service(void)
     /* the slots as a program before this left them (one a time round: a sum takes a while) */
     if (scan < LINK_TABLES) {
         volatile struct head *h = head(scan);
+        uint32_t sum;
         if (h->magic == TAB_MAGIC && (scan ? h->build == 0 : h->build == REG(R_BUILD)) && sum_of(scan) == h->sum)
             have |= 1u << scan;
+        else if (scan && store_table_load(scan, words(scan), &sum)) {   /* (a start from cold: the flash's) */
+            h->build = 0;
+            h->sum = sum;
+            h->magic = TAB_MAGIC;
+            have |= 1u << scan;
+        }
         if (++scan == LINK_TABLES && have & 1 && !(REG(R_TABA) & WRITTEN))
             in_ram = 0;
         report();

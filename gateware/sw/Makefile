@@ -3,7 +3,7 @@
 # into a running board).  On fpga: make
 
 CROSS ?= $(HOME)/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-
-SRC = boot.S main.c board.c i2c.c osd.c time.c audio.c surround.c mem.c pan.c table.c
+SRC = boot.S main.c board.c i2c.c osd.c time.c audio.c surround.c mem.c pan.c table.c store.c
 DEP = $(SRC) hw.h link.h link.ld surround.h
 # (BUILD: the newest source's time: the link gives the CPU the newer of its own copy and the bitstream's,
 # and the same sources are the same program)
@@ -13,6 +13,8 @@ CFLAGS = -DBUILD=$(BUILD) -march=rv32imac_zicsr_zifencei -mabi=ilp32 -Os -g -ffr
 B = build
 
 all: $(B)/cpu.hex
+
+.PHONY: all test clean
 
 $(B)/cpu.elf: $(DEP) | $(B)
 	$(CROSS)gcc $(CFLAGS) -Wl,--gc-sections -T link.ld -o $@ $(SRC) -lgcc
@@ -26,6 +28,10 @@ $(B)/cpu.hex: $(B)/cpu.bin
 
 $(B):
 	mkdir -p $@
+
+# store.c on the host, against a model of the flash and its port (test/store_test.c)
+test: | $(B)
+	cc -O1 -g -Wall -DHOST_TEST -I. -o $(B)/store_test test/store_test.c store.c && $(B)/store_test
 
 clean:
 	rm -rf $(B)

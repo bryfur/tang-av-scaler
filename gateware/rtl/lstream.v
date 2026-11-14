@@ -96,6 +96,11 @@ module lstream #(
     reg        r_v = 1'b0, r_last = 1'b0;
     reg [9:0]  r_x, r_j;
     wire       h_busy;
+    // (the edges' memory hears of a frame's start a clock later, from a register here: fstart comes
+    // a long way; no line is begun in that clock)
+    reg        fs1 = 1'b0;
+    always @(posedge clk)
+        fs1 <= fstart;
     reg [7:0]  r_y, r_c;
     always @(posedge clk) begin
         r_v <= 1'b0;
@@ -107,7 +112,11 @@ module lstream #(
             run <= 1'b0;
             prime <= 1'b0;
         end else if (!run && !prime) begin
+`ifdef AVB_TRIAL_NOFS1
             if (have && gap == 6'd0 && !h_busy) begin
+`else
+            if (have && gap == 6'd0 && !h_busy && !fs1) begin
+`endif
                 prime <= 1'b1;
                 pw <= 2'd0;
                 ra <= 9'd0;
@@ -161,7 +170,11 @@ module lstream #(
                                          .i_last(r_last), .i_y(r_y), .i_c(r_c), .o_v(o_v), .o_x(o_x), .o_j(o_j),
                                          .o_last(o_last), .o_y(o_y), .o_c(o_c), .keep(keep), .hq_x(hq_x), .hq_l(hq_l),
                                          .p_e(p_e), .hg_v(hg_v), .hg_x(hg_x), .hg_e(hg_e), .hg_el(hg_el), .hg_et(hg_et));
-    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fstart), .skip(skip), .h(hr), .r_x(hq_x), .r_l(hq_l),
+`ifdef AVB_TRIAL_NOFS1
+    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fstart), .skip(skip), .h(hr),
+`else
+    smaa_hist #(.W(W)) u_hist (.clk(clk), .keep(keep), .fstart(fs1), .skip(skf), .h(hr),
+`endif .r_x(hq_x), .r_l(hq_l),
                                .p_e(p_e), .busy(h_busy), .g_v(hg_v), .g_x(hg_x), .g_e(hg_e), .g_el(hg_el), .g_et(hg_et),
                                .e_valid(e_valid), .e_wr(e_wr), .e_line(e_line), .e_data(e_data), .e_ack(e_ack),
                                .e_rvalid(e_rvalid), .rd_data(rd_data));

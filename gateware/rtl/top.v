@@ -108,6 +108,8 @@
 //   45 W   NETA, 46 W NETD   the network's weights (cnn.v's l_a, l_d): NETA an address, NETD the value
 //                    for it (22 bits), and the address is then one on
 //   47 R   NETS      15:0 rows begun before the network had made their lines (there should be none)
+//   68 W   FLC, 69 RW FLD, 6A R FLS   the SOM's flash as the board's storage (sflash.v): a read anywhere,
+//                    a program or an erase at 0x800000 and above only
 //   58 RW  TABA, 59 W TABD, 5C-5F R TABQ   the scaler's table (easu.v easu_port): the CPU's program
 //                    puts the table wanted into the scaler's RAM, and reads it back (sw/table.c)
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
@@ -183,7 +185,14 @@ module top (
     output [3:0]  ddr_dm,
     inout  [31:0] ddr_dq,
     inout  [3:0]  ddr_dqs,
-    inout  [3:0]  ddr_dqs_n
+    inout  [3:0]  ddr_dqs_n,
+    // the SOM's configuration flash, the board's own storage once the FPGA is configured (sflash.v)
+    output        flash_cs_n,
+    output        flash_sck,
+    output        flash_mosi,
+    input         flash_miso,
+    output        flash_wp_n,
+    output        flash_hold_n
 );
     wire clk, core_clk, pll_lock;
     sys_pll u_pll (.clkin(sys_clk), .clk(clk), .core(core_clk), .lock(pll_lock));
@@ -683,6 +692,17 @@ module top (
     wire [119:0] tab_d, tab_q;
     easu_port #(.A(8'h58)) u_tabp (.clk(clk), .we(we), .addr(addr), .wdata(wdata), .q_a(tab_qa), .t_req(tab_req), .t_wr(tab_wr),
                                    .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack));
+    // the SOM's flash (the board's storage: sw/store.c)
+    wire [31:0]  fl_d, fl_s;
+`ifdef AVB_TRIAL_NOFLASH                 // (a trial build: the pins there, the port not)
+    assign fl_d = 32'd0;
+    assign fl_s = 32'd0;
+    assign {flash_cs_n, flash_sck, flash_mosi, flash_wp_n, flash_hold_n} = 5'b10011;
+`else
+    sflash #(.A(8'h68)) u_flash (.clk(clk), .we(we), .addr(addr), .wdata(wdata), .q_d(fl_d), .q_s(fl_s),
+                                 .f_cs_n(flash_cs_n), .f_sck(flash_sck), .f_mosi(flash_mosi), .f_miso(flash_miso),
+                                 .f_wp_n(flash_wp_n), .f_hold_n(flash_hold_n));
+`endif
     // the network (cnn.v): on, and its weights' port
     reg          net_on = 1'b0;
     reg  [11:0]  net_a = 12'd0;
@@ -1016,6 +1036,8 @@ module top (
             8'h44: rdata <= {net_req != net_ak[2], 1'b1, 29'd0, net_on};
             8'h47: rdata <= {16'd0, net_u};
             8'h58: rdata <= tab_qa;
+            8'h69: rdata <= fl_d;
+            8'h6A: rdata <= fl_s;
             8'h5C: rdata <= {2'd0, tab_q[29:0]};
             8'h5D: rdata <= {2'd0, tab_q[59:30]};
             8'h5E: rdata <= {2'd0, tab_q[89:60]};

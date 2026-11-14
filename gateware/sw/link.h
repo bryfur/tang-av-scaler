@@ -13,7 +13,7 @@
  * new number: a link whose firmware has another gives the CPU its own program (2026-11-13: without
  * that, a firmware from before the tables read this status as its own shorter one, took what lay
  * where its settings had been for the settings, and kept them) */
-#define LINK_MAGIC   0x36435641u
+#define LINK_MAGIC   0x37435641u
 
 enum {
     LINK_STATUS = 0x01,                 /* -> struct link_status */
@@ -28,10 +28,31 @@ enum {
                                          * its word at this place (4 x entry + quarter); the slot holds no
                                          * table from here until LINK_TABLE_END says it does (so with no
                                          * words: the slot emptied) */
-    LINK_TABLE_END = 0x07,              /* slot u8, sum u32 -> u8 1: all of it is there (the words' sum is
-                                         * this: link_table_sum()): the slot holds a table */
+    LINK_TABLE_END = 0x07,              /* slot u8, sum u32, a name (LINK_NAME - 1 bytes at most; none: the
+                                         * name it had) -> u8 1: all of it is there (the words' sum is this:
+                                         * link_table_sum()): the slot holds a table, and the board keeps it in
+                                         * its flash */
+    LINK_NET = 0x08,                    /* place u16, then {address u16, value u32} ... (41 at most) -> u8 1 taken:
+                                         * values for the network's port (rtl/cnn.v's l_a, l_d: sim/model.py
+                                         * net_words()), from this place in their order */
+    LINK_NET_END = 0x09,                /* count u16, sum u32, flags u8, a name (LINK_NAME - 1 bytes at most) ->
+                                         * u8 1: all of them are there (their sum: link_table_sum() over each
+                                         * address then value): put into the network; LINK_NET_KEEP: and kept
+                                         * in the board's flash, for every start from here on; LINK_NET_FORGET
+                                         * (count 0): the kept ones erased */
+    LINK_STORE = 0x0A,                  /* what u8 (1 to 7 a table's slot, 8 the network) -> kept u8, sum u32,
+                                         * name LINK_NAME bytes: what the board's flash holds of it (sw/store.c) */
     LINK_BAD = 0xFF,
 };
+#define LINK_NAME           24          /* a kept thing's name, with its 0 */
+enum { LINK_NET_KEEP = 1, LINK_NET_FORGET = 2 };
+/* the board's own storage (sw/store.c: the SOM's flash): link_status.store */
+enum { LINK_STORE_THERE = 1,            /* the flash answers */
+       LINK_STORE_SET = 2,              /* the settings are kept there: the board's count, not the link's copy */
+       LINK_STORE_BUSY = 4,             /* something waits to be kept or is being */
+       LINK_STORE_FAILED = 8 };         /* something could not be kept */
+/* whose weights the network has: link_status.net_state */
+enum { LINK_NET_OWN, LINK_NET_GIVEN, LINK_NET_KEPT };  /* the design's; given since (not kept); the kept ones */
 
 /* the scaler's tables: slots in the CPU's memory.  0 is the design's own (FSR's); the link fills the
  * rest.  A table is 8192 entries ({place below 2, place right 3, direction 5, strength 3}) of four
@@ -55,7 +76,8 @@ enum {
     LINK_CMD_GRAB_END = 7,              /* ... and let go (by itself after 3 s with no LINK_GRAB) */
 };
 
-/* the settings: the CPU's are the ones that count; the link keeps a copy for when the power is off */
+/* the settings: the CPU's are the ones that count, and it keeps them in the board's flash (sw/store.c);
+ * the link keeps a copy too, for a board whose flash holds none yet */
 struct link_settings {
     uint8_t on;             /* the scaler is run (else left alone) */
     uint8_t ntsc;           /* the picture rate 60/1.001 Hz */
@@ -136,11 +158,11 @@ struct link_status {
     uint8_t tab_state;      /* LINK_TAB_*: nothing going on; a table on its way into the scaler; read back;
                              * the design's own read into slot 0; NONE: the design has no port for it (or
                              * the memory is not there) */
-    uint8_t tab_pad;
+    uint8_t store;          /* the board's own storage: LINK_STORE_* */
     uint16_t tab_bad;       /* entries that read back other than put, the last time (0: as it should be) */
     uint16_t tab_ms;        /* the time putting it in took */
     uint8_t net_there;      /* the design has the network (rtl/cnn.v) */
-    uint8_t net_pad;
+    uint8_t net_state;      /* whose weights it has: LINK_NET_* */
     uint16_t net_under;     /* rows the network was late for, since the program began (there should be none
                              * while a picture comes in) */
     uint16_t pad2;          /* 0 (no gap before the settings, none at the end) */

@@ -90,13 +90,15 @@ Two sets exist, of the same shape:
   frames run through it in order. It scores the same +0.54 dB on its own input; it keeps the
   weights matched to what the board now feeds the network.
 
-To put another set of this shape in while the picture runs (30 s, through the monitor port):
+To put another set of this shape in while the picture runs:
 
     tools/net.py load sim/cnn/t8s-s10k3.json      # or t8s.json, t8.json
     tools/net.py status
 
-It lasts until the FPGA is loaded again: the link does not keep network weights yet (it does keep
-the scaler's tables). Another shape (`f16s`: 16 channels, 5 x 5 first) is another build.
+With a design that has the board's own storage ([storage.md](storage.md)) `net.py load` gives the
+weights to the board's CPU, which puts them in and keeps them in the SOM's flash: they are there at
+every start (`net.py try`: not kept; `net.py drop`: back to the bitstream's own). Another shape
+(`f16s`: 16 channels, 5 x 5 first) is another build.
 
 ## The settings that matter to it
 
@@ -128,8 +130,6 @@ the scaler's tables). Another shape (`f16s`: 16 channels, 5 x 5 first) is anothe
 
 ## What is not done
 
-- The link's firmware does not keep network weights: after a power cycle the network has the
-  bitstream's own (`t8s.json`) until `net.py load` is run again.
 - One shape only. `f16s` (+0.05 dB) is not built.
 - How the network's picture does in motion has not been measured: the scores are on single frames.
 - Block RAM is at 85 % and only one of the three builds that finished met timing: there is little
