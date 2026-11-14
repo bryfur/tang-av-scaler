@@ -33,3 +33,6 @@ firmware/xiao-wifi/managed_components/
 gateware/sw/build/
 # a local capture viewer (a development aid on one machine: not part of the project)
 tools/capview/
+# the case's working files (check.py, render.py); the print STLs and case.step are kept
+hardware/case/out/*-fitted.stl
+hardware/case/out/*.json
