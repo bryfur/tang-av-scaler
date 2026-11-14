@@ -3,7 +3,7 @@
 # into a running board).  On fpga: make
 
 CROSS ?= $(HOME)/tools/xpack-riscv-none-elf-gcc-15.2.0-1/bin/riscv-none-elf-
-SRC = boot.S main.c board.c i2c.c osd.c time.c audio.c surround.c mem.c pan.c
+SRC = boot.S main.c board.c i2c.c osd.c time.c audio.c surround.c mem.c pan.c table.c
 DEP = $(SRC) hw.h link.h link.ld surround.h
 # (BUILD: the newest source's time: the link gives the CPU the newer of its own copy and the bitstream's,
 # and the same sources are the same program)

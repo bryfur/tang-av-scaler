@@ -32,7 +32,13 @@ picture rate (59.94 or 60 Hz), Cb/Cr swapped, the field order, the test picture,
 settings are kept in flash. The same over HTTP: `GET /api/video`, `POST /api/video` (a form:
 `mode=1&aa=0`, ...; `again=1` brings everything up again, `measure=1` finds the picture's border
 again). **Screen capture**: the picture going out, read back from the FPGA (`GET /api/grab?step=N`,
-a BMP: 480 x 270 in 2 s, 960 x 540 in 6 s through the CPU).
+a BMP: 480 x 270 in 2 s, 960 x 540 in 6 s through the CPU). **The scaler's tables**
+([gateware/tables](../../gateware/tables/README.md)): the firmware carries two learnt ones and gives
+them to the FPGA's CPU at each start; `POST /api/table?slot=3&name=mine` (the body: a .tab file,
+131072 bytes) keeps one more in the flash's free end (slots 3 to 7) and gives it too,
+`POST /api/table?slot=3&drop=1` empties the slot; the setting `table` chooses which the scaler has
+(0 FSR's, 1 the learnt pair, 2 on: slot 3 on), and `GET /api/video` says under `tab` which slots
+hold a table, their names and which one is in the scaler.
 
 While a host is on the console port (`gateware/tools/*.py`), the link leaves the scaler to it.
 
@@ -62,7 +68,12 @@ back until a transaction's stop.
 After that the XIAO needs power only (the board's, through its sockets), and a new firmware goes
 over Wi-Fi: `tools/avx.py ota`. An update is on trial until it has been reached over the network
 (the tool does that); one that cannot be reached goes back to the firmware before it, by itself,
-3 minutes after its start.
+3 minutes after its start. One that crashes goes back at once, and the firmware that starts then
+says where the crash was: `GET /api/load` ("tasks at ..."): the last number is the instruction, the
+one before it the function's return address (look them up in `build-esp32c5/avwifi.elf` with
+addr2line). The chip's own RAM is what runs out first (Wi-Fi's buffers, the tasks' stacks; a large
+buffer here is allocated in the PSRAM: `big()`, not static): `GET /api/status` says what is free,
+`heap_int`, and the least it has been, `heap_int_min`.
 
 ## Wi-Fi
 

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N]: the picture's path through the DDR3 (Verilator): fields
+"""deint_tb.py [NFIELDS] [pg] [edi] [mc] [poly] [mv=DX,DYR[,TX,TY]] [mode=M] [thr=T] [aa=T] [diag] [corner] [aadbg] [sharp=N] [pic=FILE] [real=FILE.json] [crop=X0,CW,Y0,CH[,1]] [nr=N] [dn] [noise=A] [ll=N] [tab=TABLE]: the picture's path through the DDR3 (Verilator): fields
 with something moving in them into rtl/vcap.v, cap_ddr.v and a model of the DDR3 (ddr_model.v), then
 a frame out of deint.v, lstream.v and easu.v beside pattern.v's timing; every pixel of the frame
 against model.py (the deinterlacer) and fsr.py (the scaler).  NFIELDS (default 5; 6: the newest field a bottom one); aa=T: the anti-aliasing on, its threshold T (diag: with the diagonal patterns; corner: with the corners kept; aadbg: what it finds shown);
-pic=FILE: a still picture's fields in the moving test picture's place; ll=N: the frame made from the field still coming in, N of its lines in (with 6 fields: the one coming in must be a bottom one); pg: what comes in is progressive (480p: each field a whole frame)."""
+pic=FILE: a still picture's fields in the moving test picture's place; ll=N: the frame made from the field still coming in, N of its lines in (with 6 fields: the one coming in must be a bottom one); pg: what comes in is progressive (480p: each field a whole frame); tab=TABLE: the scaler's table is another one
+(model.table_load()), put into its RAM through the register port as the CPU's program does while the frames before go by."""
 import os
 import subprocess
 import sys
@@ -56,6 +57,8 @@ def main():
     pic = next((a[4:] for a in args if a.startswith("pic=")), None)
     prog = "pg" in args                 # 480p: each "field" a whole frame, F always 0
     edi = "edi" in args                 # the lines made go along the picture's edges
+    tabf = next((a[4:] for a in args if a.startswith("tab=")), None)
+    tab = model.table_load(tabf) if tabf else None
     # mc: motion compensation (the vectors found by the design itself); mv=DX,DYR: the picture pans (model.pan_field);
     # with mc the design is not told; without, it is told the pan (the CPU's part), or with mv=DX,DYR,TX,TY told (TX, TY)
     mvs = next((tuple(int(v) for v in a[3:].split(",")) for a in args if a.startswith("mv=")), None)
@@ -85,6 +88,8 @@ def main():
         fields = [(f, w) for (f, _), w in zip(fields, model.noisy([w for _, w in fields], noise))]
     data = stream(fields)
     tag = "d%d%s%s%s_%d_%d%s_s%d" % (nf, ("p" if pic else "") + ("y" if "poly" in args else "") + ("r" if real else "") + ("pg" if prog else "") + ("e" if edi else "") + ("c" if "mc" in args else "") + ("" if mvs is None else "_mv" + "_".join(str(v).replace("-", "m") for v in mvs)), ("_nr%d%s_n%d" % (nr, "d" if dn else "", noise) if nr or dn or noise else "") + ("_ll%d" % ll if ll else ""), "_g" + "_".join(map(str, crop)) if crop else "", mode, thr, "" if aa is None else "_aa%d%s%s" % (aa, "d" if dbg else "", "x" if diag else "") + ("c" if corner else ""), sharp)
+    if tab:
+        tag += "_t"
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
     n_out = 2200 * 1125 + 2200 * 60
     import fsr
@@ -148,7 +153,45 @@ module tb;
                    .ox(ox), .oy(oy));
     wire [7:0] e_y, e_cb, e_cr; wire [24:0] e_xy;
     easu u_easu (.g_wide(1'b%(g_wide)d), .g_xr(%(g_xr)d), .g_dx(%(g_dx)d), .g_ys(%(g_ys)d), .g_dy(%(g_dy)d), .clk(clk), .de(de), .x(ox), .y(oy), .ev(ev), .ev_first(ev_first), .ev_goal(ev_goal),
-                 .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
+                 .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d),
+                 .t_req(tab_req), .t_wr(tab_wr), .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack), .t_q(tab_q), .o_y(e_y), .o_cb(e_cb), .o_cr(e_cr));
+    // the table's port, a register bus as the CPU's: another table put in, some of it read back
+    reg sclk = 0; always #10 sclk = ~sclk;
+    reg b_we = 0; reg [7:0] b_addr = 0; reg [31:0] b_wd = 0;
+    wire [31:0] tab_qa; wire tab_req, tab_wr, tab_ack; wire [12:0] tab_a; wire [119:0] tab_d, tab_q;
+    easu_port u_tabp (.clk(sclk), .we(b_we), .addr(b_addr), .wdata(b_wd), .q_a(tab_qa), .t_req(tab_req), .t_wr(tab_wr),
+                      .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack));
+    reg [29:0] tabm [0:32767];
+    reg tab_done = 0; integer ti, tq, tbad = 0, tviol = 0;
+    reg [39:0] de_h = 0;
+    task bus(input [7:0] a, input [31:0] d);
+        begin @(negedge sclk); b_we = 1; b_addr = a; b_wd = d; @(negedge sclk); b_we = 0; end
+    endtask
+    initial begin
+        if (%(tab_on)d) begin
+            $readmemh("%(work)s/%(tag)s_tab.hex", tabm);
+            repeat (100) @(negedge sclk);
+            bus(8'h58, 32'd0);
+            for (ti = 0; ti < 8192; ti = ti + 1) begin
+                while (tab_qa[31]) @(negedge sclk);
+                for (tq = 0; tq < 4; tq = tq + 1) bus(8'h59, {2'd0, tabm[4 * ti + tq]});
+            end
+            for (ti = 0; ti < 8192; ti = ti + 1) begin
+                while (tab_qa[31]) @(negedge sclk);
+                bus(8'h58, 32'h80000000 | ti);
+                @(negedge sclk);
+                while (tab_qa[31]) @(negedge sclk);
+                if (tab_q !== {tabm[4 * ti + 3], tabm[4 * ti + 2], tabm[4 * ti + 1], tabm[4 * ti]}) tbad = tbad + 1;
+            end
+            $display("table: put in by %%0t, read back: %%0d entries wrong; %%0d of the port's turns near a pixel", $time, tbad, tviol);
+        end
+        tab_done = 1;
+    end
+    // (the port's turns: only where no pixel is near)
+    always @(posedge clk) begin
+        de_h <= {de_h[38:0], de};
+        if ((u_easu.t_sel || u_easu.t_we) && (de_h[31:0] != 0 || de)) tviol <= tviol + 1;
+    end
     dline #(.W(25), .D(26)) u_dxy (.clk(clk), .ce(1'b1), .d({ox, oy}), .q(e_xy));
     rcas u_rcas (.wide(1'b%(g_wide)d), .clk(clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(e_cb), .cri(e_cr), .sharp(5'd%(sharp)d), .dn(1'b%(dn)d),
                  .r(r), .g(g), .b(b));
@@ -195,6 +238,7 @@ module tb;
             $display("fields %%0d latest %%0d par %%b lines %%0d pix %%0d", fn, latest, par, flines, pix);
         end
         // the frame that begins after the fields are in (or: as the last comes in): from the next end of row 1079
+        wait (tab_done);
         @(posedge ev_first);
         if (%(ll_on)d) $display("as the frame begins: %%0d lines of the field in slot %%0d are in (latest %%0d)", f_prog, f_pslot, latest);
         dumping = 1;
@@ -212,9 +256,11 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, edi=1 if edi else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
+    if tab:
+        open(os.path.join(WORK, tag + "_tab.hex"), "w").write("".join("%08x\n" % v for v in model.table_words(tab)))
     rtl = [os.path.join(HERE, "../rtl", f) for f in ("vcap.v", "cap_ddr.v", "ddr_arb.v", "bram.v", "deint_edi.v", "deint.v", "lstream.v", "smaa.v", "easu.v", "rcas.v", "dline.v", "pattern.v", "border.v", "focus.v")]
     import fsr
     hexf = os.path.join(WORK, "easu")
@@ -244,7 +290,7 @@ endmodule
     # (the dump begins at the end of the frame before: its last row is still coming out)
     first = next(k for k in range(1, len(de)) if de[k] and not de[k - 1])
     start = first if first > 2200 * 20 else next(k for k in range(first + 2200 * 20, len(de)) if de[k] and not de[k - 1])
-    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip)
+    want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, edi, mv, mc, mcfirst, skip, tab)
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
     pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, edi, mv, mc, mcfirst, skip)

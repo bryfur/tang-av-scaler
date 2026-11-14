@@ -1,5 +1,6 @@
 # 8 MB flash (XIAO ESP32-C5, ESP32-S3): two 3 MB application slots (updates over Wi-Fi, with
-# rollback); the last 1.9 MB is left free
+# rollback); the last 1.9 MB (from 0x620000) has no partition: the scaler's tables that were
+# sent to the link are kept there (main/tables.c: 0x40000 each, five of them)
 # Name,    Type, SubType,  Offset,   Size
 nvs,       data, nvs,      0x9000,   0x6000
 otadata,   data, ota,      0xf000,   0x2000

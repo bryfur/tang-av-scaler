@@ -18,6 +18,7 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_attr.h"
+#include "esp_heap_caps.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
@@ -29,6 +30,31 @@ static const char *TAG = "main";
 
 RTC_NOINIT_ATTR uint32_t crumb[4];
 uint32_t crumb_was[4];
+
+/* a crash: where it was (the instruction, and on a RISC-V chip the function's return address), kept
+ * with the crumbs for the firmware that starts next (which may be the one before this: an update on
+ * trial that crashes is gone, and its log with it).  The linker puts this before the system's
+ * handler (CMakeLists.txt: --wrap). */
+#include "esp_private/panic_internal.h"
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+#include "riscv/rvruntime-frames.h"
+#endif
+void __real_esp_panic_handler(panic_info_t *info);
+void __wrap_esp_panic_handler(panic_info_t *info)
+{
+    crumb[3] = (uint32_t)info->addr;
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+    if (info->frame)
+        crumb[2] = ((const RvExcFrame *)info->frame)->ra;
+#endif
+    __real_esp_panic_handler(info);
+}
+
+void *big(size_t n)
+{
+    void *p = heap_caps_calloc(1, n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return p ? p : calloc(1, n);
+}
 
 void app_main(void)
 {

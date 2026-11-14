@@ -6,6 +6,7 @@
  *
  * Nothing holds the UART up: what a slow or absent listener cannot take is dropped. */
 
+#include <errno.h>
 #include <string.h>
 
 #include "app.h"
@@ -13,6 +14,7 @@
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/usb_serial_jtag.h"
+#include "esp_attr.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -26,7 +28,7 @@ static const char *TAG = "console";
 static struct console_state state;
 static int client = -1;
 static SemaphoreHandle_t lock;          /* client, tail */
-static char tail[TAIL];
+static char *tail;                      /* (big(): TAIL bytes) */
 static size_t tail_head, tail_used;
 /* the link's own exchange with the monitor (console_xfer): the UART's writers one at a time; the
  * FPGA's bytes to mon_buf while mon_want of them are waited for */
@@ -65,8 +67,26 @@ static void from_fpga(void *arg)
             tail_head = (tail_head + 1) % TAIL;
         }
         tail_used = tail_used + n > TAIL ? TAIL : tail_used + n;
-        if (client >= 0)
-            send(client, buf, n, MSG_DONTWAIT);
+        /* all of it to the client: what its connection cannot take now waits a little (a send that
+         * takes a part was left at that: a monitor's long answer lost bytes when it came faster than
+         * the client's acknowledgements, 2026-11-14); a client that takes nothing for half a second
+         * loses these bytes, and the count says so */
+        if (client >= 0) {
+            int sent = 0, waited = 0;
+            while (sent < n) {
+                int r = send(client, buf + sent, n - sent, MSG_DONTWAIT);
+                if (r > 0) {
+                    sent += r;
+                    waited = 0;
+                } else if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK)
+                    break;
+                else if (++waited > 250) {
+                    break;
+                } else
+                    vTaskDelay(pdMS_TO_TICKS(2));
+            }
+            state.lost += n - sent;
+        }
         xSemaphoreGive(lock);
 
         state.usb = usb_serial_jtag_is_connected();
@@ -182,6 +202,7 @@ bool console_xfer(const uint8_t *tx, size_t txn, uint8_t *rx, size_t rxn, int ms
 void console_start(void)
 {
     lock = xSemaphoreCreateMutex();
+    tail = big(TAIL);
     mon_lock = xSemaphoreCreateMutex();
     mon_done = xSemaphoreCreateBinary();
     usb_serial_jtag_driver_config_t usb = {.tx_buffer_size = 16384, .rx_buffer_size = 16384};

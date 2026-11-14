@@ -21,12 +21,16 @@
 `endif
 
 // a quarter of the table (three of the twelve weights), its address register beside it: the data
-// three clocks after the address
-module easu_rom #(
+// three clocks after the address.  A RAM: what it holds at first is the file's (sim/fsr.py's
+// table); we writes d at the address given the clock before (no read in that clock: the block
+// RAM's plain write: the place and route has no read-before-write for this device).
+module easu_tab #(
     parameter FILE = ""
 ) (
     input             clk,
     input      [12:0] a,
+    input             we,
+    input      [29:0] d,
     output reg [29:0] q /* synthesis syn_preserve = 1 */
 );
     reg [29:0] mem [0:8191];
@@ -36,8 +40,73 @@ module easu_rom #(
     // (q: a register of its own beside what uses it; q1 is the block RAM's)
     always @(posedge clk) begin
         a1 <= a;
-        q1 <= mem[a1];
+        if (we)
+            mem[a1] <= d;
+        else
+            q1 <= mem[a1];
         q <= q1;
+    end
+endmodule
+
+// the table's port on the register bus: the CPU's program keeps tables in its memory and puts the
+// one wanted into the scaler's RAM (sw/table.c), an entry (all twelve weights) at a time, so that
+// the picture is made with whole entries of one table or the other while it goes on:
+//   A      TABA  write: 12:0 an entry ({place below 2, place right 3, direction 5, strength 3});
+//                31: it is read (TABQ, when BUSY is over); else the next four TABD writes are its
+//                words and the fourth writes it; the entry after it is then the one written
+//                read: 31 BUSY (an entry on its way: nothing to be written here meanwhile), 30 1 (the
+//                port is there), 29 the RAM has been written since the FPGA was configured, 12:0
+//   A + 1  TABD  write: a quarter's word (three weights, 10 bits each), the first quarter first
+//   A + 4 to A + 7  TABQ  read: the entry read, a quarter each
+// The scaler's side (easu, on its own clock) takes an entry when t_req changes and says so with t_ack.
+module easu_port #(
+    parameter [7:0] A = 8'h58
+) (
+    input              clk,
+    input              we,
+    input      [7:0]   addr,
+    input      [31:0]  wdata,
+    output     [31:0]  q_a,
+    output reg         t_req = 1'b0,
+    output reg         t_wr = 1'b0,
+    output reg [12:0]  t_a = 13'd0,
+    output reg [119:0] t_d = 120'd0,
+    input              t_ack
+);
+    reg [2:0] ak = 3'd0;
+    reg [1:0] qn = 2'd0;
+    reg       step = 1'b0, dirty = 1'b0;
+    assign q_a = {t_req != ak[2], 1'b1, dirty, 16'd0, t_a};
+    always @(posedge clk) begin
+        ak <= {ak[1:0], t_ack};
+        if (we && addr == A) begin
+            t_a <= wdata[12:0];
+            qn <= 2'd0;
+            step <= 1'b0;
+            if (wdata[31]) begin
+                t_wr <= 1'b0;
+                t_req <= !t_req;
+            end
+        end
+        if (we && addr == A + 8'd1) begin
+            case (qn)
+                2'd0: t_d[29:0] <= wdata[29:0];
+                2'd1: t_d[59:30] <= wdata[29:0];
+                2'd2: t_d[89:60] <= wdata[29:0];
+                2'd3: t_d[119:90] <= wdata[29:0];
+            endcase
+            qn <= qn + 2'd1;
+            if (qn == 2'd0 && step) begin
+                t_a <= t_a + 13'd1;
+                step <= 1'b0;
+            end
+            if (qn == 2'd3) begin
+                t_wr <= 1'b1;
+                t_req <= !t_req;
+                step <= 1'b1;
+                dirty <= 1'b1;
+            end
+        end
     end
 endmodule
 
@@ -84,6 +153,15 @@ module easu (
     input      [16:0] g_dx,
     input signed [26:0] g_ys,
     input      [16:0] g_dy,
+
+    // the table's port (easu_port: its clock's; they stay as they are from before t_req changes until
+    // t_ack follows it): the entry t_a written (t_wr) or read into t_q, in the blanking
+    input             t_req,
+    input             t_wr,
+    input      [12:0] t_a,
+    input      [119:0] t_d,
+    output reg        t_ack = 1'b0,
+    output reg [119:0] t_q = 120'd0,
 
     output     [7:0]  o_y,
     output     [7:0]  o_cb,
@@ -329,10 +407,30 @@ module easu (
 
     // 15 to 17: the table; the twelve pixels wait for it
     wire [119:0] wt;
-    easu_rom #(.FILE(`EASU_HEX0)) u_rom0 (.clk(clk), .a(ta), .q(wt[29:0]));
-    easu_rom #(.FILE(`EASU_HEX1)) u_rom1 (.clk(clk), .a(ta), .q(wt[59:30]));
-    easu_rom #(.FILE(`EASU_HEX2)) u_rom2 (.clk(clk), .a(ta), .q(wt[89:60]));
-    easu_rom #(.FILE(`EASU_HEX3)) u_rom3 (.clk(clk), .a(ta), .q(wt[119:90]));
+    // (the port's turns: when no pixel has been shown for 32 clocks, so what the table is asked
+    // then is for nobody: the address goes in (t_sel), the entry is written the clock after or
+    // comes out three clocks after that)
+    reg  [2:0]  t_s = 3'd0;
+    reg  [5:0]  quiet = 6'd0;
+    reg  [2:0]  t_n = 3'd0;
+    reg         t_sel = 1'b0, t_we = 1'b0;
+    wire        t_go = t_s[2] != t_ack && quiet[5] && !de && t_n == 3'd0 && !t_sel;
+    wire [12:0] ta_m = t_sel ? t_a : ta;
+    always @(posedge clk) begin
+        t_s <= {t_s[1:0], t_req};
+        quiet <= de ? 6'd0 : quiet + {5'd0, !quiet[5]};
+        t_sel <= t_go;
+        t_we <= t_sel && t_wr;
+        t_n <= t_sel ? 3'd1 : t_n == 3'd0 || t_n == 3'd4 ? 3'd0 : t_n + 3'd1;
+        if (t_n == 3'd3)
+            t_q <= wt;
+        if (t_n == 3'd4)
+            t_ack <= t_s[2];
+    end
+    easu_tab #(.FILE(`EASU_HEX0)) u_rom0 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[29:0]), .q(wt[29:0]));
+    easu_tab #(.FILE(`EASU_HEX1)) u_rom1 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[59:30]), .q(wt[59:30]));
+    easu_tab #(.FILE(`EASU_HEX2)) u_rom2 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[89:60]), .q(wt[89:60]));
+    easu_tab #(.FILE(`EASU_HEX3)) u_rom3 (.clk(clk), .a(ta_m), .we(t_we), .d(t_d[119:90]), .q(wt[119:90]));
     reg [287:0] tp [5:18] /* synthesis syn_srlstyle = "registers" */;
     always @(posedge clk) begin
         tp[5] <= taps4;

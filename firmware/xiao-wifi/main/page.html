@@ -62,6 +62,8 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f sub crop" id="c_man"><span>From / size</span><span class="rg"><input type="number" name="crop_x" min="0" max="719"><input type="number" name="crop_y" min="0" max="479"><input type="number" name="crop_w" min="64" max="720"><input type="number" name="crop_h" min="64" max="480"></span></div>
 <div class="f"><span>Widescreen (16:9)<small>for a game set to widescreen</small></span><input class="sw" type="checkbox" name="wide"></div>
 <div class="f"><span>Noise reduction<small>averages frames where the picture is still</small></span><span class="seg"><label><input type="radio" name="nr" value="0"><span>Off</span></label><label><input type="radio" name="nr" value="1"><span>Low</span></label><label><input type="radio" name="nr" value="2"><span>Medium</span></label><label><input type="radio" name="nr" value="3"><span>High</span></label></span></div>
+<div class="f" id="tbr"><span>Scaling kernel<small id="tbt"></small></span><select name="table"><option value="0">FSR</option></select></div>
+<div class="f sub" id="tbu"><span style="flex:0 1 auto"><small>your own (.tab)</small></span><input type="file" id="tbf" accept=".tab" style="flex:1 1 6em;font-size:.9em;min-width:0"><button type="button" onclick="tabUp()">Add</button><button type="button" id="tbd" onclick="tabDrop()">Remove</button></div>
 <div class="f"><span>Sharpening</span><span class="rg"><input type="range" name="sharp" min="0" max="16"><output></output></span></div>
 <div class="f"><span>Noise-aware sharpening<small>sharpens less where a pixel is just noise</small></span><input class="sw" type="checkbox" name="dn"></div>
 <div class="f"><span>Sampling phase<small id="tn">where in a pixel the decoder samples</small></span><span class="rg"><input type="range" name="phase" min="0" max="31"><output></output></span><button type="button" onclick="video('tune=1')">Tune</button></div>
@@ -131,6 +133,28 @@ function modeNa(){const f=vf.elements,b=+f._m.value;
 function modeTake(){const f=vf.elements,b=+f._m.value;
   if(b!=0)f._c.checked=false;if(b==2)f._e.checked=false;
   f.mode.value=b+(f._e.checked?4:0)+(f._c.checked?8:0);modeNa()}
+// the scaler's table: FSR's (the design's own), the learnt pair (one for the anti-aliasing on, one for
+// off: the scaler takes the one that fits), and tables sent here (slots 3 to 7: the setting 2 to 6)
+let tkey='',tab=null;
+function tabShow(v){const t=tab=v.tab,s=vf.elements.table,ok=!!t&&t.state>=0,key=ok?t.names.join('|'):'-';
+  $('tbr').classList.toggle('na',!ok);$('tbu').style.display=ok?'':'none';s.disabled=!ok;
+  if(key!=tkey){tkey=key;const c=s.value;
+    s.innerHTML='<option value="0">FSR</option>'+(ok&&t.names[1]&&t.names[2]?'<option value="1">Learnt</option>':'')+
+      (ok?t.names.slice(3).map((n,i)=>n?'<option value="'+(i+2)+'">'+esc(n)+'</option>':'').join(''):'');s.value=c}
+  const set=+v.set.table,want=set==0?0:set==1?1+(v.set.aa?1:0):set+1;
+  $('tbd').style.display=set>=2?'':'none';
+  $('tbt').textContent=!ok?'fixed in this FPGA image: FSR':t.state==1?'changing...':t.state==3?'starting...':t.slot<0?'':
+    (t.slot==0?'FSR 1\'s edge-adaptive kernel':t.slot<3?'learnt from games\' pictures: the one for anti-aliasing '+(t.slot==2?'on':'off'):'in use: '+t.names[t.slot])+
+    (t.slot!=want?' (the one chosen is not in the scaler\'s memory yet)':'')+(t.bad?' - '+t.bad+' entries read back wrong':'')}
+async function tabUp(){const f=$('tbf').files[0];if(!f){msg('choose a .tab file first');return}
+  if(f.size!=131072){msg('not a table: a .tab file is 131072 bytes');return}
+  if(!tab||tab.state<0){msg('this FPGA image has a fixed table');return}
+  const slot=[3,4,5,6,7].find(k=>!tab.names[k]);if(!slot){msg('all five places are taken: remove one first');return}
+  try{const r=await fetch('/api/table?slot='+slot+'&name='+f.name.replace(/\.tab$/,'').replace(/[^A-Za-z0-9._-]/g,'_').slice(0,23),{method:'POST',body:f});
+    msg(await r.text());if(r.ok){$('tbf').value='';await vstat();video('table='+(slot-1))}}catch(e){msg('the upload failed')}}
+async function tabDrop(){const set=+vf.elements.table.value;if(set<2)return;
+  try{msg(await (await fetch('/api/table?slot='+(set+1)+'&drop=1',{method:'POST'})).text())}catch(e){msg('no answer from the link')}
+  video('table=0')}
 function outs(){for(const o of vf.querySelectorAll('output'))o.textContent=o.previousElementSibling.value;
   const c=vf.elements.crop.value;$('c_auto').classList.toggle('on',c=='1');$('c_man').classList.toggle('on',c=='2')}
 async function status(){
@@ -141,7 +165,7 @@ async function status(){
       row('Name',esc(w.host)+'.local &middot; '+w.mac+(w.ap?' &middot; access point '+esc(w.ap_ssid)+' open':''))+
       row('JTAG','port '+j.port+' &middot; '+(j.connected?'in use by '+j.peer:'free')+' &middot; '+j.sessions+' sessions, '+j.bits+' bits, TCK '+j.tck_ns+' ns (fastest '+j.fastest_ns+')')+
       row('Console','port '+c.port+' at '+c.baud+' baud &middot; '+(c.tcp?'client '+c.peer:'no client')+(c.usb?' &middot; USB':'')+' &middot; '+c.to_fpga+' bytes out, '+c.from_fpga+' in')+
-      row('Firmware',esc(f.version)+' &middot; built '+f.built+' &middot; '+f.chip+', slot '+f.slot+' &middot; up '+f.uptime_s+' s, '+f.heap+' bytes free');
+      row('Firmware',esc(f.version)+' &middot; built '+f.built+' &middot; '+f.chip+', slot '+f.slot+' &middot; up '+f.uptime_s+' s, '+f.heap+' bytes free'+(f.heap_int?' ('+f.heap_int+' of the chip\'s own, '+f.heap_int_min+' at the least)':''));
     await vstat();
     $('con').textContent=await (await fetch('/api/console')).text();
     $('log').textContent=await (await fetch('/api/log')).text();
@@ -173,8 +197,10 @@ async function vstat(){
     row('Delay',sig?v.delay_ms.toFixed(1)+' ms from a line captured to it shown ('+(v.delay_ms/16.68).toFixed(2)+' frames)':'-')+
     row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+new Date(v.cpu_build*1000).toISOString().slice(0,16).replace('T',' ')+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+
     row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'));
+  tabShow(v);
   if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;
     if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}modeShow();outs()}
+  tabShow(v);
 }
 async function video(body){try{msg(await (await fetch('/api/video',{method:'POST',body})).text())}catch(e){msg('no answer from the link')}vfill=true;vstat()}
 // a setting changed: sent at once (a slider: when it is let go)
@@ -184,7 +210,7 @@ function send(){const p=new URLSearchParams();
   video(p)}
 for(const n of ['_m','_c','_e'])for(const e of [].concat(...[vf.elements[n]].map(x=>x.length?[...x]:[x])))e.addEventListener('change',modeTake);
 vf.addEventListener('input',outs);
-vf.addEventListener('change',()=>{clearTimeout(st);st=setTimeout(send,150)});
+vf.addEventListener('change',e=>{if(e.target.type=='file')return;clearTimeout(st);st=setTimeout(send,150)});
 vf.onsubmit=e=>{e.preventDefault();send()};
 async function fpga(){
   const f=await (await fetch('/api/fpga')).json();

@@ -172,7 +172,16 @@ void osd_update(void)
         str("off");
 
     line(5);
-    str("FSR 1  EASU + RCAS ");
+    /* (the scaler's table: FSR's own, the learnt pair's, or one sent to the board, by its slot) */
+    if (st.tab_slot == 0 || st.tab_slot >= LINK_TABLES)
+        str("FSR 1  EASU + RCAS ");
+    else if (st.tab_slot < 3)
+        str("EASU learnt + RCAS ");
+    else {
+        str("EASU table ");
+        num(st.tab_slot, 1);
+        str(" + RCAS ");
+    }
     num(s->sharp, 1);
     str("/16");
     if (s->dn)

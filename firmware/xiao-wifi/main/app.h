@@ -24,6 +24,7 @@ struct console_state {
     bool tcp, usb;
     char peer[16];
     uint32_t to_fpga, from_fpga;
+    uint32_t lost;      /* the FPGA's bytes the TCP client did not take */
 };
 void console_get(struct console_state *s);
 size_t console_tail(char *dst, size_t max);     /* the last bytes the FPGA sent */
@@ -59,6 +60,8 @@ struct scaler_settings {
     bool lowlat;        /* a frame made from the field still coming in (new settings go at the end: the
                          * ones kept in flash are read as far as they go) */
     bool surround;      /* the sound's two channels made 5.1 by the FPGA's CPU */
+    uint8_t table;      /* the scaler's table: 0 FSR's, 1 the learnt pair (one for the anti-aliasing off, one
+                         * for on), 2 on: the tables sent to the link (slots 3 on: tables.c) */
 };
 struct scaler_state {
     bool host;          /* a host has the console: nothing done */
@@ -88,6 +91,11 @@ struct scaler_state {
     bool pan;           /* the picture's pan is found and given to the deinterlacer */
     int8_t pan_dx, pan_dy;
     uint8_t pan_ms10;   /* the time finding it took, in 0.1 ms */
+    uint8_t tab_have;   /* the scaler's tables (gateware/sw/link.h): the slots the CPU has one in */
+    uint8_t tab_slot;   /* the slot whose table the scaler has (255: not known) */
+    uint8_t tab_state;  /* LINK_TAB_*: 0 nothing going on, 1 on its way in, 2 read back, 3 the design's own kept, 255: none of it there */
+    uint16_t tab_bad;   /* entries that read back other than put */
+    uint16_t tab_ms;    /* the time putting it in took */
 };
 /* link.c: the SPI port to the FPGA: its registers, and messages to the scaler's CPU (gateware/sw/link.h) */
 void link_start(void);
@@ -104,6 +112,18 @@ void scaler_set(const struct scaler_settings *v);
 void scaler_again(void);
 void scaler_measure(void);      /* where the picture is: found again */
 void scaler_tune(void);         /* the decoder's sampling phase: each tried (on a still picture), the sharpest kept */
+
+/* main.c: a large buffer that is kept for ever: in the PSRAM (zeroed; the chip's own RAM if there is none) */
+void *big(size_t n);
+
+/* tables.c: the scaler's tables: the link's own two, and the ones sent to it (kept in flash), given
+ * to the FPGA's CPU when it lacks them */
+#define TABLE_NAME 24
+void tables_start(void);
+void tables_second(uint8_t have, uint8_t tab_state);    /* (the scaler's task, each second the CPU answers) */
+void tables_name(int slot, char *name);                 /* (TABLE_NAME bytes) "": the slot holds none */
+const char *tables_store(int slot, const char *name, int (*more)(void *ctx, uint8_t *buf, size_t n), void *ctx);
+const char *tables_drop(int slot);
 
 /* wifi.c: the saved network, or the firmware's own access point to be given one */
 void wifi_start(void);
@@ -123,5 +143,6 @@ void web_start(void);
 bool web_reached(void);                 /* a status request has been answered since the start */
 bool web_loading(void);                 /* a bitstream is going into the FPGA (POST /api/load): leave it alone */
 /* where each of four tasks was when the link last went down by a crash or a watchdog (kept across
- * the restart; GET /api/status: "crumbs"): 0 the scaler's task, 1 the load, 2 a web request, 3 free */
+ * the restart; GET /api/status: "crumbs"): 0 the scaler's task, 1 the load; after a crash: 3 the instruction it was at, 2 where that
+ * function was to return to (main.c: look them up in the firmware's .elf with addr2line) */
 extern uint32_t crumb[4], crumb_was[4];

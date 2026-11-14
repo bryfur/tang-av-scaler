@@ -460,13 +460,55 @@ def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_d
     return [[(16, 128, 128)] * (2 * len(lines[0]))] * skip + [upsample(line) for line in lines]
 
 
+def table_words(tab):
+    """a table (fsr.table()'s form: {(place below 0-3, place right 0-7, direction 0-31, strength 0-7):
+    12 weights in 256ths}) as the scaler's RAM holds it and a .tab file has it: 8192 entries in that
+    order, four words each, three weights (10 bits, signed) a word, the first lowest"""
+    out = []
+    for py in range(4):
+        for px in range(8):
+            for ang in range(32):
+                for li in range(8):
+                    q = tab[py, px, ang, li]
+                    out += [sum((v & 0x3FF) << 10 * j for j, v in enumerate(q[3 * k:3 * k + 3])) for k in range(4)]
+    return out
+
+
+def table_from_words(words):
+    sgn = lambda v: v - 1024 if v & 512 else v
+    tab = {}
+    for n in range(8192):
+        tab[n >> 11, n >> 8 & 7, n >> 3 & 31, n & 7] = [sgn(words[4 * n + k] >> 10 * j & 0x3FF) for k in range(4) for j in range(3)]
+    return tab
+
+
+def table_load(path):
+    """a table from a file: PATH.tab (table_words()'s words, 32 bits each, little-endian), PATH.json
+    ({"py,px,ang,len": [12 weights]}), or the four files PATH0.hex to PATH3.hex (a quarter of the
+    entries' words each: what the block RAMs are given)"""
+    import os
+    if path.endswith(".json"):
+        import json
+        return {tuple(map(int, k.split(","))): v for k, v in json.load(open(path)).items()}
+    if path.endswith(".tab") or os.path.exists(path + ".tab"):
+        d = open(path if path.endswith(".tab") else path + ".tab", "rb").read()
+        if len(d) != 131072:
+            raise ValueError("%s: %d bytes, not 131072" % (path, len(d)))
+        return table_from_words([int.from_bytes(d[4 * k:4 * k + 4], "little") for k in range(32768)])
+    qs = [[int(t, 16) for t in open("%s%d.hex" % (path, k)).read().split()] for k in range(4)]
+    if any(len(q) != 8192 for q in qs):
+        raise ValueError("%s0.hex to %s3.hex: not 8192 words each" % (path, path))
+    return table_from_words([qs[k][n] for n in range(8192) for k in range(4)])
+
+
 def frame_1080(fields, pars, mode=0, thr=6, smaa_thr=None, sharp=0, smaa_dbg=False, smaa_diag=False, smaa_corner=False,
-               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0):
-    """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch)"""
+               crop=(), nr=0, dn=False, prog=False, edi=False, mv=None, mc=False, first=0, skip=0, tab=None):
+    """deint.v, smaa.v, lstream.v, easu.v, rcas.v: 1080 rows of 1920 (r, g, b); crop: the part shown (x0, cw, y0, ch);
+    tab: the scaler's table (fsr.table()'s form: table_load()), else FSR's"""
     import fsr
     pix = frame_480(fields, pars, mode, thr, smaa_thr, smaa_dbg, smaa_diag, smaa_corner, nr, prog, edi, mv, mc, first, skip)
     w, h = len(pix[0]), len(pix)
     ana = [[(0, 0, 0)] * w] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], w, h - skip)
-    out = fsr.rcas(fsr.scale_hw(pix, ana, w, h, fsr.table(), fsr.geom(*crop)), sharp, dn)
+    out = fsr.rcas(fsr.scale_hw(pix, ana, w, h, tab or fsr.table(), fsr.geom(*crop)), sharp, dn)
     side = (1920 - len(out[0])) // 2
     return [[(0, 0, 0)] * side + [rgb(*p) for p in row] + [(0, 0, 0)] * side for row in out]

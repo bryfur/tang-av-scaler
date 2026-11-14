@@ -122,6 +122,12 @@ void service(void)
             grab(step, y, x, px);
         break;
     }
+    case LINK_TABLE:
+        tx(n >= 4 && !(n & 3) && table_part(rq[1], rq[2] | rq[3] << 8, rq + 4, n / 4 - 1));   /* (no words: the slot emptied) */
+        break;
+    case LINK_TABLE_END:
+        tx(n == 6 && table_end(rq[1], rq[2] | (uint32_t)rq[3] << 8 | (uint32_t)rq[4] << 16 | (uint32_t)rq[5] << 24));
+        break;
     default:
         tx_begin();
         tx(LINK_BAD);
@@ -151,6 +157,7 @@ int main(void)
         service();
         audio_service();
         board_field();
+        table_service();
         if (ms() - t_lock >= 100) {
             t_lock = ms();
             board_lock();

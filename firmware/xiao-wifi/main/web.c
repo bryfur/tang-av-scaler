@@ -31,6 +31,7 @@
 #include "app.h"
 #include "board.h"
 #include "link.h"
+#include "esp_attr.h"
 #include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_http_server.h"
@@ -99,7 +100,10 @@ static esp_err_t get_page(httpd_req_t *req)
 
 static esp_err_t get_status(httpd_req_t *req)
 {
-    static char out[1536];
+    enum { OUT = 1536 };
+    static char *out;
+    if (!out)
+        out = big(OUT);
     struct wifi_state w;
     struct xvc_state x;
     struct console_state c;
@@ -111,25 +115,26 @@ static esp_err_t get_status(httpd_req_t *req)
     esc(host, sizeof host, w.host);
     const esp_app_desc_t *app = esp_app_get_description();
     const esp_partition_t *part = esp_ota_get_running_partition();
-    int n = snprintf(out, sizeof out,
+    int n = snprintf(out, OUT,
                      "{\"firmware\":{\"name\":\"%s\",\"version\":\"%s\",\"built\":\"%s %s\",\"idf\":\"%s\","
-                     "\"chip\":\"%s\",\"slot\":\"%s\",\"uptime_s\":%llu,\"heap\":%u,\"reset\":%d},"
+                     "\"chip\":\"%s\",\"slot\":\"%s\",\"uptime_s\":%llu,\"heap\":%u,\"heap_int\":%u,\"heap_int_min\":%u,\"reset\":%d},"
                      "\"wifi\":{\"joined\":%s,\"ssid\":\"%s\",\"ip\":\"%s\",\"rssi\":%d,\"channel\":%d,"
                      "\"host\":\"%s\",\"mac\":\"%s\",\"ap\":%s,\"ap_ssid\":\"%s\",\"drops\":%u},"
                      "\"jtag\":{\"port\":%d,\"connected\":%s,\"peer\":\"%s\",\"sessions\":%u,\"bits\":%llu,"
                      "\"tck_ns\":%u,\"fastest_ns\":%u},"
                      "\"console\":{\"port\":%d,\"baud\":%d,\"tcp\":%s,\"usb\":%s,\"peer\":\"%s\","
-                     "\"to_fpga\":%u,\"from_fpga\":%u},"
+                     "\"to_fpga\":%u,\"from_fpga\":%u,\"lost\":%u},"
                      "\"pads\":{\"tms\":%u,\"tck\":%u,\"tdi\":%u,\"tdo\":%u}}",
                      app->project_name, app->version, app->date, app->time, app->idf_ver, CONFIG_IDF_TARGET,
                      part ? part->label : "?", (unsigned long long)(esp_timer_get_time() / 1000000),
-                     (unsigned)esp_get_free_heap_size(), (int)esp_reset_reason(),
+                     (unsigned)esp_get_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                     (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), (int)esp_reset_reason(),
                      w.joined ? "true" : "false", ssid, w.ip, w.rssi, w.channel, host, w.mac, w.ap ? "true" : "false",
                      w.ap_ssid, (unsigned)w.drops,
                      PORT_XVC, x.connected ? "true" : "false", x.peer, (unsigned)x.sessions, (unsigned long long)x.bits,
                      (unsigned)jtag_period(), (unsigned)jtag_fastest(),
                      PORT_CONSOLE, UART_BAUD, c.tcp ? "true" : "false", c.usb ? "true" : "false", c.peer,
-                     (unsigned)c.to_fpga, (unsigned)c.from_fpga,
+                     (unsigned)c.to_fpga, (unsigned)c.from_fpga, (unsigned)c.lost,
                      (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TMS & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TCK & 1),
                      (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDI & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDO & 1));
     httpd_resp_set_type(req, "application/json");
@@ -393,7 +398,9 @@ static void mon_wr(uint8_t addr, uint32_t v)
 static esp_err_t get_grab(httpd_req_t *req)
 {
     enum { VID = 0x30, GRAB = 0x38, GRABD = 0x39, N = 480 };
-    static uint8_t tx[2 * N], rx[4 * N], line[3 * 1920];
+    static uint8_t *tx, *rx, *line;
+    if (!tx)
+        tx = big(2 * N), rx = big(4 * N), line = big(3 * 1920);
     char q[32], f[8];
     int step = 4;
     if (httpd_req_get_url_query_str(req, q, sizeof q) == ESP_OK && httpd_query_key_value(q, "step", f, sizeof f) == ESP_OK)
@@ -487,24 +494,41 @@ static esp_err_t get_grab(httpd_req_t *req)
 
 static esp_err_t get_video(httpd_req_t *req)
 {
-    static char out[1500];
+    enum { OUT = 2200, NAMES = LINK_TABLES * (6 * TABLE_NAME + 4) };
+    static char *out, *names;
+    if (!out)
+        out = big(OUT), names = big(NAMES);
     struct scaler_state t;
     struct scaler_settings v;
     static const char *const in_names[] = LINK_IN_NAMES;
     scaler_get(&t, &v);
+    /* (the tables' names, a slot each: "" holds none) */
+    char nm[TABLE_NAME];
+    int nn = 0;
+    for (int k = 0; k < LINK_TABLES; k++) {
+        tables_name(k, nm);
+        names[nn++] = '"';
+        esc(names + nn, NAMES - nn - 3, nm);
+        nn += strlen(names + nn);
+        names[nn++] = '"';
+        if (k < LINK_TABLES - 1)
+            names[nn++] = ',';
+    }
+    names[nn] = 0;
 #define B(x) ((x) ? "true" : "false")
-    int n = snprintf(out, sizeof out,
+    int n = snprintf(out, OUT,
                      "{\"host\":%s,\"fpga\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
                      "\"in\":\"%s\",\"in_ok\":%s,\"in_lines\":%u,\"in_hz\":%.2f,"
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
                      "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
                      "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
-                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d,\"surround\":%d},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f]}",
+                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d,\"surround\":%d,\"table\":%u},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f],\"tab\":{\"have\":%u,\"slot\":%d,\"state\":%d,\"bad\":%u,\"ms\":%u,\"names\":[%s]}}",
                      B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      in_names[t.in_std < sizeof in_names / sizeof in_names[0] ? t.in_std : 0], B(t.in_ok || !t.cpu), t.in_lines, t.in_hz100 / 100.0,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
                      v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
-                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, !v.nolock, v.lowlat, v.surround, t.ll ? "true" : "false", t.ll_lines, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h, t.pan, t.pan_dx, t.pan_dy, t.pan_ms10 / 10.0);
+                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, !v.nolock, v.lowlat, v.surround, v.table, t.ll ? "true" : "false", t.ll_lines, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h, t.pan, t.pan_dx, t.pan_dy, t.pan_ms10 / 10.0,
+                     t.tab_have, t.tab_slot == 255 ? -1 : t.tab_slot, t.tab_state == 255 ? -1 : t.tab_state, t.tab_bad, t.tab_ms, names);
 #undef B
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_send(req, out, n);
@@ -554,6 +578,7 @@ static esp_err_t post_video(httpd_req_t *req)
     NUM("osd", v.osd, 1)
     NUM("lowlat", v.lowlat, 1)
     NUM("surround", v.surround, 1)
+    NUM("table", v.table, LINK_TABLES - 2)
     if (field(body, "lock", f, sizeof f))
         v.nolock = !atoi(f);
 #undef NUM
@@ -565,6 +590,52 @@ static esp_err_t post_video(httpd_req_t *req)
     if (field(body, "again", f, sizeof f) && atoi(f))
         scaler_again();
     return httpd_resp_sendstr(req, "set\n");
+}
+
+/* POST /api/table?slot=3&name=mine: a table for the scaler (gateware/tables/README.md: 131072
+ * bytes), kept in the slot (3 to 7; the setting "table" = slot - 1 then asks for it);
+ * POST /api/table?slot=3&drop=1: the slot emptied */
+static int table_more(void *ctx, uint8_t *buf, size_t n)
+{
+    httpd_req_t *req = ctx;
+    size_t got = 0;
+    while (got < n) {
+        int r = httpd_req_recv(req, (char *)buf + got, n - got);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT)
+            continue;
+        if (r <= 0)
+            break;
+        got += r;
+    }
+    return (int)got;
+}
+
+static esp_err_t post_table(httpd_req_t *req)
+{
+    char q[120], v[16], name[TABLE_NAME] = "table", out[80];
+    int slot = -1;
+    bool drop = false;
+    const char *err;
+    if (httpd_req_get_url_query_str(req, q, sizeof q) == ESP_OK) {
+        if (httpd_query_key_value(q, "slot", v, sizeof v) == ESP_OK)
+            slot = atoi(v);
+        if (httpd_query_key_value(q, "drop", v, sizeof v) == ESP_OK)
+            drop = atoi(v);
+        httpd_query_key_value(q, "name", name, sizeof name);
+    }
+    for (char *c = name; *c; c++)       /* (letters, digits and . _ - only: it goes into the page) */
+        if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '.' || *c == '_' || *c == '-'))
+            *c = '_';
+    if (drop)
+        err = tables_drop(slot);
+    else if (req->content_len != 4 * LINK_TABLE_WORDS)
+        err = "the body: a table, 131072 bytes";
+    else
+        err = tables_store(slot, name, table_more, req);
+    if (err)
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, err);
+    snprintf(out, sizeof out, "slot %d %s\n", slot, drop ? "emptied" : name);
+    return httpd_resp_sendstr(req, out);
 }
 
 static esp_err_t post_restart(httpd_req_t *req)
@@ -603,6 +674,7 @@ void web_start(void)
         {.uri = "/api/video", .method = HTTP_GET, .handler = get_video},
         {.uri = "/api/grab", .method = HTTP_GET, .handler = get_grab},
         {.uri = "/api/video", .method = HTTP_POST, .handler = post_video},
+        {.uri = "/api/table", .method = HTTP_POST, .handler = post_table},
     };
     for (size_t k = 0; k < sizeof uris / sizeof uris[0]; k++)
         httpd_register_uri_handler(srv, &uris[k]);

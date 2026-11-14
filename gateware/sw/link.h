@@ -9,7 +9,11 @@
 
 #include <stdint.h>
 
-#define LINK_MAGIC   0x32435641u        /* "AVC2": the program speaks this */
+/* "AVC3": the program speaks this.  A change to the messages, the settings or the status below is a
+ * new number: a link whose firmware has another gives the CPU its own program (2026-11-13: without
+ * that, a firmware from before the tables read this status as its own shorter one, took what lay
+ * where its settings had been for the settings, and kept them) */
+#define LINK_MAGIC   0x33435641u
 
 enum {
     LINK_STATUS = 0x01,                 /* -> struct link_status */
@@ -19,8 +23,27 @@ enum {
     LINK_GRAB = 0x05,                   /* step u8, row u16, column u16, pixels u16 (680 at most) ->
                                          * that many pixels of the picture as it goes out (row and
                                          * column counted in steps), blue green red each */
+    LINK_TABLE = 0x06,                  /* slot u8 (1 to LINK_TABLES - 1), place u16, words u32 ... (62 at most) ->
+                                         * u8 1 taken: a part of a table for the scaler (sw/table.c), from
+                                         * its word at this place (4 x entry + quarter); the slot holds no
+                                         * table from here until LINK_TABLE_END says it does (so with no
+                                         * words: the slot emptied) */
+    LINK_TABLE_END = 0x07,              /* slot u8, sum u32 -> u8 1: all of it is there (the words' sum is
+                                         * this: link_table_sum()): the slot holds a table */
     LINK_BAD = 0xFF,
 };
+
+/* the scaler's tables: slots in the CPU's memory.  0 is the design's own (FSR's); the link fills the
+ * rest.  A table is 8192 entries ({place below 2, place right 3, direction 5, strength 3}) of four
+ * words, three weights (10 bits, signed, in 256ths) a word: twelve, for the twelve source pixels. */
+#define LINK_TABLES         8
+#define LINK_TABLE_WORDS    32768
+#define LINK_TABLE_SUM0     2166136261u
+static inline uint32_t link_table_sum(uint32_t h, uint32_t word)       /* over the words in order, from LINK_TABLE_SUM0 */
+{
+    return (h ^ word) * 16777619u;
+}
+enum { LINK_TAB_IDLE, LINK_TAB_PUT, LINK_TAB_CHECK, LINK_TAB_KEEP, LINK_TAB_NONE = 255 };
 
 enum {
     LINK_CMD_AGAIN = 1,                 /* bring everything up again */
@@ -58,8 +81,16 @@ struct link_settings {
     uint8_t lowlat;         /* a frame made from the field still coming in: the output a few lines behind
                              * the input (with flock: without it only when it happens to fit) */
     uint8_t surround;       /* the sound's two channels made 5.1 (a game's Pro Logic II mix decoded: sw/surround.c) */
+    uint8_t table;          /* the scaler's table (sw/table.c): 0 the design's own (FSR's); 1 the pair in slots 1
+                             * and 2: 1 with the anti-aliasing off, 2 with it on; 2 on: slot 3 on.  A slot
+                             * that holds none: the design's own */
+    uint8_t pad;            /* 0.  (No gaps in this: the two sides compare theirs byte for byte.  With one the
+                             * link found the CPU's "changed" each second, by whatever lay in the gap, and
+                             * kept them in flash again each time; its flash's work held its UART's
+                             * interrupt off, and bytes from the FPGA were lost: 2026-11-14) */
     uint16_t crop_x, crop_w, crop_y, crop_h;
 };
+_Static_assert(sizeof(struct link_settings) == 26 + 8, "link_settings: a gap, or a new member not counted here");
 
 #define LINK_SETTINGS_DEFAULT { .on = 1, .ntsc = 1, .thr = 6, .aa = 1, .aa_thr = 12, .sharp = 8, .audio = 1, \
                                 .aa_diag = 1, .aa_corner = 1, .crop = 1, .nr = 2, .dn = 1, .flock = 1, .crop_w = 720, .crop_h = 480 }
@@ -94,8 +125,17 @@ struct link_status {
     uint8_t pan;            /* the picture's pan (sw/pan.c): the deinterlacer is given one */
     int8_t pan_dx, pan_dy;  /* what was found (pixels, the field's lines, in two fields) */
     uint8_t pan_ms10;       /* the time finding it took, in 0.1 ms */
+    uint8_t tab_have;       /* the scaler's tables: the slots that hold one (bit 0: the design's own) */
+    uint8_t tab_slot;       /* the slot whose table the scaler has (255: not known) */
+    uint8_t tab_state;      /* LINK_TAB_*: nothing going on; a table on its way into the scaler; read back;
+                             * the design's own read into slot 0; NONE: the design has no port for it (or
+                             * the memory is not there) */
+    uint8_t tab_pad;
+    uint16_t tab_bad;       /* entries that read back other than put, the last time (0: as it should be) */
+    uint16_t tab_ms;        /* the time putting it in took */
     struct link_settings set;
 };
+_Static_assert(sizeof(struct link_status) == 78 + sizeof(struct link_settings), "link_status: a gap, or a new member not counted here");
 
 /* what comes in */
 enum { LINK_IN_NONE, LINK_IN_240P, LINK_IN_480I, LINK_IN_288P, LINK_IN_576I, LINK_IN_480P, LINK_IN_576P,

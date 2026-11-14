@@ -430,7 +430,7 @@ static struct link_settings to_link(const struct scaler_settings *v)
                               .aa_thr = v->aa_thr, .sharp = v->sharp, .swap = v->swap, .top1 = v->top1,
                               .pattern = v->pattern, .freeze = v->freeze, .audio = v->audio, .aa_dbg = v->aa_dbg,
                               .aa_diag = v->aa_diag, .aa_corner = v->aa_corner, .crop = v->crop, .wide = v->wide,
-                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat, .surround = v->surround,
+                              .nr = v->nr, .dn = v->dn, .phase = v->phase, .osd = v->osd, .flock = !v->nolock, .lowlat = v->lowlat, .surround = v->surround, .table = v->table,
                               .crop_x = v->crop_x, .crop_w = v->crop_w, .crop_y = v->crop_y, .crop_h = v->crop_h};
     return l;
 }
@@ -441,14 +441,23 @@ static struct scaler_settings from_link(const struct link_settings *l)
                                 .aa_thr = l->aa_thr, .sharp = l->sharp, .swap = l->swap, .top1 = l->top1,
                                 .pattern = l->pattern, .freeze = l->freeze, .audio = l->audio, .aa_dbg = l->aa_dbg,
                                 .aa_diag = l->aa_diag, .aa_corner = l->aa_corner, .crop = l->crop, .wide = l->wide,
-                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround,
+                                .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround, .table = l->table,
                                 .crop_x = l->crop_x, .crop_w = l->crop_w, .crop_y = l->crop_y, .crop_h = l->crop_h};
     return v;
 }
 
 static void save(const struct scaler_settings *v)
 {
+    /* (only what has changed: the flash's work holds every interrupt off for a while; compared as
+     * the CPU has them: that form has no gaps) */
+    static struct link_settings kept;
+    static bool have;
+    struct link_settings now = to_link(v);
     nvs_handle_t h;
+    if (have && !memcmp(&kept, &now, sizeof kept))
+        return;
+    kept = now;
+    have = true;
     if (nvs_open("av", NVS_READWRITE, &h) == ESP_OK) {
         nvs_set_blob(h, "video", v, sizeof *v);
         nvs_commit(h);
@@ -516,7 +525,7 @@ static bool cpu_second(struct scaler_state *s)
     static int silent;
     static bool given;                  /* this CPU run has our settings */
     const uint8_t rq = LINK_STATUS;
-    uint8_t a[1 + sizeof(struct link_status)];
+    uint8_t a[1 + sizeof(struct link_status) + 8];      /* (room for more: a longer status is not ours) */
     struct link_status ls;
     struct scaler_settings mine;
     uint32_t id, built = 0;
@@ -526,7 +535,7 @@ static bool cpu_second(struct scaler_state *s)
     s->fpga = true;
     s->host = host;
     memcpy(&built, cpu_bin_start + 8, 4);
-    bool alive = link_msg(&rq, 1, a, sizeof a, 300) == (int)sizeof a && a[0] == (LINK_STATUS | 0x80);
+    bool alive = link_msg(&rq, 1, a, sizeof a, 300) == 1 + (int)sizeof ls && a[0] == (LINK_STATUS | 0x80);
     if (alive)
         memcpy(&ls, a + 1, sizeof ls);
     /* the CPU's program: ours if none answers (two seconds running), or the one that does is older */
@@ -599,6 +608,8 @@ static bool cpu_second(struct scaler_state *s)
     s->ll_lines = ls.ll_lines;
     s->in_std = ls.in_std, s->in_ok = ls.in_ok, s->in_lines = ls.in_lines, s->in_hz100 = ls.in_hz100;
     s->pan = ls.pan, s->pan_dx = ls.pan_dx, s->pan_dy = ls.pan_dy, s->pan_ms10 = ls.pan_ms10;
+    s->tab_have = ls.tab_have, s->tab_slot = ls.tab_slot, s->tab_state = ls.tab_state, s->tab_bad = ls.tab_bad, s->tab_ms = ls.tab_ms;
+    tables_second(ls.tab_have, ls.tab_state);
     return true;
 }
 
@@ -771,6 +782,7 @@ void scaler_start(void)
             set = s;
         nvs_close(h);
     }
+    tables_start();
     link_start();
     xTaskCreate(task, "scaler", 8192, NULL, 4, NULL);
 }

@@ -99,6 +99,8 @@
 //                    (signed: lines of the field), 10 it is known; 17:11 the frame's first line made, in
 //                    eights (deint.v, lstream.v skip: the lines above the part shown, less some, are
 //                    not made); 27:18 the first line that wants vectors (deint.v first)
+//   58 RW  TABA, 59 W TABD, 5C-5F R TABQ   the scaler's table (easu.v easu_port): the CPU's program
+//                    puts the table wanted into the scaler's RAM, and reads it back (sw/table.c)
 //   52 R   AUDPK     the greatest |sample| since it was last read: 15:0 left, 31:16 right (the
 //                    sample's upper 16 bits)
 //   25 R   MODE      pixels a word clock: 1 = 1920x1080p60 (10-bit words, 1.485 Gb/s), 2 = 3840x2160p30
@@ -660,6 +662,13 @@ module top (
         src_p0 <= src[8:0];
         src_p <= src_p0;
     end
+    // the scaler's table (easu.v): the CPU's program writes it
+    wire [31:0]  tab_qa;
+    wire         tab_req, tab_wr, tab_ack;
+    wire [12:0]  tab_a;
+    wire [119:0] tab_d, tab_q;
+    easu_port #(.A(8'h58)) u_tabp (.clk(clk), .we(we), .addr(addr), .wdata(wdata), .q_a(tab_qa), .t_req(tab_req), .t_wr(tab_wr),
+                                   .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack));
     reg  [27:0]  g_xr = -28'sd11808768;
     reg          g_wide = 1'b0;
     reg  [16:0]  g_dx = 17'd32768;
@@ -777,7 +786,7 @@ module top (
             easu u_easu (.g_wide(geo[89]), .g_xr(geo[88:61]), .g_dx(geo[60:44]), .g_ys(geo[43:17]), .g_dy(geo[16:0]),
                          .clk(tx_clk), .de(p_de[0]), .x(p_x), .y(p_y), .ev(l_ev), .ev_first(l_first), .ev_goal(l_goal),
                          .w_clk(pclk), .w_we(w_we), .w_slot(w_slot), .w_x(w_x), .w_d(w_d), .o_y(e_y), .o_cb(e_cb),
-                         .o_cr(e_cr));
+                         .t_req(tab_req), .t_wr(tab_wr), .t_a(tab_a), .t_d(tab_d), .t_ack(tab_ack), .t_q(tab_q), .o_cr(e_cr));
             pthru u_pt (.w_clk(pclk), .r_we(r_we), .r_slot_d(r_slot_d[1:0]), .r_slot_i(r_slot_i[1:0]), .r_wa(r_wa),
                         .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .hold(pt_hold), .goal(pt_goal), .clk(tx_clk),
                         .ce(pcev[10]), .swap(swap), .x(p_x), .y(p_y), .ev(pt_ev), .ev_first(pt_first), .rgb(pt_rgb));
@@ -785,6 +794,8 @@ module top (
             rcas u_rcas (.dn(dn), .wide(geo[89]), .clk(tx_clk), .x(e_xy[24:12]), .y(e_xy[11:0]), .yi(e_y), .cbi(swap ? e_cr : e_cb),
                          .cri(swap ? e_cb : e_cr), .sharp(sharp), .r(l_r), .g(l_g), .b(l_b));
         end else begin : g_nolv
+            assign tab_ack = tab_req;
+            assign tab_q = 120'd0;
             assign l_r = 8'd0;
             assign l_g = 8'd0;
             assign l_b = 8'd0;
@@ -903,6 +914,11 @@ module top (
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
             8'h53: rdata <= mv_r;
+            8'h58: rdata <= tab_qa;
+            8'h5C: rdata <= {2'd0, tab_q[29:0]};
+            8'h5D: rdata <= {2'd0, tab_q[59:30]};
+            8'h5E: rdata <= {2'd0, tab_q[89:60]};
+            8'h5F: rdata <= {2'd0, tab_q[119:90]};
             8'h27: rdata <= {6'd0, lat_s[21:12], 4'd0, lat_s[11:0]};
             8'h2B: rdata <= {24'd0, ll_min};
             8'h2C: rdata <= {3'd0, src};
