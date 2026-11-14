@@ -12,7 +12,7 @@
   table.py use N                   the setting: 0 FSR's, 1 the learnt pair (by the anti-aliasing), 2 on:
                                    slot 3 on
 
-The board: AVX_HOST (the link's address; default 192.168.1.112).  Python's own library only."""
+The board: AVX_HOST (the link's address; default avscaler.local).  Python's own library only."""
 import json
 import os
 import sys
@@ -22,7 +22,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "../sim"))
-HOST = os.environ.get("AVX_HOST", "192.168.1.112")
+HOST = os.environ.get("AVX_HOST", "avscaler.local")
 
 
 def load(path):

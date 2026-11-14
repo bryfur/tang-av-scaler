@@ -11,7 +11,7 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-HOST = os.environ.get("AV_HOST", "192.168.1.112")
+HOST = os.environ.get("AV_HOST", "avscaler.local")
 os.environ.setdefault("AVB_TTY", "tcp:%s:2323" % HOST)
 import avb
 import still

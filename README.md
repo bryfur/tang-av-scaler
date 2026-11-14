@@ -10,15 +10,20 @@ here.
 console: component video (YPbPr, 480i) + stereo audio
   -> ADV7181D decoder, PCM1808 audio converter
   -> GW5AST-138 FPGA
-       fields into DDR3 -> motion adaptive deinterlace + noise reduction -> SMAA
-       -> FSR 1 upscale (EASU) -> FSR 1 sharpen (RCAS) -> on-screen text -> HDMI coding
+       fields into DDR3 -> motion adaptive / compensated deinterlace + noise reduction -> SMAA
+       -> upscale: a small neural network (x 2) + bicubic, or FSR 1's EASU from a table
+       -> FSR 1 sharpen (RCAS) -> on-screen text -> HDMI coding
        its hard RISC-V CPU: bring-up, settings, frame lock, on-screen text
   -> the FPGA's transceivers -> SN65DP159 -> HDMI 1080p60 with sound
   XIAO ESP32-C5: Wi-Fi, web page, updates, JTAG; talks to the CPU over SPI
 ```
 
-Status (2026-11-12): the board (rev C-B) is built and runs a console's picture and sound to a
-display and a capture device. The table below is what it does now, on the board. The console it
+Status (2026-11-14): the board (rev C-B) is built and runs a console's picture and sound to a
+display and a capture device. The table below is what it does now, on the board. New since
+2026-11-12: motion compensated deinterlacing with vectors found in the FPGA, lines made along
+edges, a small neural network as the upscaler's first stage, scaler tables learnt from games and
+changeable while the picture runs, and SMAA that holds its edges from frame to frame
+([the path with the network, as deployed](gateware/docs/neural-pipeline.md)). The console it
 has been run with is a PlayStation 2; an Xbox or a GameCube with its component cable puts out the
 same signal (480i, YPbPr, 59.94 Hz) and has not been tried yet.
 
@@ -52,9 +57,9 @@ stretched the plain way, then the scaler's output; the corner says which.
 | Deinterlacing | Motion adaptive from the last four fields, kept in the SOM's DDR3: a field's lines as they are, the lines between from the field before where nothing moves and from their neighbours where something does. Two more steps can be switched on. Motion compensated: each block of 8 pixels of each line has its own motion vector, found in the FPGA line by line (six candidates a block, scored against the field two before); where the picture moves that way the line between is the field before's, moved, so a pan or a moving object keeps its full detail. Along edges: where a hard edge crosses the line (a polygon's side at a low angle), the lines taken from the neighbours follow it, up to 8 pixels either way, instead of going straight down; only where the edge is plain to see in four lines of the field and the pixels beside agree, so text and fine patterns are left as they are. Bob and weave can be chosen instead. The vectors can be shown in the picture's place (each block tinted by how it moves) to see what the motion compensation found. |
 | Noise | Where the picture is still, each sample is averaged with the same one a frame earlier (off, or three strengths). |
 | Anti-aliasing | SMAA 1x on the 480-line picture: luma edges, the orthogonal and the diagonal patterns, corners kept; the edges of the frame before are kept in memory and held to, so a still picture's edges do not shimmer with its noise. A view that paints what it finds (edges, blends) in the picture's place, for tuning. |
-| Scaling | FSR 1's edge adaptive upsampling (EASU) to 1440 x 1080 (4:3) or 1920 x 1080 (16:9, for a game's widescreen mode). Any part of the source can be shown: the black border round a game's picture is measured and left out, so the picture fills the screen (or the part is set by hand). In its place a small network can make the picture twice the size first, with a plain bicubic stretch after it ([gateware/docs/cnn-upscaler.md](gateware/docs/cnn-upscaler.md)). The kernel comes from a table that can be changed while the picture runs: FSR's own, a pair learnt from a game's pictures, or one you send to the board ([gateware/tables](gateware/tables/README.md)). |
+| Scaling | FSR 1's edge adaptive upsampling (EASU) to 1440 x 1080 (4:3) or 1920 x 1080 (16:9, for a game's widescreen mode). Any part of the source can be shown: the black border round a game's picture is measured and left out, so the picture fills the screen (or the part is set by hand). In its place a small neural network can make the picture twice the size first, with a plain bicubic stretch after it: three layers, under 1 kB of weights, 192 multipliers, trained on eleven games against the same frames rendered at 8 x; +0.54 dB over a bicubic stretch on games it never saw ([as deployed](gateware/docs/neural-pipeline.md), [the research](gateware/docs/cnn-upscaler.md)). Its weights can be changed while the picture runs. The kernel comes from a table that can be changed while the picture runs: FSR's own, a pair learnt from a game's pictures, or one you send to the board ([gateware/tables](gateware/tables/README.md)). |
 | Sharpening | FSR 1's RCAS on luma, in 16 steps, with its noise term (less where a pixel is noise rather than detail). |
-| Timing | The output's frames are kept in step with the input's fields (the CPU trims the clock generator: within 10 us, no field shown twice or left out). A frame is made from the field that is still coming in: about 2 ms from a line captured to it sent (16.8 ms with whole fields). |
+| Timing | The output's frames are kept in step with the input's fields (the CPU trims the clock generator: within 10 us, no field shown twice or left out). A frame is made from the field that is still coming in: about 2 ms from a line captured to it sent (2.4 ms with the network; 16.8 ms with whole fields). |
 | Output | 1080p60 (59.94 Hz) HDMI from the FPGA's own transceivers; the console's sound as HDMI audio (two channels of L-PCM at 48 kHz, its clock from the PLL the pixel clock comes from); AVI and audio InfoFrames. Runs a display, a capture device and an AV receiver (picture and sound). |
 | On screen | An on-screen display: what comes in and goes out, what is done to the picture, the delay, the lock, the FPGA's temperature. |
 | Control | A web page on the XIAO: every setting (applied as it is changed, kept across power cycles), status, a screen capture of the output read back from the FPGA, firmware update over Wi-Fi. |
@@ -105,14 +110,16 @@ The pictures themselves, in [`docs/compare/`](docs/compare/):
   JTAG to load bitstreams. It talks to the CPU over SPI in small messages, keeps the settings for
   when the power is off, and carries the CPU's program.
 
-The design uses 31 % of the FPGA's logic, 79 % of its block RAM and 18 % of its multipliers.
+The design uses 42 % of the FPGA's logic, 85 % of its block RAM and 54 % of its multipliers (the
+network's 192 are most of those).
 
 ## Measured on the board
 
 | | |
 |---|---|
-| Delay | 2.0 ms at the top of the picture (some 2.5 ms at the bottom, by the two scan rates) with the picture made from the field coming in; 16.8 ms with whole fields. From the FPGA's own timing of a frame's start against the field; not yet measured from outside, and a display adds its own. |
+| Delay | 2.0 ms at the top of the picture (some 2.5 ms at the bottom, by the two scan rates) with the picture made from the field coming in; 2.4 ms with the network as the upscaler; 16.8 ms with whole fields. From the FPGA's own timing of a frame's start against the field; not yet measured from outside, and a display adds its own. |
 | Frame lock | within 10 us of its mark, the clock trimmed by some -57 ppm (this console against this board); in step some 20 s after starting 5 ms off |
+| Still edges | on a still picture SMAA's edge decisions changed on 4.4 % of edge pixels from frame to frame (143 pixels a frame moved by 6 levels or more); with the edges kept, none (about 10 pixels a frame, the noise's own). The model on the board's own fields; the board's output is the model's pixel for pixel. |
 | Noise | the spread in a frozen frame's flat areas: 2.32 as it comes, 1.98 with the noise reduction; sharpened fully 3.94, with the sharpening's noise term 3.12, with both 2.61 |
 | Sampling phase | 4.5 % between the sharpest and the least sharp phase on Killzone (its picture is soft to begin with) |
 | Screen capture | 480 x 270 in 2 s, 960 x 540 in 6 s over the web page |
@@ -125,6 +132,10 @@ The design uses 31 % of the FPGA's logic, 79 % of its block RAM and 18 % of its 
 - Inputs: 480i is the one in use; 720p goes out as it came, 720p; 480p is taken as the progressive
   picture it is and scaled like the rest, but only in simulation so far (not yet tried from a
   console); 576i and 1080i need the decoder's settings and the capture's timing for each.
+- The network: one shape is built; the weights a power cycle brings back are the bitstream's own
+  (a newer set is loaded from a host and not kept); how it does in motion is not measured. The
+  edges SMAA keeps are held by screen position, so they steady a still picture, not edges that
+  move across it.
 - The surround decoding runs on the board (the CPU keeps up, nothing lost), but has not been
   heard through a receiver yet: off unless switched on.
 - 4K output: a 2160p30 test picture is clean on a display; at 2160p60 the link runs and the display

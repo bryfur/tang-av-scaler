@@ -9,7 +9,7 @@
                              again (the design's own is sim/cnn/t8s.json); check it with
                              NET=MODEL.json tools/boardcheck.py
 
-The board: AVX_HOST (default 192.168.1.112); the monitor as tools/avb.py finds it (AVB_TTY)."""
+The board: AVX_HOST (default avscaler.local); the monitor as tools/avb.py finds it (AVB_TTY)."""
 import json
 import os
 import sys
@@ -18,7 +18,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "../sim"))
-HOST = os.environ.get("AVX_HOST", "192.168.1.112")
+HOST = os.environ.get("AVX_HOST", "avscaler.local")
 os.environ.setdefault("AVB_TTY", "tcp:%s:2323" % HOST)
 NET, NETA, NETD, NETS = 0x44, 0x45, 0x46, 0x47
 

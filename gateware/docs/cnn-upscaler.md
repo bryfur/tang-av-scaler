@@ -2,7 +2,8 @@
 
 Research handed to the gateware side on 2026-11-14 (the picture-research session; the work and its data are
 outside this repository). What is here is ready to build against: the arithmetic in whole numbers, the
-weights, a reference model and test vectors. Nothing of it is in the RTL yet.
+weights, a reference model and test vectors. (Since built: "In the design" at the end, and
+[neural-pipeline.md](neural-pipeline.md) for what runs on the board now.)
 
 ## What to build, in two steps
 

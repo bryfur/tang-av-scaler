@@ -16,7 +16,7 @@ rows=Y0,Y1: these rows of the output compared (for the first mode), whatever the
 for a frame's first rows.
 
 It needs something moving in the picture for the modes to differ from plain motion adaptive (it
-says how many pixels do).  AV_HOST (default 192.168.1.112), AVB_TTY (default the link's console).
+says how many pixels do).  AV_HOST (default avscaler.local), AVB_TTY (default the link's console).
 Leaves the picture running in the mode it found.  OUT (default /tmp/boardcheck): the fields
 (fields.json), the board's and the model's rows (PNG)."""
 import json
@@ -28,7 +28,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "../sim"))
-HOST = os.environ.get("AV_HOST", "192.168.1.112")
+HOST = os.environ.get("AV_HOST", "avscaler.local")
 os.environ.setdefault("AVB_TTY", "tcp:%s:2323" % HOST)
 OUT = os.environ.get("OUT", "/tmp/boardcheck")
 
