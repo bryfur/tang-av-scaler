@@ -61,8 +61,7 @@ enum { R_ID = 0x00, R_BUILD = 0x01, R_CTRL = 0x02, R_STAT = 0x03, R_I2C = 0x04, 
 enum { BUS_PLL, BUS_DP, BUS_DDC, BUS_IN };
 
 static struct scaler_state state;
-static struct scaler_settings set = {.on = true, .ntsc = true, .mode = 0, .thr = 6, .aa = true, .aa_thr = 10, .sharp = 8,
-                                      .audio = true, .aa_diag = true, .aa_corner = true, .crop = 1, .crop_w = 720, .crop_h = 480, .nr = 2, .dn = true, .aa_keep = 3};
+static struct scaler_settings set;      /* (scaler_start: the defaults, then what was kept) */
 static SemaphoreHandle_t lock;          /* set, state, dirty */
 static bool dirty, again, measure, tune;
 static bool cpu_mode;                   /* the FPGA's CPU runs the scaler */
@@ -448,6 +447,13 @@ static struct scaler_settings from_link(const struct link_settings *l)
                                 .nr = l->nr, .dn = l->dn, .phase = l->phase, .osd = l->osd, .nolock = !l->flock, .lowlat = l->lowlat, .surround = l->surround, .table = l->table, .mv_dbg = l->mv_dbg, .net = l->net, .aa_keep = l->aa_keep,
                                 .crop_x = l->crop_x, .crop_w = l->crop_w, .crop_y = l->crop_y, .crop_h = l->crop_h};
     return v;
+}
+
+void scaler_defaults(struct scaler_settings *v)
+{
+    /* (the FPGA's CPU's own: one table of them for both sides) */
+    static const struct link_settings d = LINK_SETTINGS_DEFAULT;
+    *v = from_link(&d);
 }
 
 static void save(const struct scaler_settings *v)
@@ -890,6 +896,7 @@ void scaler_standby(bool on)
 void scaler_start(void)
 {
     lock = xSemaphoreCreateMutex();
+    scaler_defaults(&set);
     nvs_handle_t h;
     if (nvs_open("av", NVS_READONLY, &h) == ESP_OK) {
         /* (an older firmware's settings are shorter: they are taken as far as they go) */

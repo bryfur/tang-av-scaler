@@ -118,6 +118,7 @@ void scaler_start(void);
 bool scaler_cpu(void);          /* the FPGA's CPU runs the scaler (the link relays) */
 void scaler_get(struct scaler_state *s, struct scaler_settings *v);
 void scaler_set(const struct scaler_settings *v);
+void scaler_defaults(struct scaler_settings *v);   /* the settings a reset goes back to */
 void scaler_again(void);
 void scaler_standby(bool on);   /* the FPGA halted (true: once what it keeps is written), or loaded again from its flash */
 void scaler_measure(void);      /* where the picture is: found again */

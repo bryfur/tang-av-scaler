@@ -13,7 +13,7 @@ h1{font-size:1.25em;margin:0;font-weight:650;letter-spacing:-.01em}
 .pill{font-size:.82em;padding:.22em .7em;border-radius:99px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
 .pill:before{content:"";display:inline-block;width:.55em;height:.55em;border-radius:50%;background:var(--dim);margin-right:.45em}
 .pill.ok{color:var(--text)}.pill.ok:before{background:var(--ok)}.pill.bad{color:var(--text)}.pill.bad:before{background:var(--bad)}.pill.warn:before{background:var(--warn)}
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,25em),1fr));gap:1em;padding:0 1.2em 2em;max-width:64em;margin:auto}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,25em),1fr));align-items:start;gap:1em;padding:0 1.2em 2em;max-width:64em;margin:auto}
 section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1em 1.1em}
 section.full{grid-column:1/-1}
 h2{font-size:.78em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:0 0 .8em;font-weight:600}
@@ -32,7 +32,7 @@ select:focus,input:focus,button:focus-visible{outline:2px solid var(--acc);outli
 input[type=range]{width:9.5em;flex:1;accent-color:var(--acc)}.rg:has(input[type=range]){flex:0 1 13em}
 @media(max-width:30em){.rg:has(input[type=range]){flex:1 1 100%}}
 output{min-width:2.2em;text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
-.seg{display:inline-flex;background:var(--in);border:1px solid var(--line);border-radius:9px;padding:2px;flex:none}
+.seg{display:inline-flex;flex-wrap:wrap;max-width:100%;background:var(--in);border:1px solid var(--line);border-radius:9px;padding:2px;flex:none}
 .seg label{padding:.26em .7em;border-radius:7px;cursor:pointer;font-size:.92em;color:var(--dim);white-space:nowrap}
 .seg input{position:absolute;opacity:0;pointer-events:none}
 .seg label:has(input:checked){background:var(--card);box-shadow:0 0 0 1px var(--line);color:var(--text)}
@@ -50,8 +50,19 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 #msg{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.5em 1em;box-shadow:0 6px 24px #0006;white-space:pre-wrap;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none}
 #msg.on{opacity:1}
 .stack{display:grid;gap:.5em;max-width:22em}.stack input{width:100%}
+/* the bring-up settings: shown only with Advanced on (remembered in this browser) */
+body:not(.adv) .adv{display:none!important}
+.f.adv{box-shadow:inset 3px 0 0 var(--line);padding-left:.7em}
+.advsw{display:flex;align-items:center;gap:.5em;font-size:.88em;color:var(--dim);cursor:pointer}
+.pill.go{cursor:pointer}
+/* back to the default: a row's own (shown where it differs), a card's all */
+.rst{display:none;border:0;background:none;padding:0 .3em;margin-left:.15em;color:var(--dim);font-size:1.05em;line-height:1;vertical-align:baseline}
+.rst.on{display:inline}.rst:hover{color:var(--acc)}
+h2{display:flex;align-items:center;min-height:1.9em}
+h2 .def{margin-left:auto;text-transform:none;letter-spacing:0;font-size:1.15em;font-weight:500;padding:.15em .65em;display:none}
+.hasdef h2 .def{display:inline-block}h2 .def:disabled{opacity:.4;cursor:default}h2 .def:disabled:hover{border-color:var(--line)}
 </style></head><body>
-<header><h1>AV scaler</h1><div id="pills"></div></header>
+<header><h1>AV scaler</h1><div id="pills"></div><label class="advsw"><input class="sw" type="checkbox" id="advb">Advanced</label></header>
 <div id="msg"></div>
 <main>
 <form id="vf" style="display:contents">
@@ -59,7 +70,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f"><span>Fill the screen<small>what part of the signal is shown</small></span>
  <span class="seg"><label><input type="radio" name="crop" value="1"><span>Auto</span></label><label><input type="radio" name="crop" value="0"><span>Whole signal</span></label><label><input type="radio" name="crop" value="2"><span>Manual</span></label></span></div>
 <div class="f sub crop" id="c_auto"><span><small id="shown"></small></span><button type="button" onclick="video('measure=1')">Find again</button></div>
-<div class="f sub crop" id="c_man"><span>From / size</span><span class="rg"><input type="number" name="crop_x" min="0" max="719"><input type="number" name="crop_y" min="0" max="479"><input type="number" name="crop_w" min="64" max="720"><input type="number" name="crop_h" min="64" max="480"></span></div>
+<div class="f sub crop" id="c_man"><span>From / size<small>left, top, width, height in the 720 &times; 480 signal</small></span><span class="rg"><input type="number" name="crop_x" min="0" max="719" title="left" aria-label="left"><input type="number" name="crop_y" min="0" max="479" title="top" aria-label="top"><input type="number" name="crop_w" min="64" max="720" title="width" aria-label="width"><input type="number" name="crop_h" min="64" max="480" title="height" aria-label="height"></span></div>
 <div class="f"><span>Widescreen (16:9)<small>for a game set to widescreen</small></span><input class="sw" type="checkbox" name="wide"></div>
 <div class="f"><span>Noise reduction<small>averages frames where the picture is still</small></span><span class="seg"><label><input type="radio" name="nr" value="0"><span>Off</span></label><label><input type="radio" name="nr" value="1"><span>Low</span></label><label><input type="radio" name="nr" value="2"><span>Medium</span></label><label><input type="radio" name="nr" value="3"><span>High</span></label></span></div>
 <div class="f" id="ntr"><span>Upscaler<small id="ntt"></small></span><span class="seg"><label><input type="radio" name="net" value="0"><span>Kernel</span></label><label><input type="radio" name="net" value="1"><span>Network</span></label></span></div>
@@ -67,25 +78,25 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f sub" id="tbu"><span style="flex:0 1 auto"><small>your own (.tab)</small></span><input type="file" id="tbf" accept=".tab" style="flex:1 1 6em;font-size:.9em;min-width:0"><button type="button" onclick="tabUp()">Add</button><button type="button" id="tbd" onclick="tabDrop()">Remove</button></div>
 <div class="f"><span>Sharpening</span><span class="rg"><input type="range" name="sharp" min="0" max="16"><output></output></span></div>
 <div class="f"><span>Noise-aware sharpening<small>sharpens less where a pixel is just noise</small></span><input class="sw" type="checkbox" name="dn"></div>
-<div class="f"><span>Sampling phase<small id="tn">where in a pixel the decoder samples</small></span><span class="rg"><input type="range" name="phase" min="0" max="31"><output></output></span><button type="button" onclick="video('tune=1')">Tune</button></div>
-<div class="f"><span>Freeze</span><input class="sw" type="checkbox" name="freeze"></div>
+<div class="f adv"><span>Sampling phase<small id="tn">where in a pixel the decoder samples</small></span><span class="rg"><input type="range" name="phase" min="0" max="31"><output></output></span><button type="button" onclick="video('tune=1')">Tune</button></div>
+<div class="f adv"><span>Freeze<small>the picture held as it is</small></span><input class="sw" type="checkbox" name="freeze"></div>
 </section>
 <section><h2>Anti-aliasing</h2>
 <div class="f"><span>SMAA</span><input class="sw" type="checkbox" name="aa"></div>
-<div class="f"><span>Edge threshold<small>lower catches more edges</small></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
-<div class="f"><span>Steady edges<small>how firmly an edge found in the frame before is kept, so still edges do not shimmer; 0 off</small></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
-<div class="f"><span>Diagonal edges</span><input class="sw" type="checkbox" name="aa_diag"></div>
-<div class="f"><span>Keep corners sharp</span><input class="sw" type="checkbox" name="aa_corner"></div>
-<div class="f"><span>Show what it finds<small>edges green, blends blue and red</small></span><input class="sw" type="checkbox" name="aa_dbg"></div>
+<div class="f adv"><span>Edge threshold<small>lower catches more edges</small></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
+<div class="f adv"><span>Steady edges<small>how firmly an edge found in the frame before is kept, so still edges do not shimmer; 0 off</small></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
+<div class="f adv"><span>Diagonal edges</span><input class="sw" type="checkbox" name="aa_diag"></div>
+<div class="f adv"><span>Keep corners sharp</span><input class="sw" type="checkbox" name="aa_corner"></div>
+<div class="f adv"><span>Show what it finds<small>edges green, blends blue and red</small></span><input class="sw" type="checkbox" name="aa_dbg"></div>
 </section>
 <section><h2>Deinterlacing</h2>
 <input type="hidden" name="mode">
 <div class="f"><span>Method<small id="mdt"></small></span><span class="seg"><label><input type="radio" name="_m" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="_m" value="1"><span>Bob</span></label><label><input type="radio" name="_m" value="2"><span>Weave</span></label></span></div>
 <div class="f" id="mcf"><span>Motion compensation<small id="pant"></small></span><input class="sw" type="checkbox" name="_c"></div>
 <div class="f" id="kcf"><span>30 fps games<small>a game that draws each frame twice (two fields from one instant): found, and the second field woven with the first: its whole detail in motion</small></span><input class="sw" type="checkbox" name="_k"></div>
-<div class="f sub" id="mvf"><span>Show the motion<small>the picture in grey, each block tinted by how it moves: blue left, yellow right, red up, green down; stronger is faster</small></span><input class="sw" type="checkbox" name="mv_dbg"></div>
-<div class="f"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
-<div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
+<div class="f sub adv" id="mvf"><span>Show the motion<small>the picture in grey, each block tinted by how it moves: blue left, yellow right, red up, green down; stronger is faster</small></span><input class="sw" type="checkbox" name="mv_dbg"></div>
+<div class="f adv"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
+<div class="f adv"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
 </section>
 <section><h2>Output</h2>
 <div class="f"><span>Frame lock<small id="lk">the output kept in step with the input</small></span><input class="sw" type="checkbox" name="lock"></div>
@@ -94,10 +105,10 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <div class="f"><span>Sound over HDMI<small>off sends DVI framing</small></span><input class="sw" type="checkbox" name="audio"></div>
 <div class="f"><span>Surround 5.1<small>a game's Pro Logic II sound decoded to five channels (1080p output)</small></span><input class="sw" type="checkbox" name="surround"></div>
 <div class="f"><span>Frame rate</span><span class="seg"><label><input type="radio" name="ntsc" value="1"><span>59.94 Hz</span></label><label><input type="radio" name="ntsc" value="0"><span>60 Hz</span></label></span></div>
-<div class="f"><span>Test picture</span><input class="sw" type="checkbox" name="pattern"></div>
-<div class="f"><span>Swap Cb / Cr</span><input class="sw" type="checkbox" name="swap"></div>
-<div class="f"><span>Run the scaler<small>off leaves the FPGA to a host tool</small></span><input class="sw" type="checkbox" name="on"></div>
-<div class="btns"><button type="button" onclick="video('again=1')">Bring up again</button></div>
+<div class="f adv"><span>Test picture</span><input class="sw" type="checkbox" name="pattern"></div>
+<div class="f adv"><span>Swap Cb / Cr</span><input class="sw" type="checkbox" name="swap"></div>
+<div class="f adv"><span>Run the scaler<small>off leaves the FPGA to a host tool</small></span><input class="sw" type="checkbox" name="on"></div>
+<div class="btns adv"><button type="button" onclick="video('again=1')">Bring up again</button></div>
 </section>
 </form>
 <section class="full"><h2>Screen capture</h2>
@@ -110,20 +121,20 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <section><h2>Wi-Fi network</h2>
 <form id="wf" class="stack"><input type="text" name="ssid" placeholder="Network name" required>
 <input name="pass" type="password" placeholder="Password"><div><button class="pri">Save and join</button></div></form></section>
-<section><h2>Maintenance</h2>
+<section class="adv"><h2>Maintenance</h2>
 <div class="f"><span>Firmware update<small>avwifi.bin</small></span><button onclick="ota()">Upload</button><input type="file" id="fw" style="flex:1 1 100%;font-size:.9em"></div>
 <div class="f"><span>FPGA over JTAG<small id="fp">not read</small></span><button onclick="fpga()">Read</button></div>
 </section>
-<section class="full"><h2>Logs</h2>
-<details><summary>FPGA console (last output)</summary><pre id="con"></pre></details>
-<details><summary>Firmware log</summary><pre id="log"></pre></details></section>
+<section class="full adv"><h2>Logs</h2>
+<details id="cond"><summary>FPGA console (last output)</summary><pre id="con"></pre></details>
+<details id="logd"><summary>Firmware log</summary><pre id="log"></pre></details></section>
 </main>
 <script>
 const $=i=>document.getElementById(i);
 let mt;const msg=t=>{const m=$('msg');m.textContent=t;m.classList.add('on');clearTimeout(mt);mt=setTimeout(()=>m.classList.remove('on'),3500)};
-const row=(k,v)=>'<tr><td>'+k+'</td><td>'+v+'</td></tr>';
+const row=(k,v,c)=>'<tr'+(c?' class="'+c+'"':'')+'><td>'+k+'</td><td>'+v+'</td></tr>';
 const yes=(b,t,f)=>'<span class="'+(b?'ok':'bad')+'">'+(b?t:f)+'</span>';
-const pill=(c,t)=>'<span class="pill '+c+'">'+t+'</span>';
+const pill=(c,t,go)=>'<span class="pill '+c+(go?' go" onclick="'+go:'')+'">'+t+'</span>';
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const vf=$('vf');
 // the deinterlacer's setting is one number: the method (0 motion adaptive, 1 bob, 2 weave), 4 more with
@@ -136,7 +147,7 @@ function modeNa(){const f=vf.elements,b=+f._m.value;
   $('mdt').textContent=['fields woven where the picture is still, lines filled in where it moves','every line between filled in from its neighbours: half the detail, never a comb','the two fields woven as they are: right for a still picture only'][b]}
 function modeTake(){const f=vf.elements,b=+f._m.value;
   if(b!=0)f._c.checked=f._k.checked=false;
-  f.mode.value=b+(f._k.checked?4:0)+(f._c.checked?8:0);modeNa()}
+  f.mode.value=b+(f._k.checked?4:0)+(f._c.checked?8:0);modeNa();marks()}
 // the scaler's table: FSR's (the design's own), the learnt pair (one for the anti-aliasing on, one for
 // off: the scaler takes the one that fits), and tables sent here (slots 3 to 7: the setting 2 to 6)
 let tkey='',tab=null;
@@ -170,12 +181,15 @@ async function status(){
     $('st').innerHTML=
       row('Network',yes(w.joined,esc(w.ssid)+' &middot; '+w.ip+' &middot; '+w.rssi+' dBm, channel '+w.channel,'not joined'+(w.ssid?' ('+esc(w.ssid)+')':'')))+
       row('Name',esc(w.host)+'.local &middot; '+w.mac+(w.ap?' &middot; access point '+esc(w.ap_ssid)+' open':''))+
-      row('JTAG','port '+j.port+' &middot; '+(j.connected?'in use by '+j.peer:'free')+' &middot; '+j.sessions+' sessions, '+j.bits+' bits, TCK '+j.tck_ns+' ns (fastest '+j.fastest_ns+')')+
-      row('Console','port '+c.port+' at '+c.baud+' baud &middot; '+(c.tcp?'client '+c.peer:'no client')+(c.usb?' &middot; USB':'')+' &middot; '+c.to_fpga+' bytes out, '+c.from_fpga+' in')+
+      row('JTAG','port '+j.port+' &middot; '+(j.connected?'in use by '+j.peer:'free')+' &middot; '+j.sessions+' sessions, '+j.bits+' bits, TCK '+j.tck_ns+' ns (fastest '+j.fastest_ns+')','adv')+
+      row('Console','port '+c.port+' at '+c.baud+' baud &middot; '+(c.tcp?'client '+c.peer:'no client')+(c.usb?' &middot; USB':'')+' &middot; '+c.to_fpga+' bytes out, '+c.from_fpga+' in','adv')+
       row('Firmware',esc(f.version)+' &middot; built '+f.built+' &middot; '+f.chip+', slot '+f.slot+' &middot; up '+f.uptime_s+' s, '+f.heap+' bytes free'+(f.heap_int?' ('+f.heap_int+' of the chip\'s own, '+f.heap_int_min+' at the least)':''));
     await vstat();
-    $('con').textContent=await (await fetch('/api/console')).text();
-    $('log').textContent=await (await fetch('/api/log')).text();
+    if(!def)defs();
+    // (the logs only while they are open: the link's memory and time are short)
+    const adv=document.body.classList.contains('adv');
+    if(adv&&$('cond').open)$('con').textContent=await (await fetch('/api/console')).text();
+    if(adv&&$('logd').open)$('log').textContent=await (await fetch('/api/log')).text();
   }catch(e){$('pills').innerHTML=pill('bad','no answer from the link')}
 }
 let vfill=true,tun=0;
@@ -187,7 +201,8 @@ async function vstat(){
     pill(sig?'ok':'bad',sig?'Input '+v.pix+' &times; '+v.lines*2+'i':'No input')+
     pill(v.pll?'ok':'bad','1080p out'+(v.set.ntsc?' 59.94':' 60'))+
     pill(v.hpd?'ok':'','Display '+(v.hpd?'connected':'not seen'))+
-    (v.temp_c>-100?pill(v.temp_c<85?'ok':'warn','FPGA '+v.temp_c.toFixed(1)+' &deg;C'):'');
+    (v.temp_c>-100?pill(v.temp_c<85?'ok':'warn','FPGA '+v.temp_c.toFixed(1)+' &deg;C'):'')+
+    (!document.body.classList.contains('adv')&&advOff(v.set)?pill('warn','Advanced settings changed',"advSet(true)"):'');
   $('tn').textContent=['where in a pixel the decoder samples; Tune tries each on a still picture (pause the game)','tuning: about ten seconds...','tuned: the sharpest is '+(v.tune_gain-100)+' % sharper than the worst','the picture moved while tuning: pause the game and try again','no picture to tune on'][v.tune]||'';
   if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
   $('lk').textContent=['the output kept in step with the input','no input to follow','getting in step: '+(v.lock_us/1000).toFixed(2)+' ms to go, clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm','in step (clock '+(v.lock_ppm>0?'+':'')+v.lock_ppm+' ppm): every field shown once, the delay steady'][v.relay?v.lock:0];
@@ -207,18 +222,52 @@ async function vstat(){
     row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+new Date(v.cpu_build*1000).toISOString().slice(0,16).replace('T',' ')+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+
     row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'));
   tabShow(v);
-  if(vfill){vfill=false;for(const k in v.set){const e=f[k];if(!e)continue;
-    if(e.type=='checkbox')e.checked=!!v.set[k];else e.value=v.set[k]}modeShow();outs()}
-  tabShow(v);
+  if(vfill){vfill=false;fill(v.set)}
 }
-async function video(body){try{msg(await (await fetch('/api/video',{method:'POST',body})).text())}catch(e){msg('no answer from the link')}vfill=true;vstat()}
+function fill(o){const f=vf.elements;for(const k in o){const e=f[k];if(!e)continue;
+  if(e.type=='checkbox')e.checked=!!o[k];else e.value=o[k]}modeShow();outs();marks()}
+async function video(body,note){try{const r=await fetch('/api/video',{method:'POST',body}),t=await r.text();msg(r.ok&&note||t)}catch(e){msg('no answer from the link')}vfill=true;vstat()}
 // a setting changed: sent at once (a slider: when it is let go)
 let st;
-function send(){const p=new URLSearchParams();
-  for(const e of vf.elements){if(!e.name||e.name[0]=='_'||e.type=='radio'&&!e.checked)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
-  video(p)}
+function cur(){const o={};
+  for(const e of vf.elements){if(!e.name||e.name[0]=='_'||e.type=='radio'&&!e.checked)continue;o[e.name]=e.type=='checkbox'?(e.checked?1:0):+e.value}
+  return o}
+function send(note){video(new URLSearchParams(cur()),note)}
+// the defaults (the link's: GET /api/defaults; an older firmware has none, and then no resets are offered)
+let def=null;
+async function defs(){try{const r=await fetch('/api/defaults');if(!r.ok)return;def=await r.json();
+  document.body.classList.add('hasdef');marks()}catch(e){}}
+// what a row sets: [setting, the bits of it] (the deinterlacer's three controls share mode; the sampling
+// phase is the board's own calibration: Tune is its reset)
+const MBITS={_m:3,_k:4,_c:8};
+function keys(el){const ks=[],seen={};
+  for(const e of el.querySelectorAll('[name]')){const n=e.name;if(seen[n]||n=='phase'||n=='mode'||e.type=='file')continue;seen[n]=1;
+    ks.push(MBITS[n]?['mode',MBITS[n]]:[n,0])}return ks}
+const differs=(o,[k,m])=>def&&k in def&&(m?(o[k]&m)!=(def[k]&m):o[k]!=def[k]);
+const rows=[...vf.querySelectorAll('.f')].filter(r=>keys(r).length);
+function marks(){if(!def)return;const o=cur();
+  for(const r of rows)r.querySelector('.rst').classList.toggle('on',keys(r).some(k=>differs(o,k)));
+  for(const s of vf.querySelectorAll('section'))s.querySelector('.def').disabled=!keys(s).some(k=>differs(o,k))}
+function reset(el,note){if(!def)return;const o=cur();
+  for(const [k,m] of keys(el))if(k in def)o[k]=m?(o[k]&~m)|(def[k]&m):def[k];
+  fill(o);send(note)}
+for(const r of rows){const b=document.createElement('button');b.type='button';b.className='rst';b.textContent='\u21ba';
+  b.title='back to the default';b.setAttribute('aria-label',b.title);b.onclick=()=>reset(r,'back to the default');
+  const l=r.firstElementChild;l.insertBefore(b,l.querySelector('small'))}
+for(const s of vf.querySelectorAll('section')){const b=document.createElement('button'),h=s.querySelector('h2');
+  b.type='button';b.className='def';b.textContent='Defaults';const n=h.textContent;b.title='every '+n.toLowerCase()+' setting back to its default';
+  b.onclick=()=>reset(s,n+': back to the defaults');h.append(b)}
+// an advanced setting not at its default while they are hidden (said in the pills: one click shows them)
+const advRows=rows.filter(r=>r.classList.contains('adv'));
+const advOff=o=>advRows.some(r=>keys(r).some(k=>differs(o,k)));
+function advSet(on,quiet){document.body.classList.toggle('adv',on);$('advb').checked=on;try{localStorage.setItem('av.adv',on?'1':'')}catch(e){}
+  if(on&&!quiet)status()}
+let keep='';try{keep=localStorage.getItem('av.adv')}catch(e){}
+advSet(!!keep,true);
+$('advb').onchange=e=>advSet(e.target.checked);
+for(const d of ['cond','logd'])$(d).addEventListener('toggle',()=>{if($(d).open)status()});
 for(const n of ['_m','_c','_k'])for(const e of [].concat(...[vf.elements[n]].map(x=>x.length?[...x]:[x])))e.addEventListener('change',modeTake);
-vf.addEventListener('input',outs);
+vf.addEventListener('input',()=>{outs();marks()});
 vf.addEventListener('change',e=>{if(e.target.type=='file')return;clearTimeout(st);st=setTimeout(send,150)});
 vf.onsubmit=e=>{e.preventDefault();send()};
 async function fpga(){
@@ -246,5 +295,5 @@ async function grab(){
   }catch(e){msg('capture failed: '+e)}
   clearInterval(tick);$('gb').textContent='Capture';$('gb').disabled=false;grabbing=false;
 }
-status(); setInterval(()=>{if(!grabbing)status()},3000);
+defs();status(); setInterval(()=>{if(!grabbing)status()},3000);
 </script></body></html>

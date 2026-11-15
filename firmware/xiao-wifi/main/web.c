@@ -11,6 +11,7 @@
  *   POST /api/load?sum=N   the body is a bitstream (the .fs file's bits as bytes); the link loads it into
  *                          the FPGA's SRAM by itself (gowin.c) and answers with what happened
  *   GET  /api/video        JSON: the scaler as the link runs it (scaler.c): the picture in, the settings
+ *   GET  /api/defaults     JSON: the settings a reset goes back to (as /api/video's "set")
  *   GET  /api/grab?step=N  the picture going out, read back from the FPGA: a BMP (N 1, 2, 4, 8: 4 is 480 x 270)
  *   POST /api/video        a form, any of: on, ntsc, mode, thr, aa, aa_thr, sharp, swap, top1, pattern, freeze, audio, aa_dbg,
  *                          standby (1: the FPGA halted; 0: loaded again from its flash),
@@ -498,6 +499,31 @@ static esp_err_t get_grab(httpd_req_t *req)
     return e == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : e;
 }
 
+/* the settings as JSON, the names POST /api/video takes */
+enum { SET_JSON = 600 };
+static void set_json(char *o, const struct scaler_settings *v)
+{
+    snprintf(o, SET_JSON,
+             "{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
+             "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
+             "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,"
+             "\"lowlat\":%d,\"surround\":%d,\"table\":%u,\"mv_dbg\":%d,\"net\":%u,\"aa_keep\":%u}",
+             v->on, v->ntsc, v->mode, v->thr, v->aa, v->aa_thr, v->sharp, v->swap, v->top1, v->pattern, v->freeze, v->audio,
+             v->aa_dbg, v->aa_diag, v->aa_corner, v->crop, v->crop_x, v->crop_w, v->crop_y, v->crop_h, v->wide, v->nr, v->dn,
+             v->phase, v->osd, !v->nolock, v->lowlat, v->surround, v->table, v->mv_dbg, v->net, v->aa_keep);
+}
+
+/* GET /api/defaults: the settings a reset goes back to */
+static esp_err_t get_defaults(httpd_req_t *req)
+{
+    char sj[SET_JSON];
+    struct scaler_settings d;
+    scaler_defaults(&d);
+    set_json(sj, &d);
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, sj);
+}
+
 static esp_err_t get_video(httpd_req_t *req)
 {
     enum { OUT = 2200, NAMES = LINK_TABLES * (6 * TABLE_NAME + 4) };
@@ -521,7 +547,8 @@ static esp_err_t get_video(httpd_req_t *req)
             names[nn++] = ',';
     }
     names[nn] = 0;
-    char netname[TABLE_NAME], nn2[2 * TABLE_NAME];
+    char sj[SET_JSON], netname[TABLE_NAME], nn2[2 * TABLE_NAME];
+    set_json(sj, &v);
     tables_net_name(nn2);
     esc(netname, sizeof netname, nn2);
 #define B(x) ((x) ? "true" : "false")
@@ -529,14 +556,10 @@ static esp_err_t get_video(httpd_req_t *req)
                      "{\"host\":%s,\"fpga\":%s,\"standby\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
                      "\"in\":\"%s\",\"in_ok\":%s,\"in_lines\":%u,\"in_hz\":%.2f,"
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
-                     "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
-                     "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
-                     "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d,\"surround\":%d,\"table\":%u,\"mv_dbg\":%d,\"net\":%u,\"aa_keep\":%u},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f],\"tab\":{\"have\":%u,\"slot\":%d,\"state\":%d,\"bad\":%u,\"ms\":%u,\"names\":[%s]},\"net\":{\"there\":%s,\"under\":%u,\"state\":%u,\"name\":\"%s\"},\"store\":{\"there\":%s,\"set\":%s,\"busy\":%s,\"failed\":%s}}",
+                     "\"set\":%s,\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f],\"tab\":{\"have\":%u,\"slot\":%d,\"state\":%d,\"bad\":%u,\"ms\":%u,\"names\":[%s]},\"net\":{\"there\":%s,\"under\":%u,\"state\":%u,\"name\":\"%s\"},\"store\":{\"there\":%s,\"set\":%s,\"busy\":%s,\"failed\":%s}}",
                      B(t.host), B(t.fpga), B(t.standby), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      in_names[t.in_std < sizeof in_names / sizeof in_names[0] ? t.in_std : 0], B(t.in_ok || !t.cpu), t.in_lines, t.in_hz100 / 100.0,
-                     t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
-                     v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
-                     v.crop_h, v.wide, v.nr, v.dn, v.phase, v.osd, !v.nolock, v.lowlat, v.surround, v.table, v.mv_dbg, v.net, v.aa_keep, t.ll ? "true" : "false", t.ll_lines, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h, t.pan, t.pan_dx, t.pan_dy, t.pan_ms10 / 10.0,
+                     t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, sj, t.ll ? "true" : "false", t.ll_lines, t.lock, t.lock_err * 10, t.lock_ppm10 / 10.0, t.tune, t.tune_gain, t.temp4 / 4.0, t.delay_us10 / 100.0, t.cpu ? "true" : "false", t.relay ? "true" : "false", (unsigned)t.cpu_build, t.show_x, t.show_w, t.show_y, t.show_h, t.pan, t.pan_dx, t.pan_dy, t.pan_ms10 / 10.0,
                      t.tab_have, t.tab_slot == 255 ? -1 : t.tab_slot, t.tab_state == 255 ? -1 : t.tab_state, t.tab_bad, t.tab_ms, names, B(t.net_there), t.net_under, t.net_state, netname, B(t.store & 1), B(t.store & 2), B(t.store & 4), B(t.store & 8));
 #undef B
     httpd_resp_set_type(req, "application/json");
@@ -704,7 +727,7 @@ void web_start(void)
 {
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.stack_size = 8192;
-    cfg.max_uri_handlers = 16;
+    cfg.max_uri_handlers = 20;
     /* (a browser keeps several connections open, and there are few to have: with all of them taken
      * nothing more is answered, so the one used longest ago makes way) */
     cfg.lru_purge_enable = true;
@@ -727,6 +750,7 @@ void web_start(void)
         {.uri = "/api/load", .method = HTTP_GET, .handler = get_load},
         {.uri = "/api/restart", .method = HTTP_POST, .handler = post_restart},
         {.uri = "/api/video", .method = HTTP_GET, .handler = get_video},
+        {.uri = "/api/defaults", .method = HTTP_GET, .handler = get_defaults},
         {.uri = "/api/grab", .method = HTTP_GET, .handler = get_grab},
         {.uri = "/api/video", .method = HTTP_POST, .handler = post_video},
         {.uri = "/api/table", .method = HTTP_POST, .handler = post_table},
