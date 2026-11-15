@@ -10,4 +10,6 @@ gw="env QT_QPA_PLATFORM=minimal LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libfreetype
 if [ -n "$GW_CST" ]; then
     exec "$fpgarun" env GW_SRCS="$GW_SRCS" GW_CST="$GW_CST" $gw gowin/avb.tcl
 fi
+# (a name connected or assigned that nothing declares is a wire nothing drives: the tools say nothing; stopped here)
+python3 sim/lint_nets.py > /dev/null || { python3 sim/lint_nets.py; echo "build.sh: undeclared names (sim/lint_nets.py)"; exit 1; }
 exec "$fpgarun" bash -c "$gw gowin/avb.tcl && python3 gowin/csr_result.py $out/avb/avb.gprj.user $out/serdes/serdes.csr && $gw gowin/run.tcl"

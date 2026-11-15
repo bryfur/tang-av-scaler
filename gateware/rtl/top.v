@@ -794,6 +794,10 @@ module top (
     wire [9:0]   pt_goal;
     wire [2:0]   r_slot_d, r_slot_i, w_slot;
     wire [31:0]  r_wd_d, r_wd_i;
+    wire         p_we;                  // (the same words again, for the pass-through's store: deint.v p_*)
+    wire [1:0]   p_slot_d, p_slot_i;
+    wire [9:0]   p_wa;
+    wire [31:0]  p_wd_d, p_wd_i;
     wire [53:0]  w_d;
     // (the stream runs 18 lines ahead of the ring for smaa.v; l_goal crosses from the word clock
     // with its event: taken as deint.v takes it)
@@ -850,7 +854,8 @@ module top (
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
-                   .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
+                   .r_wd_d(r_wd_d), .r_wd_i(r_wd_i), .p_we(p_we), .p_slot_d(p_slot_d), .p_slot_i(p_slot_i), .p_wa(p_wa),
+                   .p_wd_d(p_wd_d), .p_wd_i(p_wd_i), .emitted(d_emitted), .fstart(d_fstart), .frames(d_frames),
                    .state_o(d_state));
     lstream u_ls (.clk(pclk), .fstart(d_fstart), .emitted(d_emitted), .goal(s_goal), .skip(ls_skip), .hold(ls_hold), .r_we(r_we),
                   .aa_en(dcfg[16]), .aa_dbg(dcfg[17]), .aa_diag(dcfg[18]), .aa_corner(dcfg[19]), .aa_thr(dcfg[31:24]),

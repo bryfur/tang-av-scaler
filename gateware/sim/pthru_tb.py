@@ -116,17 +116,19 @@ module tb;
     wire ev, ev_first, r_we, fstart, hold; wire [9:0] goal, emitted, r_wa;
     wire [2:0] sd, si; wire [31:0] wd_d, wd_i;
     wire [15:0] frames; wire [7:0] dstate;
+    wire p_we; wire [1:0] psd, psi; wire [9:0] p_wa; wire [31:0] p_wdd, p_wdi;
     deint u_deint (.clk(pclk), .nch(7'd80), .pg(pg_r), .ev(ev), .ev_first(ev_first), .goal(goal), .hold(hold),
                    .latest(latest), .par(par), .nfields(fn), .flines(flines), .mode(2'd0), .thr(8'd6), .nr(2'd2), .mc(1'b0), .mv(11'd0), .first(10'd0), .cad(1'b0), .wv(8'd0), .wv_n(), .wv_on(), .cs_q(), .skip(10'd0),
                    .ll(1'b%(ll_on)d), .ll_min(8'd%(ll)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
-                   .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
+                   .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i), .p_we(p_we), .p_slot_d(psd), .p_slot_i(psi), .p_wa(p_wa), .p_wd_d(p_wdd), .p_wd_i(p_wdi),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
     wire de, hs, vs, pre, gb, ucc; wire [7:0] pr, pg, pb; wire [12:0] ox; wire [11:0] oy; wire [23:0] rgb;
     pattern u_pat (.clk(clk), .ce(pce), .hd(1'b1), .de(de), .hs(hs), .vs(vs), .pre(pre), .gb(gb), .ucc(ucc), .r(pr),
                    .g(pg), .b(pb), .ox(ox), .oy(oy));
-    pthru u_pt (.w_clk(pclk), .r_we(r_we), .r_slot_d(sd[1:0]), .r_slot_i(si[1:0]), .r_wa(r_wa), .r_wd_d(wd_d),
-                .r_wd_i(wd_i), .emitted(emitted), .hold(hold), .goal(goal), .clk(clk), .ce(pce), .swap(1'b0), .x(ox),
+    // (the pass-through's store written by the deinterlacer's own copies of the words, as in rtl/top.v)
+    pthru u_pt (.w_clk(pclk), .r_we(p_we), .r_slot_d(psd), .r_slot_i(psi), .r_wa(p_wa), .r_wd_d(p_wdd),
+                .r_wd_i(p_wdi), .emitted(emitted), .hold(hold), .goal(goal), .clk(clk), .ce(pce), .swap(1'b0), .x(ox),
                 .y(oy), .ev(ev), .ev_first(ev_first), .rgb(rgb));
     // the picture's timing beside pthru.v's pixel
     reg [%(lat)d:0] de_s = 0;
