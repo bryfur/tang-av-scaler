@@ -104,11 +104,49 @@ lost (measured on frames).
 - **Latency:** the smoothing wants the vectors of blocks below a block. Limited to two block rows ahead (16 source
   lines) it lost about 0.1 pixel of accuracy in fast scenes and little in slow ones. Prediction from the previous
   field did not help.
-- **Chroma:** the network is luma only. Simplest: chroma as today's deinterlacer path makes it.
+- **Chroma:** see "Colour" below: it follows the luma, with no change to the network.
 - **The edge search is gone** (removed 2026-11-14); A needs none.
+
+## Colour
+
+The network is luma only. The colour **follows the luma**: a colour history (the colour frame made before, Cb and
+Cr at the capture's 4:2:2, 320 x 448 each), moved by the same block vectors; the field's own colour rows taken as
+they are; each missing row a blend of the moved history and the mean of the rows above and below, weighted by
+the luma's agreement d (already computed for the network):
+
+    d5   the 5 x 5 mean of d, then the mean of each pair of samples (the colour's width)
+    a8   = clamp(12 - d5, 0, 8)                                   (eighths; d5 in levels)
+    row  = (a8 x moved colour history + (8 - a8) x (row above + row below) / 2 + 4) >> 3
+    the colour history's move: the block vectors in source rows / 16 down and colour samples / 32 across
+    (eighths of an output pixel), bilinear; the new colour frame is the next field's colour history
+
+(Tuned on four training games: the threshold hardly matters, 44.84 to 44.89 dB over the grid tried.) Then the
+colour is stretched to the output as `cnn.v`'s path does now.
+
+Measured on the test games, colour PSNR over Cb and Cr (all / at colour edges, where fringes show), each frame
+as two fields, from the second frame on; the 8 x render's colour as the truth:
+
+| | bob | today's deinterlacer | **colour follows luma** | perfect weave (ceiling) |
+|---|---|---|---|---|
+| Tales of the Abyss | 43.61 / 36.14 | 42.74 / 35.82 | **44.30 / 36.78** | 44.56 / 37.10 |
+| Final Fantasy XII | 42.74 / 34.34 | 42.81 / 34.80 | **43.37 / 35.02** | 43.46 / 35.09 |
+| God of War | 46.30 / 39.92 | 45.24 / 39.26 | **46.16 / 40.08** | 46.70 / 40.41 |
+| Killzone | 48.50 / 43.93 | 46.52 / 42.94 | **48.61 / 44.27** | 48.85 / 44.46 |
+| Silent Hill 2 | 50.08 / 46.70 | 49.94 / 46.42 | **50.38 / 47.01** | 50.28 / 47.01 |
+
+It beats today's deinterlacer's colour on every test set (about 0.9 dB on average, more at edges), comes within
+about 0.25 dB of the ceiling, and its colour is steadier (temporal error 0.5-0.9 against 0.5-1.2 levels).
+
+Two caveats: here d came from whole-frame luma (the frame before moved), not from path A's own history; and
+today's deinterlacer is modelled by `sim/model.py` (mode 0, threshold 6, noise reduction 2, motion compensation):
+in that model its colour in motion is below plain bob on Tales of the Abyss, God of War and Killzone (by up to
+2.6 dB), which may be worth a look on its own. Scripts: `~/devel/rvwork/fsrcmp/chroma_pairs.py`,
+`deint_chroma.py`, `chroma_eval.py`.
 
 ## Open
 
+- **SMAA:** today it runs on the deinterlaced frame before the network; here there is no such frame. It would run
+  on the x 2 output, or not at all: not measured.
 - **Real moving fields** (step 6 of the plan): `real_check.py` takes `tools/fields.py OUT.json 8` of a game in
   motion and runs A, B and today's chain on it. It needs someone playing and the monitor free.
 - **Killzone-like fast motion** with the history-based estimator (about 1 dB lost there).
