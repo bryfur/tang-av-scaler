@@ -51,7 +51,7 @@ somewhere warm: the FPGA's heatsink runs warm and the lid is over it.
    into its openings. Lower board and panel together into the base: the panel into its grooves,
    the board onto the four standoffs.
 2. Slide the front panel down its grooves (it clears the XIAO's USB-C).
-3. Screw the fan to the underside of the lid, under the round grille, its label up (blowing down
+3. Screw the fan to the underside of the lid, under the round grille, its label side down toward the board (fans blow out of the label side: down
    into the case), the wire toward the right. Put each button into its guide in the lid from the top, its tab along the guide's keyway (to
    the right), push it down and turn it a quarter: the head keeps it from falling in, the tab from
    coming out, so the buttons stay with the lid. Stick the XIAO's antenna to the inside of the
