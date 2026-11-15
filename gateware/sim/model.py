@@ -186,8 +186,10 @@ EDI_ORDER = [d for k in range(1, EDI_D + 1) for d in (-k, k)]      # the offsets
 
 
 MC_HOLD = 12
-WV_HOLD = 12            # (rtl/deint.v WVH: the woven pixel within this of the pixels above and below)
-CAD_BLACK = 24          # (rtl/deint.v: a pixel under this, and the mean above and below it, is not counted)
+WV_HOLD = 48            # (rtl/deint.v WVH: the woven pixel within this of the pixels above and below; the picture
+                        # research's 17 sets: 48 scores as no guard, with no false weaves, 2026-11-15)
+CAD_BLACK = 0           # (rtl/deint.v: a pixel under this, and the mean above and below it, is not counted: 24 left
+                        # the slow pans' misses as they were and added some in dark games: none left out)
 
 
 def cadence_s(fields, pars, top_f=0):
@@ -308,7 +310,10 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
     p2 = fields[-3] if len(fields) >= 3 else c
     p3 = fields[-4] if len(fields) >= 4 else p1
     raw_c, raw_p1 = c, p1               # (what moves is seen in the fields as they are)
-    if hist and nr:
+    # (a woven frame without the noise reduction: the field and its partner from one instant are the
+    # picture itself; averaged with the frame before they lost up to half a dB: the picture research)
+    weave = weave and hist and mode == 0
+    if hist and nr and not weave:
         c = [[tnr_word(wa, wb, nr) for wa, wb in zip(la, lb)] for la, lb in zip(c, p2)]
         p1 = [[tnr_word(wa, wb, nr) for wa, wb in zip(la, lb)] for la, lb in zip(p1, p3)]
     pc = int(pars[-1] != top_f)
@@ -316,7 +321,6 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
     out = [None] * (2 * nl)
     dcp = [[abs(a - b) for a, b in zip(luma(raw_c[n]), luma(p2[n]))] for n in range(nl)]
     mc = mc and hist and mode == 0
-    weave = weave and hist and mode == 0
     W = 2 * PAIRS
     if mc:
         cl, p2l, p1l, p3l = ([luma(r) for r in f] for f in (raw_c, p2, raw_p1, p3))

@@ -319,8 +319,8 @@ module deint #(
     reg  [7:0]         cs_m0, cs_m1;
     reg  [15:0]        cs_y;
     reg  [1:0]         cs_k = 2'd0;
-    localparam [7:0]   CAD_BLACK = 8'd24;   // (sim/model.py CAD_BLACK)
-    localparam [8:0]   WVH = 9'd12;         // the woven pixel within this of the pixels above and below (sim/model.py WV_HOLD)
+    localparam [7:0]   CAD_BLACK = 8'd0;    // (sim/model.py CAD_BLACK: every pixel counted)
+    localparam [8:0]   WVH = 9'd48;         // the woven pixel within this of the pixels above and below (sim/model.py WV_HOLD)
     assign cs_q = {cs_p, cs_pc};
     assign wv_on = wvf;
     wire [2:0]         cs_new = ll_now_r ? nxt : latest;        // (the field the frame now begun is made from)
@@ -1013,12 +1013,13 @@ module deint #(
             cs_c <= cs_c + {22'd0, cs_k};
         end
         // f: the part of it taken (a chroma sample's: none where either of its word's lumas differs by
-        // 2 T or more: sim/model.py tnr_word())
+        // 2 T or more: sim/model.py tnr_word(); none at all in a woven frame: the field and its partner
+        // from one instant are the picture as it was drawn)
         otf <= ote;
         for (nb = 0; nb < 4; nb = nb + 1) begin
-            cA[5 * nb +: 5] <= {tA[9 * nb + 8], |tA[9 * nb + 4 +: 4] || (nb[0] && !gA) ? 4'd0 : tnr_t[{nrq[1:0], tA[9 * nb +: 4]}]};
-            cB[5 * nb +: 5] <= {tB[9 * nb + 8], |tB[9 * nb + 4 +: 4] || (nb[0] && !gB) ? 4'd0 : tnr_t[{nrq[3:2], tB[9 * nb +: 4]}]};
-            cW[5 * nb +: 5] <= {tW[9 * nb + 8], |tW[9 * nb + 4 +: 4] || (nb[0] && !gW) ? 4'd0 : tnr_t[{nrq[5:4], tW[9 * nb +: 4]}]};
+            cA[5 * nb +: 5] <= {tA[9 * nb + 8], |tA[9 * nb + 4 +: 4] || (nb[0] && !gA) || wvf ? 4'd0 : tnr_t[{nrq[1:0], tA[9 * nb +: 4]}]};
+            cB[5 * nb +: 5] <= {tB[9 * nb + 8], |tB[9 * nb + 4 +: 4] || (nb[0] && !gB) || wvf ? 4'd0 : tnr_t[{nrq[3:2], tB[9 * nb +: 4]}]};
+            cW[5 * nb +: 5] <= {tW[9 * nb + 8], |tW[9 * nb + 4 +: 4] || (nb[0] && !gW) || wvf ? 4'd0 : tnr_t[{nrq[5:4], tW[9 * nb +: 4]}]};
         end
         mab0 <= max2(dA0, dB0);
         mab1 <= max2(dA1, dB1);
