@@ -190,3 +190,11 @@ void wifi_get(struct wifi_state *s)
     }
     *s = state;
 }
+
+/* The radio's power saving: while the board stands by, the radio sleeps between the access point's
+ * beacons (the page answers a little later); else it listens all the time (the monitor's and
+ * JTAG's ports want that). */
+void wifi_power_save(bool on)
+{
+    esp_wifi_set_ps(on ? WIFI_PS_MAX_MODEM : WIFI_PS_NONE);
+}

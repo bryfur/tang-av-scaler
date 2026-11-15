@@ -150,14 +150,7 @@ static esp_err_t get_fpga(httpd_req_t *req)
     char out[160];
     uint32_t id, status;
     int n;
-    struct scaler_state t;
-    struct scaler_settings v;
-    scaler_get(&t, &v);
-    /* (halted, it is parked in its configuration mode: a word over JTAG lets it out, and it loads
-     * its flash's image again: not asked) */
-    if (t.standby)
-        n = snprintf(out, sizeof out, "{\"busy\":false,\"standby\":true,\"idcode\":\"-\",\"status\":\"standing by\",\"answers\":true}");
-    else if (fpga_read(&id, &status))
+    if (fpga_read(&id, &status))
         /* all ones or all zeros: nothing answers (no SOM, no power, a JTAG line open) */
         n = snprintf(out, sizeof out, "{\"busy\":false,\"idcode\":\"0x%08x\",\"status\":\"0x%08x\",\"answers\":%s}",
                      (unsigned)id, (unsigned)status, id != 0 && id != 0xFFFFFFFF ? "true" : "false");
@@ -313,10 +306,15 @@ static void load_task(void *arg)
 
 static esp_err_t get_load(httpd_req_t *req)
 {
-    char out[sizeof load.msg + 80];
-    /* (and where the tasks were at the last restart that was not a power-on: app.h crumb) */
-    snprintf(out, sizeof out, "%s(restart %d: tasks at %u %u %u %u)\n", load.msg, (int)esp_reset_reason(),
-             (unsigned)crumb_was[0], (unsigned)crumb_was[1], (unsigned)crumb_was[2], (unsigned)crumb_was[3]);
+    char out[sizeof load.msg + 320];
+    extern uint32_t trace_was[12];
+    /* (and where the tasks were at the last restart that was not a power-on: app.h crumb; a crash's
+     * cause, what it touched, and the places on its stack: main.c) */
+    int n = snprintf(out, sizeof out, "%s(restart %d: tasks at %u %u %u %u)\ncrash:", load.msg, (int)esp_reset_reason(),
+                     (unsigned)crumb_was[0], (unsigned)crumb_was[1], (unsigned)crumb_was[2], (unsigned)crumb_was[3]);
+    for (int k = 0; k < 12; k++)
+        n += snprintf(out + n, sizeof out - n, " %08x", (unsigned)trace_was[k]);
+    snprintf(out + n, sizeof out - n, "\n");
     httpd_resp_set_type(req, "text/plain");
     return httpd_resp_sendstr(req, out);
 }
@@ -325,7 +323,7 @@ static esp_err_t post_load(httpd_req_t *req)
 {
     char q[120], v[16], msg[64];
     unsigned sum = 0;
-    struct gowin_opt o = {.gap_ms = 0, .stop_ms = 30, .pre_ms = 0, .spi_hz = 0, .reverse = true, .hold = false};
+    struct gowin_opt o = {.gap_ms = 0, .stop_ms = 0, .pre_ms = 0, .spi_hz = 0, .reverse = true, .hold = false};
     if (httpd_req_get_url_query_str(req, q, sizeof q) == ESP_OK) {
         if (httpd_query_key_value(q, "sum", v, sizeof v) == ESP_OK)
             sum = strtoul(v, NULL, 0);

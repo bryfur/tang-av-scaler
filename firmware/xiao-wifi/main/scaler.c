@@ -35,7 +35,11 @@
 
 #include "app.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "board.h"
+#include "driver/gpio.h"
 #include "gowin.h"
+#include "miniz.h"
 #include "jtag.h"
 #include "link.h"
 #include "freertos/FreeRTOS.h"
@@ -519,7 +523,49 @@ static void transmit_check(const struct link_status *ls, bool host)
              (unsigned)((uint64_t)tx * 800000 >> 25), (unsigned)((uint64_t)ref * 800000 >> 25), reloads);
 }
 
-static bool halt_want, halted;         /* stand by asked for from the page; the FPGA is halted */
+/* ---- standing by ----
+ * The board's supply has no switch: to stand by, the FPGA is given another image
+ * (gateware/standby/standby.v: no clock, the HDMI redriver, the decoder and the DDR3 held off, the
+ * carrier's LEDs dark, the buttons passed on to this link's interrupt line), carried here
+ * deflated; to wake, the FPGA loads its flash's image again (RECONFIG's button does the same). */
+extern const uint8_t sby_start[] asm("_binary_standby_z_start");
+extern const uint8_t sby_end[] asm("_binary_standby_z_end");
+static bool halt_want, halted;         /* stand by asked for from the page; the FPGA has the standby image */
+
+static uint16_t sby_sum(void)
+{
+    uint16_t v;
+    memcpy(&v, sby_start + 8, 2);
+    return v;
+}
+
+/* the standby image into the FPGA (a minute: bit by bit); true: it is the one there now */
+static bool standby_load(void)
+{
+    uint32_t len;
+    size_t in = sby_end - sby_start - 12, out;
+    char msg[500];
+    bool ok = false;
+    memcpy(&len, sby_start + 4, 4);
+    out = len;
+    uint8_t *buf = heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    tinfl_decompressor *d = heap_caps_malloc(sizeof *d, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (buf && d) {
+        tinfl_init(d);
+        ok = tinfl_decompress(d, sby_start + 12, &in, buf, buf, &out, TINFL_FLAG_PARSE_ZLIB_HEADER |
+                              TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF) == TINFL_STATUS_DONE && out == len;
+    }
+    free(d);
+    if (ok && jtag_take(false)) {
+        const struct gowin_opt o = {.reverse = true};
+        ok = gowin_load(buf, len, sby_sum(), &o, msg, sizeof msg);
+        jtag_give();
+        ESP_LOGW(TAG, "stand by: the standby image %s", ok ? "is in the FPGA" : "did NOT go in");
+    } else
+        ok = false;
+    free(buf);
+    return ok;
+}
 
 static bool cpu_second(struct scaler_state *s)
 {
@@ -562,14 +608,10 @@ static bool cpu_second(struct scaler_state *s)
         if (!(ls.store & LINK_STORE_BUSY) || ++halt_tries > 10) {
             halt_tries = 0;
             halt_want = false;
-            if (jtag_take(false)) {
-                halted = gowin_halt();
-                jtag_give();
-                ESP_LOGW(TAG, "stand by: the FPGA %s", halted ? "halted" : "would NOT be halted");
-                if (halted) {
-                    s->fpga = false;
-                    return false;
-                }
+            halted = standby_load();
+            if (halted) {
+                s->fpga = false;
+                return false;
             }
         }
     } else
@@ -656,8 +698,28 @@ static void task(void *arg)
     uint16_t tune_gain = 0;
     bool wide_was = false;
     uint32_t fields_was = 0, frames_was = 0, cpu_was = 0;
+    int tick = 0, low = 0, dead = 0;
+    bool ps_on = false;
     for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        /* standing by: a button on the board (the standby image passes them on: the interrupt line
+         * low while one is pressed) wakes it; looked at ten times a second, the rest once a second */
+        if (halted) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            low = gpio_get_level(PIN_IRQ) ? 0 : low + 1;
+            if (low == 3) {
+                ESP_LOGW(TAG, "wake: a button on the board");
+                scaler_standby(false);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+            if (++tick % 10)
+                continue;
+        } else
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        if (halted != ps_on) {          /* (the radio saves power while the board stands by, and only then:
+                                         * with it a load over the network's JTAG port fails: wifi.c) */
+            ps_on = halted;
+            wifi_power_save(ps_on);
+        }
         struct scaler_state s = {0};
         bool on_now, redo;
         crumb[0] = 1;
@@ -794,9 +856,15 @@ static void task(void *arg)
                 frames_was = dstat >> 16;
             }
         }
-        /* (halted: until it answers again: its RECONFIG button, the power, or a wake from here) */
+        /* (standing by: until the scaler answers again: the RECONFIG button, the power, or a wake from
+         * here.  And a link that begins while the board stands by: nothing answers for three
+         * seconds, and the image there is the standby one by its user code) */
         if (s.fpga)
-            halted = false;
+            halted = false, dead = 0;
+        else if (!halted && !s.host && ++dead == 3 && jtag_take(false)) {
+            halted = (gowin_usercode() & 0xFFFF) == sby_sum();
+            jtag_give();
+        }
         s.standby = halted;
         xSemaphoreTake(lock, portMAX_DELAY);
         state = s;
@@ -814,7 +882,8 @@ void scaler_standby(bool on)
     if (jtag_take(false)) {
         gowin_reload();
         jtag_give();
-        ESP_LOGW(TAG, "wake: the FPGA loads its image");
+        halted = false;
+        ESP_LOGW(TAG, "wake: the FPGA loads its flash's image");
     }
 }
 

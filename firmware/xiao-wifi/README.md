@@ -99,11 +99,17 @@ for the network.
 
 The link is found as `avscaler.local` (mDNS); `AVX_HOST` names another host or address.
 
-Standby: `POST /api/video` with `standby=1` halts the FPGA (`main/gowin.c gowin_halt()`: erased
-and left in its configuration mode: let out of it, it loads its flash's image again at once), as
-the board's first button held a second does (the FPGA's CPU asks the link: `link.h` `standby`);
-`standby=0` loads it again, as its RECONFIG button does. While it is halted nothing is said to it
-over JTAG (`GET /api/fpga` answers without asking): a word there lets it out.
+Standby: `POST /api/video` with `standby=1` (or the board's first button held a second: the
+FPGA's CPU asks the link, `link.h` `standby`) loads the standby image into the FPGA
+(`gateware/standby`, carried in the firmware deflated: `main/standby.z`, 60 kB for 4.3 MB; a
+minute over JTAG), and the radio sleeps between beacons meanwhile. `standby=0`, or a button on
+the board (the standby image passes them on to the link's interrupt line), loads the flash's
+image again. A link that starts while the board stands by knows it by the image's user code.
+
+The link's own loads of the FPGA (`POST /api/load`, `tools/avx.py load`) work since 2026-11-15:
+they ended in a restart before (the JTAG port's lock was a mutex, taken by the request and given
+back by the load's task), and what went in did not run (a pause between the erase's passes let
+the FPGA begin loading its flash's image by itself).
 
 There are no passwords on its ports: whoever is on the local network can load the FPGA and update
 the link.

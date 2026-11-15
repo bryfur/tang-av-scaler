@@ -6,7 +6,9 @@
 
 /* How the load goes (web.c: POST /api/load's query):
  *   gap_ms   clocks in Run-Test/Idle for that long between the erase passes
- *   stop_ms  the clock stopped for that long between them
+ *   stop_ms  the clock stopped for that long between them (0: with a pause there the FPGA begins to
+ *            load its flash's image by itself, and what is then sent it does not take: every load
+ *            by the link failed so until 2026-11-15)
  *   pre_ms   clocks for that long before the bitstream
  *   reverse  each byte's top bit first (the .fs file's order): true
  *   hold     the bitstream without a pause in the clock (the task above all others: Wi-Fi starved
@@ -26,6 +28,6 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
 /* The FPGA configures itself afresh from its flash (as at power-on).  The caller holds the JTAG port. */
 void gowin_reload(void);
 
-/* The FPGA's configuration taken away: it does nothing, its pins let go, until it is loaded again
- * (gowin_reload, its RECONFIG button, or the power).  true: it is blank.  The caller holds the JTAG port. */
-bool gowin_halt(void);
+/* The user code of the image the FPGA has: its low sixteen bits the sum of the bitstream's
+ * configuration words.  The caller holds the JTAG port. */
+uint32_t gowin_usercode(void);

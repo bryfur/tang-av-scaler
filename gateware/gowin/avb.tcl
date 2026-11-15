@@ -131,6 +131,14 @@ set_option -use_i2c_as_gpio 1
 set_option -use_cpu_as_gpio 1
 # (not compressed: openFPGALoader 1.1.1 cannot parse a compressed GW5AST .fs)
 set_option -bit_compress 0
+#   GW_STANDBY=1  the image the board stands by in (standby/standby.v with GW_SRCS and GW_CST): the
+#                 FPGA's DONE and READY pins are the design's (the carrier's two LEDs on them go
+#                 off).  (Not compressed by the tool: that halves it; nearly all of it is zeros,
+#                 and the link carries it deflated: 5 MB as some 40 kB)
+if {[env GW_STANDBY 0]} {
+    set_option -use_done_as_gpio 1
+    set_option -use_ready_as_gpio 1
+}
 set_option -timing_driven 1
 #   GW_PLACE, GW_ROUTE  the place and route algorithms (as gowin/build.stamp says, or 3 and 1: above)
 # GW_SDP32=1: the 32/36-bit wide RAMs left whole (the IDE splits each over two blocks by default since 1.9.10;

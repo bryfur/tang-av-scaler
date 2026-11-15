@@ -80,7 +80,11 @@ static uint32_t timed_ps(uint32_t turns)
 
 void jtag_init(void)
 {
-    lock = xSemaphoreCreateMutex();
+    /* (not a mutex: the port is taken by one task and given back by another, a load's request and the
+     * task that does it, and a mutex given by a task that does not hold it stops the program:
+     * every load over the network ended so until 2026-11-15) */
+    lock = xSemaphoreCreateBinary();
+    xSemaphoreGive(lock);
     /* the levels first, then the drivers: TMS high and TCK low is where the FPGA's TAP rests */
     gpio_set_level(PIN_TMS, 1);
     gpio_set_level(PIN_TCK, 0);

@@ -151,6 +151,7 @@ struct wifi_state {
     uint32_t drops;
 };
 void wifi_get(struct wifi_state *s);
+void wifi_power_save(bool on);          /* the radio asleep between beacons (while the board stands by) */
 #define AP_PASSWORD "avscaler"
 
 /* web.c: the status page, settings, updates */
