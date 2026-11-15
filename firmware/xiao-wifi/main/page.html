@@ -69,6 +69,7 @@ button:disabled{opacity:.45;cursor:default}button:disabled:hover{border-color:va
 .lnk{border:0;background:none;padding:0;color:var(--acc);font-size:.82em}
 .nums{display:flex;gap:.4em;flex-wrap:wrap}
 .ctl{display:flex;align-items:center;justify-content:flex-end;gap:.6em;flex-wrap:wrap}
+.ctl.wide{flex:1 1 100%;justify-content:space-between}
 .fname{color:var(--dim);font-size:.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:12em}
 .foot{display:flex;justify-content:center;padding:1.6em 0 .4em}
 .foot button{background:none;color:var(--dim)}
@@ -83,6 +84,8 @@ details{flex:1 1 100%}details>summary{cursor:pointer;color:var(--dim);padding:.2
 #msg{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.5em 1em;box-shadow:0 6px 24px #0006;white-space:pre-wrap;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 #msg.on{opacity:1}
 main{padding-bottom:2.5em}
+/* two columns where there is room: fixed (the cards do not move when Advanced shows more) */
+@media(min-width:62em){.wrap{max-width:68em}.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 1.5em;align-items:start}}
 </style></head><body>
 <header><div class="wrap">
  <div class="hd"><h1>AV scaler</h1>
@@ -95,6 +98,8 @@ main{padding-bottom:2.5em}
 <main id="t_pic" class="wrap">
 <form id="vf">
 <input type="hidden" name="mode">
+<div class="cols">
+<div class="col">
 <h2>Picture</h2><div class="grp">
  <div class="f" data-hint="Auto finds the game's picture inside the signal and leaves out the black around it. Whole signal shows all 720 × 480. Manual: the part set below.">
   <span class="l"><span class="t">Fill the screen</span><span class="sl"><span class="chip hide" id="fillc"></span><button type="button" class="lnk hide" id="fa" onclick="video('measure=1','finding the picture again')">Find again</button></span></span>
@@ -116,15 +121,6 @@ main{padding-bottom:2.5em}
  <div class="f adv" data-hint="Holds the picture as it is."><span class="l"><span class="t">Freeze</span></span><input class="sw" type="checkbox" name="freeze"></div>
 </div>
 
-<h2>Anti-aliasing</h2><div class="grp">
- <div class="f" data-hint="Smooths the jagged edges of the game's own pictures."><span class="l"><span class="t">SMAA</span></span><input class="sw" type="checkbox" name="aa"></div>
- <div class="f adv" data-hint="Lower catches more edges."><span class="l"><span class="t">Edge threshold</span></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
- <div class="f adv" data-hint="How firmly an edge found in the frame before is kept, so still edges do not shimmer. 0 is off."><span class="l"><span class="t">Steady edges</span></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
- <div class="f adv"><span class="l"><span class="t">Diagonal edges</span></span><input class="sw" type="checkbox" name="aa_diag"></div>
- <div class="f adv"><span class="l"><span class="t">Keep corners sharp</span></span><input class="sw" type="checkbox" name="aa_corner"></div>
- <div class="f adv" data-hint="Edges green, blends blue and red, in the picture's place."><span class="l"><span class="t">Show what it finds</span></span><input class="sw" type="checkbox" name="aa_dbg"></div>
-</div>
-
 <h2>Deinterlacing</h2><div class="grp">
  <div class="f" data-hint="Motion adaptive: fields woven where the picture is still, lines filled in where it moves. Bob: every line filled in from its neighbours (half the detail, never a comb). Weave: the two fields as they are (still pictures only).">
   <span class="l"><span class="t">Method</span></span>
@@ -134,6 +130,17 @@ main{padding-bottom:2.5em}
  <div class="f sub adv" id="mvf" data-hint="The picture in grey, each block tinted by how it moves: blue left, yellow right, red up, green down; stronger is faster."><span class="l"><span class="t">Show the motion</span></span><input class="sw" type="checkbox" name="mv_dbg"></div>
  <div class="f adv"><span class="l"><span class="t">Motion threshold</span></span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
  <div class="f adv"><span class="l"><span class="t">Top field is F=1</span></span><input class="sw" type="checkbox" name="top1"></div>
+</div>
+
+</div>
+<div class="col">
+<h2>Anti-aliasing</h2><div class="grp">
+ <div class="f" data-hint="Smooths the jagged edges of the game's own pictures."><span class="l"><span class="t">SMAA</span></span><input class="sw" type="checkbox" name="aa"></div>
+ <div class="f adv" data-hint="Lower catches more edges."><span class="l"><span class="t">Edge threshold</span></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
+ <div class="f adv" data-hint="How firmly an edge found in the frame before is kept, so still edges do not shimmer. 0 is off."><span class="l"><span class="t">Steady edges</span></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
+ <div class="f adv"><span class="l"><span class="t">Diagonal edges</span></span><input class="sw" type="checkbox" name="aa_diag"></div>
+ <div class="f adv"><span class="l"><span class="t">Keep corners sharp</span></span><input class="sw" type="checkbox" name="aa_corner"></div>
+ <div class="f adv" data-hint="Edges green, blends blue and red, in the picture's place."><span class="l"><span class="t">Show what it finds</span></span><input class="sw" type="checkbox" name="aa_dbg"></div>
 </div>
 
 <h2>Output</h2><div class="grp">
@@ -147,22 +154,25 @@ main{padding-bottom:2.5em}
  <div class="f adv"><span class="l"><span class="t">Swap Cb / Cr</span></span><input class="sw" type="checkbox" name="swap"></div>
  <div class="f adv" data-hint="Off leaves the FPGA to a host tool."><span class="l"><span class="t">Run the scaler</span></span><input class="sw" type="checkbox" name="on"></div>
 </div>
-</form>
-
 <h2>Screen capture</h2><div class="grp">
- <div class="f" data-hint="The picture going out, read back from the FPGA. It is held still while it is read."><span class="l"><span class="t">Size</span></span>
-  <span class="ctl"><span class="seg"><label><input type="radio" name="gs" value="4" checked><span>480 &times; 270 &middot; 2 s</span></label><label><input type="radio" name="gs" value="2"><span>960 &times; 540 &middot; 6 s</span></label><label><input type="radio" name="gs" value="1"><span>1920 &times; 1080 &middot; 25 s</span></label></span>
-  <button type="button" class="pri" id="gb" onclick="grab()">Capture</button></span></div>
+ <div class="f">
+  <span class="ctl wide"><span class="seg"><label title="480 &times; 270"><input type="radio" name="gs" value="4" form="none" checked><span>Small &middot; 2 s</span></label><label title="960 &times; 540"><input type="radio" name="gs" value="2" form="none"><span>Half &middot; 6 s</span></label><label title="1920 &times; 1080"><input type="radio" name="gs" value="1" form="none"><span>Full &middot; 25 s</span></label></span>
+  <button type="button" class="pri" id="gb" onclick="grab()" title="the picture going out, read back from the FPGA (held still while it is read)">Capture</button></span></div>
  <div id="gw" class="cap hide"><img id="gi" alt="capture"><div class="sl"><a id="gl" download="avscaler.png" class="btn">Save as PNG</a><span class="fname" id="gt"></span></div></div>
 </div>
+</div>
+</div>
+</form>
+
 <div class="foot"><button type="button" id="rall" disabled>Reset to defaults</button></div>
 </main>
 
 <main id="t_board" class="wrap hide">
+<div class="cols">
+<div class="col">
 <h2>Power</h2><div class="grp">
  <div class="f"><span class="l"><span class="t">The scaler</span><span class="chip" id="pwc"></span></span><button type="button" id="pwb">Stand by</button></div>
 </div>
-<h2>Status</h2><div class="grp"><table><tbody id="vs"></tbody><tbody id="st"></tbody></table></div>
 <h2>Wi-Fi network</h2><div class="grp">
  <div class="f"><form id="wf" class="stack"><input type="text" name="ssid" placeholder="Network name" required>
   <input name="pass" type="password" placeholder="Password"><div><button class="pri">Save and join</button></div></form></div>
@@ -171,6 +181,11 @@ main{padding-bottom:2.5em}
  <div class="f"><span class="l"><span class="t">Bring the scaler up again</span></span><button type="button" onclick="video('again=1','bringing it up again')">Bring up</button></div>
  <div class="f"><span class="l"><span class="t">Firmware update</span></span><label class="btn"><input type="file" id="fw" hidden>Choose avwifi.bin</label><span class="fname" id="fwn"></span><button type="button" onclick="ota()">Upload</button></div>
  <div class="f"><span class="l"><span class="t">FPGA over JTAG</span><span class="chip hide" id="fpc"></span></span><button type="button" onclick="fpga()">Read</button></div>
+</div>
+</div>
+<div class="col">
+<h2>Status</h2><div class="grp"><table><tbody id="vs"></tbody><tbody id="st"></tbody></table></div>
+</div>
 </div>
 <h2>Logs</h2><div class="grp">
  <div class="f"><details id="cond"><summary>FPGA console (last output)</summary><pre id="con"></pre></details></div>
@@ -197,7 +212,7 @@ const day=s=>new Date(s*1000).toISOString().slice(0,16).replace('T',' ');
 // (Tune is its reset)
 const MBITS={_m:3,_k:4,_c:8};
 function keys(el){const ks=[],seen={};
-  for(const e of el.querySelectorAll('[name]')){const n=e.name;if(seen[n]||n=='phase'||n=='mode'||e.type=='file')continue;seen[n]=1;
+  for(const e of el.querySelectorAll('[name]')){const n=e.name;if(seen[n]||n=='phase'||n=='mode'||e.type=='file'||e.form!=vf)continue;seen[n]=1;
     ks.push(MBITS[n]?['mode',MBITS[n]]:[n,0])}return ks}
 let def=null;   // the link's defaults (GET /api/defaults; an older firmware has none: no resets then)
 async function defs(){try{const r=await fetch('/api/defaults');if(r.ok){def=await r.json();marks()}}catch(e){}}
@@ -213,7 +228,7 @@ function marks(){if(!def)return;const o=cur();let any=false;
 function reset(el,note){if(!def)return;const o=cur();
   for(const [k,m] of keys(el))if(k in def)o[k]=m?(o[k]&~m)|(def[k]&m):def[k];
   fill(o);send(note)}
-for(const r of rows){const t=r.querySelector('.t');
+for(const r of rows){const t=r.querySelector('.t');if(!t)continue;
   if(r.dataset.hint){const b=document.createElement('button'),h=document.createElement('div');b.type='button';b.className='ib';b.textContent='i';
     b.title='what this does';b.setAttribute('aria-label',b.title);b.onclick=()=>r.classList.toggle('open');t.append(b);
     h.className='hint';h.textContent=r.dataset.hint;r.append(h)}
@@ -247,7 +262,7 @@ let st;
 for(const n of ['_m','_c','_k'])for(const e of (F[n].length?[...F[n]]:[F[n]]))e.addEventListener('change',modeTake);
 vf.addEventListener('input',()=>{outs();marks()});
 // a setting changed: sent at once (a slider: when it is let go)
-vf.addEventListener('change',e=>{if(e.target.type=='file')return;clearTimeout(st);st=setTimeout(send,150)});
+vf.addEventListener('change',e=>{if(e.target.type=='file'||e.target.form!=vf)return;clearTimeout(st);st=setTimeout(send,150)});
 vf.onsubmit=e=>{e.preventDefault();send()};
 
 // ---- the scaler's tables: FSR's (the design's own), the learnt pair (one for SMAA on, one for off: the
