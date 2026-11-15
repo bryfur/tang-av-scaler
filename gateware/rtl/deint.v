@@ -315,11 +315,18 @@ module deint #(
     reg  [2:0]         cs_f = 3'd0;
     reg                cs_w = 1'b0, cs_ok = 1'b0, cs_rise = 1'b0, cs_r1 = 1'b0, cs_r2 = 1'b0;
     reg  [8:0]         cs_d = 9'd0;
-    reg                cs_v = 1'b0;
+    reg                cs_v = 1'b0, cs_v2 = 1'b0, cs_i0, cs_i1, cs_ok_was = 1'b0;
+    reg  [7:0]         cs_m0, cs_m1;
+    reg  [15:0]        cs_y;
+    reg  [1:0]         cs_k = 2'd0;
+    localparam [7:0]   CAD_BLACK = 8'd24;   // (sim/model.py CAD_BLACK)
+    localparam [8:0]   WVH = 9'd12;         // the woven pixel within this of the pixels above and below (sim/model.py WV_HOLD)
     assign cs_q = {cs_p, cs_pc};
     assign wv_on = wvf;
     wire [2:0]         cs_new = ll_now_r ? nxt : latest;        // (the field the frame now begun is made from)
-    wire               cs_auto = cad && cs_ok && cs_new == cs_f + 3'd1 && cs_rise;
+    // (a decision only from three fields in a row: the frame just made from the field after the one before it,
+    // and that one from the field after its own: a start, a field missed, another mode: none for two fields)
+    wire               cs_auto = cad && cs_ok && cs_ok_was && cs_new == cs_f + 3'd1 && cs_rise;
     wire               cs_ext = (wv[7] && wv[6:4] == cs_new) || (wv[3] && wv[2:0] == cs_new);
     wire               cs_mode = !pg && mode == 2'd0 && (ll_now_r || hist_n_r);
     always @(posedge clk) begin
@@ -942,6 +949,11 @@ module deint #(
         nearq = {{1'b0, v} <= {1'b0, b} + 9'd12, {1'b0, v} <= {1'b0, a} + 9'd12,
                  {1'b0, v} + 9'd12 >= {1'b0, b}, {1'b0, v} + 9'd12 >= {1'b0, a}};
     endfunction
+    // (the same for the woven pixel, within WVH)
+    function [3:0] nearw(input [7:0] v, input [7:0] a, input [7:0] b);
+        nearw = {{1'b0, v} <= {1'b0, b} + WVH, {1'b0, v} <= {1'b0, a} + WVH,
+                 {1'b0, v} + WVH >= {1'b0, b}, {1'b0, v} + WVH >= {1'b0, a}};
+    endfunction
     wire [4:0]  v0g = nr0 ? v_y0 : 5'd16;
     wire [4:0]  v1g = nr1 ? v_y1 : 5'd16;
 
@@ -971,9 +983,17 @@ module deint #(
             tB[9 * nb +: 9] <= tnr_a(xB[8 * nb +: 8], yB[8 * nb +: 8]);
             tW[9 * nb +: 9] <= tnr_a(xW[8 * nb +: 8], yW[8 * nb +: 8]);
         end
-        // (the cadence's measure: P1's own lumas against the mean of C's above and below)
-        cs_d <= {1'b0, absd(xW[23:16], mean(xA[23:16], xB[23:16]))} + {1'b0, absd(xW[7:0], mean(xA[7:0], xB[7:0]))};
+        // (the cadence's measure: P1's own lumas against the mean of C's above and below; f: a pixel
+        // counted where it or that mean is not black, CAD_BLACK or more; g: summed)
+        cs_m0 <= mean(xA[23:16], xB[23:16]);
+        cs_m1 <= mean(xA[7:0], xB[7:0]);
+        cs_y <= {xW[23:16], xW[7:0]};
         cs_v <= otd[10] && !pgf;
+        cs_i0 = cs_y[15:8] >= CAD_BLACK || cs_m0 >= CAD_BLACK;
+        cs_i1 = cs_y[7:0] >= CAD_BLACK || cs_m1 >= CAD_BLACK;
+        cs_d <= (cs_i0 ? {1'b0, absd(cs_y[15:8], cs_m0)} : 9'd0) + (cs_i1 ? {1'b0, absd(cs_y[7:0], cs_m1)} : 9'd0);
+        cs_k <= {1'b0, cs_i0} + {1'b0, cs_i1};
+        cs_v2 <= cs_v;
         dA0 <= absd(xA[23:16], yA[23:16]);
         dA1 <= absd(xA[7:0], yA[7:0]);
         dB0 <= absd(xB[23:16], yB[23:16]);
@@ -988,9 +1008,9 @@ module deint #(
         if (fstart) begin
             cs_s <= 32'd0;
             cs_c <= 24'd0;
-        end else if (cs_v) begin
+        end else if (cs_v2) begin
             cs_s <= cs_s + {23'd0, cs_d};
-            cs_c <= cs_c + 24'd2;
+            cs_c <= cs_c + {22'd0, cs_k};
         end
         // f: the part of it taken (a chroma sample's: none where either of its word's lumas differs by
         // 2 T or more: sim/model.py tnr_word())
@@ -1056,8 +1076,8 @@ module deint #(
         // (the guard's comparisons, a clock before stage 0: the pan's pixel; and P1's own, for the weave)
         nq0 <= nearq(cd25[43:36], cd25[139:132], cd25[107:100]);
         nq1 <= nearq(cd25[27:20], cd25[123:116], cd25[91:84]);
-        wq0 <= nearq(cd25[75:68], cd25[139:132], cd25[107:100]);
-        wq1 <= nearq(cd25[59:52], cd25[123:116], cd25[91:84]);
+        wq0 <= nearw(cd25[75:68], cd25[139:132], cd25[107:100]);
+        wq1 <= nearw(cd25[59:52], cd25[123:116], cd25[91:84]);
         // stage 0: the pair, CDN + 1 clocks after stage k
         s0_v <= cd26[158];
         s0_wa <= cd26[157:148];
@@ -1209,6 +1229,7 @@ module deint #(
                         if (cs_mode && (cs_auto || cs_ext))
                             wv_n <= wv_n + 8'd1;
                         cs_ok <= cs_mode && cs_new == cs_f + 3'd1;
+                        cs_ok_was <= cs_ok;
                         cs_p <= cs_s;
                         cs_pc <= cs_c;
                     end

@@ -186,15 +186,18 @@ EDI_ORDER = [d for k in range(1, EDI_D + 1) for d in (-k, k)]      # the offsets
 
 
 MC_HOLD = 12
-WV_HOLD = 12            # (rtl/deint.v: the same test as the motion compensation's: nearq())
+WV_HOLD = 12            # (rtl/deint.v WVH: the woven pixel within this of the pixels above and below)
+CAD_BLACK = 24          # (rtl/deint.v: a pixel under this, and the mean above and below it, is not counted)
 
 
 def cadence_s(fields, pars, top_f=0):
     """rtl/deint.v's cadence measure for the frame made from these fields: for each line it makes,
     |P1's luma (the line's own, from the field before) - the mean of C's lines above and below it|
-    (C the newest field; at the picture's first and last line its one line), summed over all the
-    line's pixels and all the lines: (the sum, the pixels counted).  C's lines and P1's come from
-    one frame of a 30 fps game: small; from two instants of a moving picture: large."""
+    (C the newest field; at the picture's first and last line its one line), summed over the line's
+    pixels that are not black (P1's or that mean CAD_BLACK or more: the black round a game's picture
+    is not counted, which would make the margin below a smaller part of what moves) and all the
+    lines: (the sum, the pixels counted).  C's lines and P1's come from one frame of a 30 fps game:
+    small; from two instants of a moving picture: large."""
     c, p1 = fields[-1], fields[-2]
     pc = int(pars[-1] != top_f)
     nl = len(c)
@@ -210,15 +213,20 @@ def cadence_s(fields, pars, top_f=0):
         w = k if pc else k - 1
         lo, ln, lw = luma(c[old]), luma(c[new]), luma(p1[w])
         for x in range(len(lw)):
-            s += abs(lw[x] - mean(lo[x], ln[x]))
-        n += len(lw)
+            m = mean(lo[x], ln[x])
+            if lw[x] >= CAD_BLACK or m >= CAD_BLACK:
+                s += abs(lw[x] - m)
+                n += 1
     return s, n
 
 
 def cadence_next(s, n, s_was):
     """rtl/deint.v: whether the NEXT field is the second of a 30 fps game's frame, from this frame's
     measure (cadence_s()) and the frame before's: this one began a new frame where its measure is
-    clearly over the one before's (more than 10/7 of it, and by more than half a level a pixel)"""
+    clearly over the one before's (more than 10/7 of it, and by more than half a level a pixel).
+    Only where the two measures come from three fields in a row (the frame before's was made from
+    the field before this one's and its own field before): rtl/deint.v cs_ok, cs_ok_was; a start, a
+    field missed or another mode: no decision for the next two fields"""
     return 7 * s > 10 * s_was and 2 * (s - s_was) > n
 
 
