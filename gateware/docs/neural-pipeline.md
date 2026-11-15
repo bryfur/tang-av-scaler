@@ -1,6 +1,6 @@
 # The picture's path with the network, as it runs on the board
 
-The tree's build as it runs on the board on 2026-11-15: the build, the stages a pixel goes through
+What is in the board's flash and running on 2026-11-15: the build, the stages a pixel goes through
 with the network as the scaler's first stage, the weights and where they live, how to change them,
 and how all of it is checked. The research behind the network (what was tried, what it gains, the
 arithmetic in full) is in [cnn-upscaler.md](cnn-upscaler.md); this note is the deployed state.
@@ -9,7 +9,7 @@ arithmetic in full) is in [cnn-upscaler.md](cnn-upscaler.md); this note is the d
 
 | | |
 |---|---|
-| Bitstream | build 1794698353 (`gowin/build.stamp`: place 3, route 1), loaded into the FPGA from a host and checked there. The SOM's flash still holds the build before it (1794673585: no storage of the board's own, the edge search still in) until this one is written to it |
+| Bitstream | build 1794698353 (`gowin/build.stamp`: place 3, route 1), in the SOM's flash since 2026-11-15: the FPGA starts with it by itself, and with what the board keeps beside it in the same flash |
 | Timing | system clock 65.3 MHz (wanted 50), output clock 157.5 MHz (148.5), memory's user clock 101.4 MHz (100); ten of ten builds of these sources meet their timing |
 | Size | logic 34 %, registers 35 %, block RAM 258 of 340 (76 %), multiplier blocks 159 of 298 (54 %) of the GW5AST-138 |
 | Network | `t8s` shape: three layers of 3 x 3, 1 -> 8 -> 8 -> 4 channels, luma only, 720 x 480 to 1440 x 960 |
