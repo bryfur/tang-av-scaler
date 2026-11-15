@@ -104,12 +104,15 @@ def main():
         # memory once the mode is set, and must find the same again: a frozen picture's do not change)
         keep = s.get("aa_keep", 0) if s["aa"] else 0
 
-        def frame(mode, prev=None):
+        def frame(mode, prev=None, woven=False):
             hist = {"keep": keep, "prev": prev} if prev is not None else None
+            mc, mvd = bool(mode & 8) and mode & 3 == 0, bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0
+            pix = model.frame_480(fields, pars, mode & 3, s["thr"], s["aa_thr"] if s["aa"] else None, bool(s["aa_dbg"]),
+                                  bool(s["aa_diag"]), bool(s["aa_corner"]), s["nr"], False, False, None, mc, first, skip, mvd,
+                                  hist, woven)
             rows = model.frame_1080(fields, pars, mode & 3, s["thr"], s["aa_thr"] if s["aa"] else None, s["sharp"], bool(s["aa_dbg"]),
                                     bool(s["aa_diag"]), bool(s["aa_corner"]), crop, s["nr"], bool(s["dn"]), False, False,
-                                    None, bool(mode & 8) and mode & 3 == 0, first, skip, tab,
-                                    bool(s.get("mv_dbg")) and bool(mode & 8) and mode & 3 == 0, net, hist)
+                                    None, mc, first, skip, tab, mvd, net, hist, pix=pix)
             im = Image.new("RGB", (1920, 1080))
             im.putdata([p for row in rows for p in row])
             if hist:
@@ -124,15 +127,17 @@ def main():
         plain = frame(0)
         bad = 0
         for mode in modes:
-            if keep:
-                api(mode=mode)
-                time.sleep(1.5)
-                m = avb.Mon()
-                prev = still.edges(m, skip)
-                m.close()
-                want = frame(mode, prev)
-            else:
-                want = plain if mode == 0 else frame(mode)
+            # (the mode set first: the frozen frame woven as a 30 fps game's frame's second field or not is
+            # the board's decision, and the edges it keeps are of what it made: both read, then the model)
+            api(mode=mode)
+            time.sleep(1.5)
+            m = avb.Mon()
+            woven = bool(m.r(0x41) >> 24 & 1)
+            prev = still.edges(m, skip) if keep else None
+            m.close()
+            if woven:
+                print("  the frozen frame is woven (a 30 fps game's frame's second field)", flush=True)
+            want = frame(mode, prev, woven) if keep or woven or mode != 0 else plain
             box = ImageChops.difference(want, plain).getbbox()
             y0, y1 = (max(0, box[1] - 8), min(1080, box[3] + 8)) if box else (500, 580)
             if keep and y1 - y0 > 160:      # (the edges kept change pixels all over: the middle of where they do)

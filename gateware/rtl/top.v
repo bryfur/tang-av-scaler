@@ -53,6 +53,7 @@
 //                    3 motion compensation (deint.v mc: with mode 0),
 //                    15:8 the motion threshold, 5:4 temporal noise reduction (0 none, 1 to 3),
 //                    6 a frame made from the field still coming in (deint.v ll: not while frozen),
+//                    7 a 30 fps game's frames found and their second fields woven (deint.v cad),
 //                    20 the vectors shown (deint.v mvdbg: with 3): the picture grey, each block the
 //                    colour of its vector,
 //                    23:21 the anti-aliasing's edges of the frame before count (smaa_hist.v: 0 not, to
@@ -97,6 +98,10 @@
 //   50-51 R AUD      the PCM1808's last left and right words as they came (audio_in.v: 32 bits; the
 //                    24-bit sample at 30:7)
 //   54-57  AUD, AUDL, AUDR, AUDO  the sound through the CPU: audio_fifo.v
+//   41 RW  CAD       a 30 fps game's frames (deint.v cad, wv: found by the deinterlacer with DEINT 7; this
+//                    register a test's: 31 weave the field in slot 2:0, 30 the one in slot 6:4); read:
+//                    24 the frame now made is woven, 23:16 a count of the frames woven
+//   42 R   CADS      the last field's cadence measure: the sum (43: the pixels counted, 23:0)
 //   53 RW  MV        for the motion compensation (deint.v mv, first; sw/pan.c): the picture's pan: 5:0 dx
 //                    (signed: what is at x in a field is at x + dx in the field two before), 9:6 dyr
 //                    (signed: lines of the field), 10 it is known; 17:11 the frame's first line made, in
@@ -664,6 +669,34 @@ module top (
     reg  [31:0]  dcfg = 32'h140D0620;
     // the picture's pan, as the CPU found it (MV): to the DDR3's clock whole (the same twice)
     reg  [31:0]  mv_r = 32'd0;
+    reg  [31:0]  cad_r = 32'd0;         // CAD: the 30 fps game's frames to weave (deint.v wv)
+    reg  [7:0]   cad_p0 = 8'd0, cad_p1 = 8'd0, cad_p = 8'd0;
+    wire [7:0]   d_wvn;
+    wire [55:0]  d_csq;
+    wire         d_wvon;
+    reg  [1:0]   d_wvon_s = 2'd0;
+    always @(posedge clk)
+        d_wvon_s <= {d_wvon_s[0], d_wvon};
+    reg  [55:0]  d_csq_s0 = 56'd0, d_csq_s1 = 56'd0, d_csq_s = 56'd0;  // (the last field's measure, on the system clock)
+    always @(posedge clk) begin
+        d_csq_s0 <= d_csq;
+        d_csq_s1 <= d_csq_s0;
+        if (d_csq_s0 == d_csq_s1)
+            d_csq_s <= d_csq_s1;
+    end
+    reg  [7:0]   d_wvn_s0 = 8'd0, d_wvn_s1 = 8'd0, d_wvn_s = 8'd0;     // (the count, on the system clock)
+    always @(posedge clk) begin
+        d_wvn_s0 <= d_wvn;
+        d_wvn_s1 <= d_wvn_s0;
+        if (d_wvn_s0 == d_wvn_s1)
+            d_wvn_s <= d_wvn_s1;
+    end
+    always @(posedge pclk) begin
+        cad_p0 <= {cad_r[31], cad_r[2:0], cad_r[30], cad_r[6:4]};
+        cad_p1 <= cad_p0;
+        if (cad_p0 == cad_p1)
+            cad_p <= cad_p1;
+    end
     reg  [27:0]  mv_p0 = 28'd0, mv_p1 = 28'd0, mv_p = 28'd0;
     always @(posedge pclk) begin
         mv_p0 <= mv_r[27:0];
@@ -734,6 +767,8 @@ module top (
             dcfg <= wdata;
         if (we && addr == 8'h53)
             mv_r <= wdata;
+        if (we && addr == 8'h41)
+            cad_r <= wdata;
         if (we && addr == 8'h2B)
             ll_min <= wdata[7:0];
         if (we && addr == 8'h3A)
@@ -811,7 +846,7 @@ module top (
     end
     deint u_deint (.clk(pclk), .nch(nch_p), .pg(pg_p), .ev(hd_p ? pt_ev : l_ev), .ev_first(hd_p ? pt_first : l_first),
                    .goal(d_goal), .hold(d_hold), .latest(f_latest),
-                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .mc(dcfg[3]), .mvdbg(dcfg[20]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
+                   .par(f_par), .nfields(f_n), .flines(f_lines), .mode(dcfg[1:0]), .thr(dcfg[15:8]), .nr(dcfg[5:4]), .mc(dcfg[3]), .mvdbg(dcfg[20]), .mv(mv_p[10:0]), .first(mv_p[27:18]), .cad(dcfg[7]), .wv(cad_p), .wv_n(d_wvn), .wv_on(d_wvon), .cs_q(d_csq), .skip(hd_p || pg_p ? 10'd0 : {mv_p[17:11], 3'b000}), .ll(dcfg[6] && !vid[1]), .ll_min(ll_min),
                    .prog(f_prog), .prog_slot(f_pslot),
                    .top_f(dcfg[2]), .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid),
                    .rd_data(d_rd_q), .r_we(r_we), .r_slot_d(r_slot_d), .r_slot_i(r_slot_i), .r_wa(r_wa),
@@ -1026,6 +1061,9 @@ module top (
             8'h34: rdata <= {13'd0, raw_rd};
             8'h35: rdata <= dcfg;
             8'h53: rdata <= mv_r;
+            8'h41: rdata <= {cad_r[31:30], 5'd0, d_wvon_s[1], d_wvn_s, 8'd0, 1'b0, cad_r[6:4], 1'b0, cad_r[2:0]};
+            8'h42: rdata <= d_csq_s[55:24];
+            8'h43: rdata <= {8'd0, d_csq_s[23:0]};
             8'h44: rdata <= {net_req != net_ak[2], 1'b1, 29'd0, net_on};
             8'h47: rdata <= {16'd0, net_u};
             8'h58: rdata <= tab_qa;

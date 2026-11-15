@@ -117,7 +117,7 @@ module tb;
     wire [2:0] sd, si; wire [31:0] wd_d, wd_i;
     wire [15:0] frames; wire [7:0] dstate;
     deint u_deint (.clk(pclk), .nch(7'd80), .pg(pg_r), .ev(ev), .ev_first(ev_first), .goal(goal), .hold(hold),
-                   .latest(latest), .par(par), .nfields(fn), .flines(flines), .mode(2'd0), .thr(8'd6), .nr(2'd2), .mc(1'b0), .mv(11'd0), .first(10'd0), .skip(10'd0),
+                   .latest(latest), .par(par), .nfields(fn), .flines(flines), .mode(2'd0), .thr(8'd6), .nr(2'd2), .mc(1'b0), .mv(11'd0), .first(10'd0), .cad(1'b0), .wv(8'd0), .wv_n(), .wv_on(), .cs_q(), .skip(10'd0),
                    .ll(1'b%(ll_on)d), .ll_min(8'd%(ll)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),

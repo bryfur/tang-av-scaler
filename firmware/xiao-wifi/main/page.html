@@ -82,6 +82,7 @@ details>summary{cursor:pointer;color:var(--dim);font-size:.9em;padding:.3em 0}
 <input type="hidden" name="mode">
 <div class="f"><span>Method<small id="mdt"></small></span><span class="seg"><label><input type="radio" name="_m" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="_m" value="1"><span>Bob</span></label><label><input type="radio" name="_m" value="2"><span>Weave</span></label></span></div>
 <div class="f" id="mcf"><span>Motion compensation<small id="pant"></small></span><input class="sw" type="checkbox" name="_c"></div>
+<div class="f" id="kcf"><span>30 fps games<small>a game that draws each frame twice (two fields from one instant): found, and the second field woven with the first: its whole detail in motion</small></span><input class="sw" type="checkbox" name="_k"></div>
 <div class="f sub" id="mvf"><span>Show the motion<small>the picture in grey, each block tinted by how it moves: blue left, yellow right, red up, green down; stronger is faster</small></span><input class="sw" type="checkbox" name="mv_dbg"></div>
 <div class="f"><span>Motion threshold</span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
 <div class="f"><span>Top field is F=1</span><input class="sw" type="checkbox" name="top1"></div>
@@ -125,17 +126,17 @@ const yes=(b,t,f)=>'<span class="'+(b?'ok':'bad')+'">'+(b?t:f)+'</span>';
 const pill=(c,t)=>'<span class="pill '+c+'">'+t+'</span>';
 const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const vf=$('vf');
-// the deinterlacer's setting is one number: the method (0 motion adaptive, 1 bob, 2 weave), 8 more with
-// motion compensation (motion adaptive only): two controls
+// the deinterlacer's setting is one number: the method (0 motion adaptive, 1 bob, 2 weave), 4 more with
+// 30 fps games' frames found and woven, 8 more with motion compensation (each motion adaptive only)
 function modeShow(){const f=vf.elements,m=+f.mode.value||0,b=m&3;
-  f._m.value=b;f._c.checked=!!(m&8)&&b==0;modeNa()}
+  f._m.value=b;f._c.checked=!!(m&8)&&b==0;f._k.checked=!!(m&4)&&b==0;modeNa()}
 function modeNa(){const f=vf.elements,b=+f._m.value;
-  f._c.disabled=b!=0;$('mcf').classList.toggle('na',b!=0);
+  f._c.disabled=b!=0;f._k.disabled=b!=0;$('mcf').classList.toggle('na',b!=0);$('kcf').classList.toggle('na',b!=0);
   f.mv_dbg.disabled=b!=0||!f._c.checked;$('mvf').classList.toggle('na',f.mv_dbg.disabled);
   $('mdt').textContent=['fields woven where the picture is still, lines filled in where it moves','every line between filled in from its neighbours: half the detail, never a comb','the two fields woven as they are: right for a still picture only'][b]}
 function modeTake(){const f=vf.elements,b=+f._m.value;
-  if(b!=0)f._c.checked=false;
-  f.mode.value=b+(f._c.checked?8:0);modeNa()}
+  if(b!=0)f._c.checked=f._k.checked=false;
+  f.mode.value=b+(f._k.checked?4:0)+(f._c.checked?8:0);modeNa()}
 // the scaler's table: FSR's (the design's own), the learnt pair (one for the anti-aliasing on, one for
 // off: the scaler takes the one that fits), and tables sent here (slots 3 to 7: the setting 2 to 6)
 let tkey='',tab=null;
@@ -216,7 +217,7 @@ let st;
 function send(){const p=new URLSearchParams();
   for(const e of vf.elements){if(!e.name||e.name[0]=='_'||e.type=='radio'&&!e.checked)continue;p.set(e.name,e.type=='checkbox'?(e.checked?1:0):e.value)}
   video(p)}
-for(const n of ['_m','_c'])for(const e of [].concat(...[vf.elements[n]].map(x=>x.length?[...x]:[x])))e.addEventListener('change',modeTake);
+for(const n of ['_m','_c','_k'])for(const e of [].concat(...[vf.elements[n]].map(x=>x.length?[...x]:[x])))e.addEventListener('change',modeTake);
 vf.addEventListener('input',outs);
 vf.addEventListener('change',e=>{if(e.target.type=='file')return;clearTimeout(st);st=setTimeout(send,150)});
 vf.onsubmit=e=>{e.preventDefault();send()};

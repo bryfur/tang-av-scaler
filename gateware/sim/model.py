@@ -157,6 +157,15 @@ def blend(w, b, a):
     return (w * (16 - a) + b * a + 8) >> 4
 
 
+def tnr_word(w, o, nr):
+    """a word (cb, y0, cr, y1) and the same one two fields before through tnr(): its chroma only where
+    both its lumas are within 2 T of theirs (the chroma's own differences are small even where the
+    picture moves: averaged by them, colour in motion lagged a frame, 4 dB of it: 2026-11-15)"""
+    t2 = 2 << nr
+    still = abs(w[1] - o[1]) < t2 and abs(w[3] - o[3]) < t2
+    return (tnr(w[0], o[0], nr) if still else w[0], tnr(w[1], o[1], nr), tnr(w[2], o[2], nr) if still else w[2], tnr(w[3], o[3], nr))
+
+
 def tnr(cur, oth, nr):
     """a sample and the same one two fields before (the same line, a frame earlier), where the picture
     is still: their mean while they differ by T = 1 << nr or less, less and less of the older one
@@ -177,6 +186,42 @@ EDI_ORDER = [d for k in range(1, EDI_D + 1) for d in (-k, k)]      # the offsets
 
 
 MC_HOLD = 12
+WV_HOLD = 12            # (rtl/deint.v: the same test as the motion compensation's: nearq())
+
+
+def cadence_s(fields, pars, top_f=0):
+    """rtl/deint.v's cadence measure for the frame made from these fields: for each line it makes,
+    |P1's luma (the line's own, from the field before) - the mean of C's lines above and below it|
+    (C the newest field; at the picture's first and last line its one line), summed over all the
+    line's pixels and all the lines: (the sum, the pixels counted).  C's lines and P1's come from
+    one frame of a 30 fps game: small; from two instants of a moving picture: large."""
+    c, p1 = fields[-1], fields[-2]
+    pc = int(pars[-1] != top_f)
+    nl = len(c)
+    s = n = 0
+    for k in range(nl + (0 if pc else 1)):
+        if not pc and k == 0:
+            continue
+        new, old = (k if k < nl else None), (k - 1 if k >= 1 else None)
+        if new is None:
+            new = old
+        if old is None:
+            old = new
+        w = k if pc else k - 1
+        lo, ln, lw = luma(c[old]), luma(c[new]), luma(p1[w])
+        for x in range(len(lw)):
+            s += abs(lw[x] - mean(lo[x], ln[x]))
+        n += len(lw)
+    return s, n
+
+
+def cadence_next(s, n, s_was):
+    """rtl/deint.v: whether the NEXT field is the second of a 30 fps game's frame, from this frame's
+    measure (cadence_s()) and the frame before's: this one began a new frame where its measure is
+    clearly over the one before's (more than 10/7 of it, and by more than half a level a pixel)"""
+    return 7 * s > 10 * s_was and 2 * (s - s_was) > n
+
+
 ME_UPS = [(1, 0), (-1, 0), (0, 1), (0, -1), (2, 0), (-2, 0), (3, 0), (-3, 0), (1, 1), (-1, -1), (4, 0), (-4, 0), (0, 2), (0, -2),
           (1, -1), (-1, 1)]
 ME_PEN = [0, 2, 2, 6, 4, 4]
@@ -230,7 +275,8 @@ def me_line(k, cl, p2l, prev, pan):
     return out
 
 
-def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, mc=False, first=0, vecs=None, mvdbg=False):
+def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, mc=False, first=0, vecs=None, mvdbg=False,
+                weave=False):
     """the last four of the fields (each LINES lines of words; pars their F) -> 2 LINES lines; nr: the
     temporal noise reduction (0 none, 1 to 3: tnr()), with four fields of alternating parity; mc:
     motion compensation (rtl/deint.v mc): each block of eight pixels of each line made has a
@@ -241,7 +287,12 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
     lines made before this one (a part of the picture shown: they are not seen); vecs: a list
     that is given each step's (k, vectors); mvdbg: the vectors' view (rtl/deint.v mvdbg): every
     word's chroma is its block's vector's colour (Cb 128 + 4 dx, Cr 128 + 16 dyr), grey in a line
-    without vectors"""
+    without vectors; weave: the newest field is the second of a 30 fps game's frame (the CPU says so:
+    sw/cadence.c): with the motion adaptive mode, every pixel of the lines made is the field before's
+    own (P1: the same frame) where it lies within WV_HOLD of the pixels above and below it, as the
+    motion compensation's pixel must (a field taken for a pair that is not one, by a game that drops
+    a frame or an overlay that moves at 60, then mostly keeps to the mean); a chroma sample by the
+    greater of its two lumas' weights, as always"""
     if edi:
         raise ValueError("the lines made along the picture's edges (edi) were taken out of the design on 2026-11-14")
     c, p1 = fields[-1], fields[-2]
@@ -250,13 +301,14 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
     p3 = fields[-4] if len(fields) >= 4 else p1
     raw_c, raw_p1 = c, p1               # (what moves is seen in the fields as they are)
     if hist and nr:
-        c = [[tuple(tnr(a, b, nr) for a, b in zip(wa, wb)) for wa, wb in zip(la, lb)] for la, lb in zip(c, p2)]
-        p1 = [[tuple(tnr(a, b, nr) for a, b in zip(wa, wb)) for wa, wb in zip(la, lb)] for la, lb in zip(p1, p3)]
+        c = [[tnr_word(wa, wb, nr) for wa, wb in zip(la, lb)] for la, lb in zip(c, p2)]
+        p1 = [[tnr_word(wa, wb, nr) for wa, wb in zip(la, lb)] for la, lb in zip(p1, p3)]
     pc = int(pars[-1] != top_f)
     nl = len(c)
     out = [None] * (2 * nl)
     dcp = [[abs(a - b) for a, b in zip(luma(raw_c[n]), luma(p2[n]))] for n in range(nl)]
     mc = mc and hist and mode == 0
+    weave = weave and hist and mode == 0
     W = 2 * PAIRS
     if mc:
         cl, p2l, p1l, p3l = ([luma(r) for r in f] for f in (raw_c, p2, raw_p1, p3))
@@ -335,9 +387,15 @@ def deinterlace(fields, pars, mode=0, thr=6, top_f=0, nr=0, edi=False, mv=None, 
                     qc = (2 * q + (dx >> 1)) >> 1
                     r1 = w + dyr // 2
                     wv[q] = (raw_p1[r1][qc][0], wy[2 * q], raw_p1[r1][qc][2], wy[2 * q + 1])
+        if weave:
+            wlo, wln = luma(c[old]), luma(c[new])
         for q in range(PAIRS):
             o, n_, ww = c[old][q], c[new][q], p1[w][q]
             a0, a1 = al[2 * q], al[2 * q + 1]
+            if weave:
+                near = lambda v, i: min(wlo[i], wln[i]) - WV_HOLD <= v <= max(wlo[i], wln[i]) + WV_HOLD
+                a0 = 0 if near(ww[1], 2 * q) else a0
+                a1 = 0 if near(ww[3], 2 * q + 1) else a1
             ac = max(a0, a1)
             b = (mean(o[0], n_[0]), mean(o[1], n_[1]), mean(o[2], n_[2]), mean(o[3], n_[3]))
             v0, v1 = av[2 * q], av[2 * q + 1]
@@ -393,11 +451,11 @@ def upsample(line):
 
 
 def frame_480(fields, pars, mode=0, thr=6, smaa_thr=None, smaa_dbg=False, smaa_diag=False, smaa_corner=False, nr=0,
-              prog=False, edi=False, mv=None, mc=False, first=0, skip=0, mvdbg=False, aa_hist=None):
+              prog=False, edi=False, mv=None, mc=False, first=0, skip=0, mvdbg=False, aa_hist=None, weave=False):
     """deint.v, smaa.v (smaa_thr: its edge threshold; None: no SMAA), the 4:4:4 lines; prog: what came
     in is progressive (each of fields a whole frame): the newest as it is; aa_hist: the edges of the
     frame before count (smaa.smaa_words() hist; rtl/smaa_hist.v)"""
-    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first, mvdbg=mvdbg)
+    lines = fields[-1] if prog else deinterlace(fields, pars, mode, thr, nr=nr, edi=edi, mv=mv, mc=mc, first=first, mvdbg=mvdbg, weave=weave)
     # (skip: the lines before it are not made: what follows takes the rest as the whole picture;
     # here they are black)
     lines = lines[skip:]

@@ -29,6 +29,11 @@
 // everywhere; bob too until four fields of alternating parity are there (hist).  top_f: the F of
 // the top field.
 //
+// wv: a 30 fps game sends each frame as two fields from the same instant; for the second, the CPU
+// (sw/cadence.c) says so by the field's slot, and the lines made are the first field's own: exact.
+// A pixel of it only where it lies within 12 of the pixels above and below (nearq(), as the
+// motion compensation's pixel must): a field taken for a pair that is not one keeps to the mean.
+//
 // mc: motion compensation.  Each block of eight pixels of each line made has a vector (dx, dyr):
 // what is at (x, row) of a field is at (x + dx, row + dyr) of the field two before (the same
 // lines).  Where the picture moves and is that (C against P2 moved by (dx, dyr) on old and new, P1
@@ -189,6 +194,14 @@ module deint #(
                                         // it does not move, or the line has no vectors)
     input      [10:0]  mv,              // the picture's pan: {known, dyr, dx}
     input      [9:0]   first,           // no vectors for the lines made before this one
+    // a 30 fps game's frames, each two fields from one instant: cad, found here (each frame's measure:
+    // the lines made against P1's own); or wv, said from outside (a test: {on, slot} twice); wv_n: a
+    // count of the frames woven; cs_q: the last field's measure, {the sum, the pixels counted}
+    input              cad,
+    input      [7:0]   wv,
+    output reg [7:0]   wv_n = 8'd0,
+    output             wv_on,           // (the frame now made is woven)
+    output     [55:0]  cs_q,
     input      [9:0]   skip,            // the lines before this one (a multiple of 8) are not made at all
     input              ll,
     input      [7:0]   ll_min,
@@ -293,7 +306,28 @@ module deint #(
     endfunction
 
     // the motion compensation, as the frame has it: on; the pan (known, and what); the first line
-    reg                mc_f = 1'b0, pan_k = 1'b0;
+    reg                mc_f = 1'b0, pan_k = 1'b0, wvf = 1'b0;
+    // the cadence: this frame's measure as it is made (cs_s, cs_c: sum, pixels); the field before's
+    // (cs_p); the field the last frame was made from (cs_f) and whether it was woven (cs_w); a frame
+    // that began a new one of the game's, seen at this frame's start (cs_rise, from registers)
+    reg  [31:0]        cs_s = 32'd0, cs_p = 32'd0;
+    reg  [23:0]        cs_c = 24'd0, cs_pc = 24'd0;
+    reg  [2:0]         cs_f = 3'd0;
+    reg                cs_w = 1'b0, cs_ok = 1'b0, cs_rise = 1'b0, cs_r1 = 1'b0, cs_r2 = 1'b0;
+    reg  [8:0]         cs_d = 9'd0;
+    reg                cs_v = 1'b0;
+    assign cs_q = {cs_p, cs_pc};
+    assign wv_on = wvf;
+    wire [2:0]         cs_new = ll_now_r ? nxt : latest;        // (the field the frame now begun is made from)
+    wire               cs_auto = cad && cs_ok && cs_new == cs_f + 3'd1 && cs_rise;
+    wire               cs_ext = (wv[7] && wv[6:4] == cs_new) || (wv[3] && wv[2:0] == cs_new);
+    wire               cs_mode = !pg && mode == 2'd0 && (ll_now_r || hist_n_r);
+    always @(posedge clk) begin
+        // (from the frame just made, which is long over when the next begins: two clocks of compare)
+        cs_r1 <= {cs_s, 3'd0} - {3'd0, cs_s} > {cs_p, 3'd0} + {2'd0, cs_p, 1'b0};                  // 7 s > 10 p
+        cs_r2 <= {cs_s, 1'b0} > {cs_p, 1'b0} + {8'd0, cs_c};                                    // 2 (s - p) > n
+        cs_rise <= cs_r1 && cs_r2;
+    end
     reg signed [5:0]   dxf = 6'sd0;
     reg signed [3:0]   dyf = 4'sd0;
     reg [9:0]          firstf = 10'd0;
@@ -835,6 +869,11 @@ module deint #(
     function [8:0] tnr_a(input [7:0] cur, input [7:0] oth);
         tnr_a = {oth < cur, oth > cur ? oth - cur : cur - oth};
     endfunction
+    // (a word's two lumas each within 2 T of theirs: its chroma may be averaged too)
+    function still2(input [35:0] t, input [1:0] n);
+        still2 = {1'b0, t[9 * 2 +: 8]} < (9'd2 << n) && {1'b0, t[0 +: 8]} < (9'd2 << n);
+    endfunction
+    wire        gA = still2(tA, nrq[1:0]), gB = still2(tB, nrq[3:2]), gW = still2(tW, nrq[5:4]);
     reg [9:0]   nrq /* synthesis syn_preserve = 1 */;   // nr (none without the fields' history): copies
     // the token: {valid, the word's place}
     reg         o_run = 1'b0;
@@ -897,7 +936,7 @@ module deint #(
     reg [4:0]   t1_v0, t1_v1, t1_vc, t1_ay0, t1_ay1, t1_ac;
     // (the vector's pixel must lie near the pixels above and below, within 12: else the mean)
     reg         nr0, nr1;               // (with stage 0's registers; its comparisons a clock before: nq0, nq1)
-    reg  [3:0]  nq0, nq1;
+    reg  [3:0]  nq0, nq1, wq0, wq1;
     // v + 12 >= the lesser of a, b: it is that of one of them; v <= the greater + 12: the same
     function [3:0] nearq(input [7:0] v, input [7:0] a, input [7:0] b);
         nearq = {{1'b0, v} <= {1'b0, b} + 9'd12, {1'b0, v} <= {1'b0, a} + 9'd12,
@@ -932,6 +971,9 @@ module deint #(
             tB[9 * nb +: 9] <= tnr_a(xB[8 * nb +: 8], yB[8 * nb +: 8]);
             tW[9 * nb +: 9] <= tnr_a(xW[8 * nb +: 8], yW[8 * nb +: 8]);
         end
+        // (the cadence's measure: P1's own lumas against the mean of C's above and below)
+        cs_d <= {1'b0, absd(xW[23:16], mean(xA[23:16], xB[23:16]))} + {1'b0, absd(xW[7:0], mean(xA[7:0], xB[7:0]))};
+        cs_v <= otd[10] && !pgf;
         dA0 <= absd(xA[23:16], yA[23:16]);
         dA1 <= absd(xA[7:0], yA[7:0]);
         dB0 <= absd(xB[23:16], yB[23:16]);
@@ -942,12 +984,21 @@ module deint #(
         xBe <= xB;
         xWe <= xW;
         ve <= vd;
-        // f: the part of it taken
+        // (begun again with each frame: fstart, the clock after the state's start took the sum before)
+        if (fstart) begin
+            cs_s <= 32'd0;
+            cs_c <= 24'd0;
+        end else if (cs_v) begin
+            cs_s <= cs_s + {23'd0, cs_d};
+            cs_c <= cs_c + 24'd2;
+        end
+        // f: the part of it taken (a chroma sample's: none where either of its word's lumas differs by
+        // 2 T or more: sim/model.py tnr_word())
         otf <= ote;
         for (nb = 0; nb < 4; nb = nb + 1) begin
-            cA[5 * nb +: 5] <= {tA[9 * nb + 8], |tA[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[1:0], tA[9 * nb +: 4]}]};
-            cB[5 * nb +: 5] <= {tB[9 * nb + 8], |tB[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[3:2], tB[9 * nb +: 4]}]};
-            cW[5 * nb +: 5] <= {tW[9 * nb + 8], |tW[9 * nb + 4 +: 4] ? 4'd0 : tnr_t[{nrq[5:4], tW[9 * nb +: 4]}]};
+            cA[5 * nb +: 5] <= {tA[9 * nb + 8], |tA[9 * nb + 4 +: 4] || (nb[0] && !gA) ? 4'd0 : tnr_t[{nrq[1:0], tA[9 * nb +: 4]}]};
+            cB[5 * nb +: 5] <= {tB[9 * nb + 8], |tB[9 * nb + 4 +: 4] || (nb[0] && !gB) ? 4'd0 : tnr_t[{nrq[3:2], tB[9 * nb +: 4]}]};
+            cW[5 * nb +: 5] <= {tW[9 * nb + 8], |tW[9 * nb + 4 +: 4] || (nb[0] && !gW) ? 4'd0 : tnr_t[{nrq[5:4], tW[9 * nb +: 4]}]};
         end
         mab0 <= max2(dA0, dB0);
         mab1 <= max2(dA1, dB1);
@@ -1002,9 +1053,11 @@ module deint #(
         {nAk, nBk, nWk, vwk} <= {nAj, nBj, nWj, vwj};
         // what goes with the pair, through the edges' search's clocks
         cdl <= {otk, nAk, nBk, nWk, vwk, al0, al1, alv0, alv1, cdl[159 * CDN - 1:159]};
-        // (the guard's comparisons, a clock before stage 0)
+        // (the guard's comparisons, a clock before stage 0: the pan's pixel; and P1's own, for the weave)
         nq0 <= nearq(cd25[43:36], cd25[139:132], cd25[107:100]);
         nq1 <= nearq(cd25[27:20], cd25[123:116], cd25[91:84]);
+        wq0 <= nearq(cd25[75:68], cd25[139:132], cd25[107:100]);
+        wq1 <= nearq(cd25[59:52], cd25[123:116], cd25[91:84]);
         // stage 0: the pair, CDN + 1 clocks after stage k
         s0_v <= cd26[158];
         s0_wa <= cd26[157:148];
@@ -1013,6 +1066,11 @@ module deint #(
         ww <= cd26[83:52];
         wvp <= cd26[51:20];
         {a_y0, a_y1, v_y0, v_y1} <= cd26[19:0];
+        // (a 30 fps game's frame's second field: P1's pixel where it lies near the pixels above and below)
+        if (wvf && (wq0[0] || wq0[1]) && (wq0[2] || wq0[3]))
+            a_y0 <= 5'd0;
+        if (wvf && (wq1[0] || wq1[1]) && (wq1[2] || wq1[3]))
+            a_y1 <= 5'd0;
         nr0 <= (nq0[0] || nq0[1]) && (nq0[2] || nq0[3]);
         nr1 <= (nq1[0] || nq1[1]) && (nq1[2] || nq1[3]);
         // stage 1: with the mean of old and new
@@ -1140,6 +1198,21 @@ module deint #(
                     // (the vectors: with the fields' history, in the motion adaptive mode; the pan a
                     // candidate if it is within what the estimator may find)
                     mc_f <= mc && !pg && mode == 2'd0 && (ll_now_r || hist_n_r);
+                    // (this frame's field, C, the second of a 30 fps game's frame: woven with P1.  The
+                    // same field again: as it was; a new one: by the frame before's measure against
+                    // the one before it; a field missed: nothing, and the measures begun again)
+                    if (cs_new == cs_f) begin
+                        wvf <= cs_mode && (cs_w || cs_ext);
+                    end else begin
+                        wvf <= cs_mode && (cs_auto || cs_ext);
+                        cs_w <= cs_mode && (cs_auto || cs_ext);
+                        if (cs_mode && (cs_auto || cs_ext))
+                            wv_n <= wv_n + 8'd1;
+                        cs_ok <= cs_mode && cs_new == cs_f + 3'd1;
+                        cs_p <= cs_s;
+                        cs_pc <= cs_c;
+                    end
+                    cs_f <= cs_new;
                     pan_k <= mv[10] && mv[5:0] != 6'b100000 && $signed(mv[9:6]) >= -4'sd4 && $signed(mv[9:6]) <= 4'sd4;
                     dxf <= mv[5:0];
                     dyf <= mv[9:6];

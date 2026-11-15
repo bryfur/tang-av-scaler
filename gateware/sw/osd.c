@@ -142,6 +142,8 @@ void osd_update(void)
     str("DEINT ");
     str(board_ed() ? "none (progressive)" : (s->mode & 3) == 1 ? "bob" : (s->mode & 3) == 2 ? "weave" :
         st.hist ? "motion adaptive" : "bob (no history)");
+    if (!board_ed() && (s->mode & 4) && (s->mode & 3) == 0)
+        str(REG(R_CAD) >> 24 & 1 ? " + 30 FPS PAIR" : " + 30 fps");
     if (!board_ed() && (s->mode & 8) && (s->mode & 3) == 0) {
         str(s->mv_dbg ? " + VECTORS" : " + motion");
         if (pan_ok)

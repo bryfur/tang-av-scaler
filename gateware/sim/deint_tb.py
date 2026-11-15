@@ -52,6 +52,9 @@ def main():
     corner = "corner" in args
     # keep=N: the edges of the frame before count (rtl/smaa_hist.v): the frame compared follows one of the same
     # fields; keep=N,rand: the first frame, the memory's bits any (the model is given what the design read)
+    # weave: the fields come in pairs from one frame (a 30 fps game: model.frame()'s, or a picture's), and the
+    # frame compared is made with its newest field taken for a frame's second (the CPU's word: deint.v wv)
+    weave = "weave" in args
     keeps = next((a[5:] for a in args if a.startswith("keep=")), "0").split(",")
     keep, hrand = int(keeps[0]), "rand" in keeps
     crop = next((tuple(int(v) for v in a[5:].split(",")) for a in args if a.startswith("crop=")), ())
@@ -79,6 +82,8 @@ def main():
         fields = [(t & 1, f) for t, f in enumerate(model.picture_fields(pic, nf))]
     if mvs:
         fields = [(t & 1, model.pan_field(t, mvs[0], mvs[1])) for t in range(nf)]
+    if weave and not pic and not mvs:   # (a 30 fps game: each frame two fields; the last field the second of its frame)
+        fields = [(t & 1, [model.frame((t + nf % 2) // 2)[2 * n + (t & 1)] for n in range(model.LINES)]) for t in range(nf)]
     # real=FILE.json: fields read out of the board's memory (tools/fields.py): the newest NFIELDS of them
     real = next((a[5:] for a in args if a.startswith("real=")), None)
     if real:
@@ -101,6 +106,8 @@ def main():
         tag += "_v"
     if net:
         tag += "_n"
+    if weave:
+        tag += "_w"
     if keep:
         tag += "_k%d%s" % (keep, "r" if hrand else "")
     open(os.path.join(WORK, tag + "_in.hex"), "w").write("\n".join("%04x" % b for b in data) + "\n")
@@ -157,7 +164,7 @@ module tb;
     wire [2:0] sd, si, w_slot; wire [31:0] wd_d, wd_i; wire [53:0] w_d;
     wire [15:0] frames; wire [7:0] dstate;
     deint u_deint (.clk(pclk), .nch(7'd45), .pg(1'b%(pg)d), .ev(ev), .ev_first(ev_first), .goal(s_goal[9:0]), .hold(hold), .latest(latest), .par(par),
-                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .mc(1'b%(mc)d), .mvdbg(1'b%(mvdbg)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .skip(10'd%(skip)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
+                   .nfields(fn), .flines(flines), .mode(2'd%(mode)d), .thr(8'd%(thr)d), .nr(2'd%(nr)d), .mc(1'b%(mc)d), .mvdbg(1'b%(mvdbg)d), .mv(11'd%(mvw)d), .first(10'd%(first)d), .cad(1'b0), .wv(8'd%(wvr)d), .wv_n(), .wv_on(), .cs_q(cs_q), .skip(10'd%(skip)d), .ll(1'b%(ll_on)d), .ll_min(8'd%(ll_min)d), .prog(f_prog), .prog_slot(f_pslot), .top_f(1'b0),
                    .b_valid(db_valid), .b_line(db_line), .b_ack(db_ack), .b_rvalid(db_rvalid), .rd_data(rd_q),
                    .r_we(r_we), .r_slot_d(sd), .r_slot_i(si), .r_wa(r_wa), .r_wd_d(wd_d), .r_wd_i(wd_i),
                    .emitted(emitted), .fstart(fstart), .frames(frames), .state_o(dstate));
@@ -169,6 +176,13 @@ module tb;
     // the edges' memory (smaa_hist.v): each of its lines read and written, with the count of frames begun
     // (hf_ring: the frame the ring's first words in the dump are of)
     integer hf, hf_n = 0, hf_ring = -1, h_slow = 0;
+    wire [55:0] cs_q;
+    // (the cadence's measure of each frame, as the next begins: the frame's C, the sum, the pixels)
+    reg [2:0] tb_c = 3'd0;
+    always @(posedge pclk) if (u_deint.fstart) begin
+        $display("cadence: C %%0d sum %%0d n %%0d", tb_c, u_deint.cs_s, u_deint.cs_c);
+        tb_c <= u_deint.cs_f;
+    end
     initial hf = $fopen("%(work)s/%(tag)s_hist.txt", "w");
     integer hi, hj;
     initial if (%(hrand)d) for (hi = 0; hi < 480; hi = hi + 1) for (hj = 120; hj < 126; hj = hj + 1)
@@ -329,7 +343,7 @@ module tb;
         $finish;
     end
 endmodule
-''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, keep=keep, hrand=1 if hrand else 0, net_on=1 if net else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
+''' % dict(last=len(data) - 1, mode=mode, thr=thr, aa_en=aa is not None, aa_dbg=dbg, aa_diag=diag, aa_corner=corner, g_xr=geo[0], g_dx=geo[1], g_ys=geo[2], g_dy=geo[3], g_wide=geo[4], aa_thr=aa or 0, sharp=sharp, nr=nr, dn=dn, ll_on=1 if ll else 0, ll_min=max(ll - 4, 1), last_before=last_before, ll_wait=ll_wait, latv=LAT, lat=LAT - 1, work=WORK, tag=tag, n_out=n_out, nlin=484 if prog else 244, pg=1 if prog else 0, tab_on=1 if tab else 0, mvdbg=1 if mvdbg else 0, wvr=(0x08 | (nf - 2) & 7) if weave else 0, keep=keep, hrand=1 if hrand else 0, net_on=1 if net else 0, mc=1 if mc else 0, first=mcfirst, skip=skip,
            mvw=0 if mv is None else 1024 | (mv[1] & 15) << 6 | (mv[0] & 63))
     open(os.path.join(WORK, tag + "_tb.v"), "w").write(tb)
     if tab:
@@ -355,6 +369,13 @@ endmodule
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     log = subprocess.check_output([os.path.join(mdir, tag)]).decode().strip()
     print(log)
+    # the cadence's measure of the frame made from the last two fields, against the model's (the capture puts
+    # the last of the fields in slot NFIELDS - 2: it counts from the first it sees whole)
+    cs = [t.split() for t in log.splitlines() if t.startswith("cadence: C %d " % ((nf - 2) & 7))]
+    if cs and not prog and not crop:
+        ws, wn = model.cadence_s([w for _, w in fields][-2:], [f for f, _ in fields][-2:])
+        print("cadence: the design's measure %s (%s pixels), the model's %d (%d)%s" % (cs[-1][4], cs[-1][6], ws, wn,
+              "" if (int(cs[-1][4]), int(cs[-1][6])) == (ws, wn) else "  WRONG"))
     bd = [int(v) for v in next(t for t in log.splitlines() if t.startswith("border ")).split()[1:]]
     bw = model.border([w for _, w in fields])
     fo = [int(v) for v in next(t for t in log.splitlines() if t.startswith("focus ")).split()[1:]]
@@ -399,7 +420,7 @@ endmodule
         print("hist: %d lines read (%d of the frame's missing), %d edges in them" % (len(rd), miss, sum(a + b for row in hprev for a, b in row)))
     # the ring as lstream.v wrote it, against the model's lines and analysis
     import fsr
-    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, False, mv, mc, mcfirst, skip, mvdbg, aa_hist)
+    pix = model.frame_480([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, dbg, diag, corner, nr, prog, False, mv, mc, mcfirst, skip, mvdbg, aa_hist, weave)
     want = model.frame_1080([w for _, w in fields], [f for f, _ in fields], mode, thr, aa, sharp, dbg, diag, corner, crop, nr, dn, prog, False, mv, mc, mcfirst, skip, tab, mvdbg, net, pix=pix)
     if aa_hist:
         hnew, miss = bits(wr)
@@ -415,7 +436,7 @@ endmodule
               % (len(wr), miss, sum(a + b for row in hnew for a, b in row), bad,
                  sum(tuple(a) != tuple(b) for ra, rb_ in zip(hprev, aa_hist["new"]) for a, b in zip(ra, rb_))))
     ana = [None] * skip + fsr.analysis([[p[0] for p in row] for row in pix[skip:]], 720, 480 - skip)
-    line, prev, rb = skip - 1, None, 0
+    line, prev, rb, pb = skip - 1, None, 0, {}
     for t in open(os.path.join(WORK, tag + "_ring.txt")):
         slot, x, d = t.split()
         slot, x, d = int(slot), int(x), int(d, 16)
@@ -425,11 +446,16 @@ endmodule
             break
         sgn = lambda v: v - 512 if v & 256 else v
         got = ((d >> 18 & 255, d >> 10 & 255, d >> 2 & 255), (sgn(d >> 45 & 511), sgn(d >> 36 & 511), d >> 28 & 255))
+        if got[0] != pix[line][x]:
+            pb.setdefault(line, []).append(x)
         if got != (pix[line][x], ana[line][x]) or slot != line % 8:
             rb += 1
             if rb <= 8:
                 print("  ring line %d x %d slot %d: got %s want %s" % (line, x, slot, got, (pix[line][x], ana[line][x])))
     print("ring: %d lines, %d words wrong" % (line + 1, rb))
+    if pb:
+        print("ring: the pixels themselves wrong in %d lines, from line %d (%d of them there, from x %d)" % (
+            len(pb), min(pb), len(pb[min(pb)]), pb[min(pb)][0]))
     if mc and not prog:
         # the vectors, against the model's
         vecs = []
