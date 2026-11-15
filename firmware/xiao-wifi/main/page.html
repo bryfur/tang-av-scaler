@@ -10,23 +10,23 @@ body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;color:
 .wrap{max-width:40em;margin:auto;padding:0 16px}
 .hide{display:none!important}
 body:not(.adv) .adv{display:none!important}
-/* the header stays: the name, the tabs, Advanced, and the board's state in one line of chips */
+/* the header stays: the name, the board's state, Advanced, power */
 header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
-.hd{display:flex;align-items:center;flex-wrap:wrap;gap:.5em 1em;padding:.75em 0 .55em}
-h1{font-size:1.15em;margin:0;font-weight:650;letter-spacing:-.01em}
-.tabs{display:flex;gap:.15em}
-.tabs button{background:none;border:0;padding:.3em .8em;border-radius:8px;color:var(--dim)}
-.tabs button.on{background:var(--card);color:var(--text);box-shadow:0 0 0 1px var(--line)}
-.advsw{display:flex;align-items:center;gap:.5em;margin-left:auto;font-size:.88em;color:var(--dim);cursor:pointer}
-#bar{display:flex;gap:.4em;flex-wrap:wrap;padding:0 0 .7em;cursor:pointer;min-height:2.1em}
-#bar .chip{font-size:.84em;padding:.2em .7em}
-/* groups of rows, a settings list */
-h2{font-size:.74em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:1.7em .25em .5em;font-weight:600}
+.hd{display:flex;align-items:center;flex-wrap:wrap;gap:.6em 1em;padding:.7em 0}
+h1{font-size:1.15em;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+#bar{display:flex;gap:.4em;flex-wrap:wrap;flex:1 1 auto;order:1}
+#bar .chip{font-size:.84em;padding:.2em .7em}#bar .chip[data-adv]{cursor:pointer}
+.advsw{display:flex;align-items:center;gap:.5em;font-size:.88em;color:var(--dim);cursor:pointer;margin-left:auto;order:2}
+#pwb{order:3;display:inline-flex;align-items:center;gap:.4em;white-space:nowrap}
+#pwb:before{content:"\23FB";font-size:1.05em;line-height:1}
+@media(max-width:46em){#bar{order:4;flex:1 1 100%}}
+/* groups of rows */
+h2{font-size:.74em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:1.6em .25em .5em;font-weight:600}
 .grp{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .f{display:flex;align-items:center;flex-wrap:wrap;gap:.45em 1em;padding:.6em 1em;min-height:3.1em;border-top:1px solid var(--line);margin-top:-1px}
 .f.sub{padding-left:2.2em}
 .f.adv{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--acc) 50%,transparent)}
-.l{flex:1 1 10em;display:flex;flex-direction:column;align-items:flex-start;gap:.3em;min-width:0}
+.l{flex:1 1 9em;display:flex;flex-direction:column;align-items:flex-start;gap:.3em;min-width:0}
 .t{display:flex;align-items:center;gap:.35em;position:relative}
 .sl{display:flex;align-items:center;gap:.5em;flex-wrap:wrap}
 /* an explanation: behind the i */
@@ -34,14 +34,14 @@ h2{font-size:.74em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim
 .ib:hover,.f.open .ib{color:var(--acc);opacity:1}
 .hint{flex:1 1 100%;display:none;color:var(--dim);font-size:.86em;line-height:1.45;margin:-.15em 0 .15em}
 .f.open .hint{display:block}
-/* a live state: a chip, coloured by how it stands (not a setting, not an explanation) */
+/* a live state: a chip coloured by how it stands */
 .chip{display:inline-flex;align-items:center;gap:.45em;font-size:.78em;line-height:1.5;padding:.05em .6em;border-radius:99px;font-variant-numeric:tabular-nums;white-space:nowrap;
   --c:var(--dim);color:var(--c);background:color-mix(in srgb,var(--c) 14%,transparent)}
 .chip:before{content:"";width:.5em;height:.5em;border-radius:50%;background:var(--c);flex:none}
 .chip[data-s=ok]{--c:var(--ok)}.chip[data-s=busy]{--c:var(--warn)}.chip[data-s=bad]{--c:var(--bad)}
 .chip[data-s=busy]:before{animation:pulse 1.1s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.2}}
-/* not at its default: a dot before the name; the reset beside it */
+/* not at its default: a dot before the name, the reset beside it */
 .f.chg .t:before{content:"";position:absolute;left:-.8em;top:50%;width:.4em;height:.4em;margin-top:-.2em;border-radius:50%;background:var(--acc)}
 .rst{display:none;border:0;background:none;padding:0 .2em;color:var(--dim);font-size:1em;line-height:1;cursor:pointer}
 .f.chg .rst{display:inline}.rst:hover{color:var(--acc)}
@@ -68,143 +68,141 @@ button:hover,.btn:hover{border-color:var(--acc)}button.pri{background:var(--acc)
 button:disabled{opacity:.45;cursor:default}button:disabled:hover{border-color:var(--line)}
 .lnk{border:0;background:none;padding:0;color:var(--acc);font-size:.82em}
 .nums{display:flex;gap:.4em;flex-wrap:wrap}
-.ctl{display:flex;align-items:center;justify-content:flex-end;gap:.6em;flex-wrap:wrap}
-.ctl.wide{flex:1 1 100%;justify-content:space-between}
+.ctl{display:flex;align-items:center;justify-content:space-between;gap:.6em;flex-wrap:wrap;flex:1 1 100%}
 .fname{color:var(--dim);font-size:.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:12em}
-.foot{display:flex;justify-content:center;padding:1.6em 0 .4em}
+.foot{display:flex;justify-content:center;padding:1.4em 0 0}
 .foot button{background:none;color:var(--dim)}
-table{border-collapse:collapse;width:100%}td{padding:.45em 1em;vertical-align:top}td:first-child{color:var(--dim);white-space:nowrap;width:1%;padding-right:0}
+/* the status: names and values, red only where something is wrong */
+table{border-collapse:collapse;width:100%;font-size:.92em;font-variant-numeric:tabular-nums}
+td{padding:.42em 1em;vertical-align:top}td:first-child{color:var(--dim);white-space:nowrap;width:1%;padding-right:.2em}
 tr+tr td,tbody+tbody tr:first-child td{border-top:1px solid var(--line)}
-.ok{color:var(--ok)}.bad{color:var(--bad)}
-pre{background:#0a0b0e;color:#cfd3dc;padding:.7em;border-radius:8px;overflow:auto;max-height:20em;font-size:12px;margin:.5em 0 0;flex:1 1 100%}
-details{flex:1 1 100%}details>summary{cursor:pointer;color:var(--dim);padding:.2em 0}
-.stack{display:grid;gap:.5em;flex:1 1 100%;max-width:22em}.stack input{width:100%}
+.bad{color:var(--bad)}
+.stack{display:flex;flex-wrap:wrap;gap:.5em;flex:1 1 100%}.stack input{flex:1 1 7em;min-width:0}
 .cap{padding:0 1em 1em}.cap img{width:100%;border-radius:8px;display:block;background:#000}
 .cap .sl{margin-top:.6em}
+/* the logs: one row under everything */
+.logs .f{align-items:flex-start}
+pre{background:#0a0b0e;color:#cfd3dc;padding:.7em;border-radius:8px;overflow:auto;max-height:22em;font-size:12px;margin:.5em 0 0}
+details{flex:1 1 100%;min-width:0}details>summary{cursor:pointer;color:var(--dim);padding:.2em 0}
 #msg{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.5em 1em;box-shadow:0 6px 24px #0006;white-space:pre-wrap;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 #msg.on{opacity:1}
 main{padding-bottom:2.5em}
-/* two columns where there is room: fixed (the cards do not move when Advanced shows more) */
-@media(min-width:62em){.wrap{max-width:68em}.cols{display:grid;grid-template-columns:1fr 1fr;gap:0 1.5em;align-items:start}}
+/* the dashboard: one column on a phone; two (the board below, in two of its own) on a middle screen;
+ * three on a wide one (the board on the right).  Fixed: no card moves when Advanced shows more */
+.dash{display:grid;gap:0 1.5em;align-items:start}.dash>form{display:contents}
+@media(min-width:62em){.wrap{max-width:68em}.dash{grid-template-columns:1fr 1fr}
+  .c3{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:0 1.5em;align-items:start}.c3 .sta{grid-row:span 2}
+  .logs{display:grid;grid-template-columns:1fr 1fr}.logs .f+.f{margin-top:0;border-top:0;border-left:1px solid var(--line)}}
+@media(min-width:94em){.wrap{max-width:110em}.dash{grid-template-columns:1fr 1fr 1fr}.c3{grid-column:auto;display:block}}
 </style></head><body>
-<header><div class="wrap">
- <div class="hd"><h1>AV scaler</h1>
-  <nav class="tabs"><button type="button" data-t="pic" class="on">Picture</button><button type="button" data-t="board">Board</button></nav>
-  <label class="advsw">Advanced <input class="sw" type="checkbox" id="advb"></label></div>
- <div id="bar" title="the board"></div>
-</div></header>
+<header><div class="wrap"><div class="hd">
+ <h1>AV scaler</h1><div id="bar"></div>
+ <label class="advsw">Advanced <input class="sw" type="checkbox" id="advb"></label>
+ <button type="button" id="pwb">Stand by</button>
+</div></div></header>
 <div id="msg"></div>
 
-<main id="t_pic" class="wrap">
+<main class="wrap">
+<div class="dash">
 <form id="vf">
 <input type="hidden" name="mode">
-<div class="cols">
-<div class="col">
+<div class="c1">
 <h2>Picture</h2><div class="grp">
- <div class="f" data-hint="Auto finds the game's picture inside the signal and leaves out the black around it. Whole signal shows all 720 × 480. Manual: the part set below.">
-  <span class="l"><span class="t">Fill the screen</span><span class="sl"><span class="chip hide" id="fillc"></span><button type="button" class="lnk hide" id="fa" onclick="video('measure=1','finding the picture again')">Find again</button></span></span>
-  <span class="seg"><label><input type="radio" name="crop" value="1"><span>Auto</span></label><label><input type="radio" name="crop" value="0"><span>Whole signal</span></label><label><input type="radio" name="crop" value="2"><span>Manual</span></label></span></div>
- <div class="f sub hide" id="c_man"><span class="l"><span class="t">Left, top, width, height</span></span>
+ <div class="f" data-hint="Auto finds the game's picture and leaves out the black around it.">
+  <span class="l"><span class="t">Crop</span><span class="sl"><span class="chip hide" id="fillc"></span><button type="button" class="lnk hide" id="fa" onclick="video('measure=1','finding the picture')">Find again</button></span></span>
+  <span class="seg"><label><input type="radio" name="crop" value="1"><span>Auto</span></label><label><input type="radio" name="crop" value="0"><span>Off</span></label><label><input type="radio" name="crop" value="2"><span>Manual</span></label></span></div>
+ <div class="f sub hide" id="c_man"><span class="l"><span class="t">Area</span></span>
   <span class="nums"><input type="number" name="crop_x" min="0" max="719" title="left" aria-label="left"><input type="number" name="crop_y" min="0" max="479" title="top" aria-label="top"><input type="number" name="crop_w" min="64" max="720" title="width" aria-label="width"><input type="number" name="crop_h" min="64" max="480" title="height" aria-label="height"></span></div>
- <div class="f" data-hint="For a game set to widescreen: the picture fills all 1920 columns."><span class="l"><span class="t">Widescreen 16:9</span></span><input class="sw" type="checkbox" name="wide"></div>
- <div class="f" data-hint="Averages frames where the picture is still; moving parts are left alone."><span class="l"><span class="t">Noise reduction</span></span>
+ <div class="f" data-hint="For a game set to 16:9."><span class="l"><span class="t">Widescreen</span></span><input class="sw" type="checkbox" name="wide"></div>
+ <div class="f" data-hint="Averages frames where the picture is still."><span class="l"><span class="t">Noise reduction</span></span>
   <span class="seg"><label><input type="radio" name="nr" value="0"><span>Off</span></label><label><input type="radio" name="nr" value="1"><span>Low</span></label><label><input type="radio" name="nr" value="2"><span>Medium</span></label><label><input type="radio" name="nr" value="3"><span>High</span></label></span></div>
- <div class="f" id="ntr" data-hint="Kernel: an edge-adaptive kernel from the table below. Network: a small neural network makes the picture twice the size, then a plain stretch (the table is not used)."><span class="l"><span class="t">Upscaler</span><span class="chip hide" id="ntc"></span></span>
+ <div class="f" id="ntr" data-hint="Kernel: edge-adaptive, from a table. Network: a small neural network doubles the picture, then a plain stretch."><span class="l"><span class="t">Upscaler</span><span class="chip hide" id="ntc"></span></span>
   <span class="seg"><label><input type="radio" name="net" value="0"><span>Kernel</span></label><label><input type="radio" name="net" value="1"><span>Network</span></label></span></div>
- <div class="f" id="tbr" data-hint="FSR 1's edge-adaptive kernel, or one learnt from games' pictures (a pair: the scaler takes the one for SMAA on or off), or a table of your own (Advanced)."><span class="l"><span class="t">Scaling kernel</span><span class="chip hide" id="tbc"></span></span><select name="table"><option value="0">FSR</option></select></div>
- <div class="f sub adv" id="tbu"><span class="l"><span class="t">Your own table</span></span>
+ <div class="f" id="tbr" data-hint="FSR 1, or learnt from games' pictures."><span class="l"><span class="t">Kernel</span><span class="chip hide" id="tbc"></span></span><select name="table"><option value="0">FSR</option></select></div>
+ <div class="f sub adv" id="tbu"><span class="l"><span class="t">Own table</span></span>
   <label class="btn"><input type="file" id="tbf" accept=".tab" hidden>Choose .tab</label><span class="fname" id="tbn"></span><button type="button" onclick="tabUp()">Add</button><button type="button" id="tbd" onclick="tabDrop()">Remove</button></div>
  <div class="f"><span class="l"><span class="t">Sharpening</span></span><span class="rg"><input type="range" name="sharp" min="0" max="16"><output></output></span></div>
- <div class="f" data-hint="Sharpens less where a pixel differs from its neighbours only by noise."><span class="l"><span class="t">Noise-aware sharpening</span></span><input class="sw" type="checkbox" name="dn"></div>
- <div class="f adv" data-hint="Where in a pixel the video decoder samples. Tune tries each phase on a still picture and keeps the sharpest: pause the game first."><span class="l"><span class="t">Sampling phase</span><span class="chip hide" id="tnc"></span></span>
-  <span class="rg"><input type="range" name="phase" min="0" max="31"><output></output></span><button type="button" onclick="video('tune=1','tuning: about ten seconds')">Tune</button></div>
- <div class="f adv" data-hint="Holds the picture as it is."><span class="l"><span class="t">Freeze</span></span><input class="sw" type="checkbox" name="freeze"></div>
+ <div class="f" data-hint="Sharpens noise less."><span class="l"><span class="t">Noise-aware sharpening</span></span><input class="sw" type="checkbox" name="dn"></div>
+ <div class="f adv" data-hint="Where in a pixel the decoder samples. Tune on a still picture (pause the game)."><span class="l"><span class="t">Sampling phase</span><span class="chip hide" id="tnc"></span></span>
+  <span class="rg"><input type="range" name="phase" min="0" max="31"><output></output></span><button type="button" onclick="video('tune=1','tuning')">Tune</button></div>
+ <div class="f adv"><span class="l"><span class="t">Freeze</span></span><input class="sw" type="checkbox" name="freeze"></div>
 </div>
-
 <h2>Deinterlacing</h2><div class="grp">
- <div class="f" data-hint="Motion adaptive: fields woven where the picture is still, lines filled in where it moves. Bob: every line filled in from its neighbours (half the detail, never a comb). Weave: the two fields as they are (still pictures only).">
+ <div class="f" data-hint="Motion adaptive: weave where still, fill in where moving. Bob: fill in every line. Weave: still pictures only.">
   <span class="l"><span class="t">Method</span></span>
   <span class="seg"><label><input type="radio" name="_m" value="0"><span>Motion adaptive</span></label><label><input type="radio" name="_m" value="1"><span>Bob</span></label><label><input type="radio" name="_m" value="2"><span>Weave</span></label></span></div>
- <div class="f sub" id="mcf" data-hint="Where the picture moves, the filled-in lines come from the field before, moved with it, each block of 8 pixels by its own motion."><span class="l"><span class="t">Motion compensation</span><span class="chip hide" id="panc"></span></span><input class="sw" type="checkbox" name="_c"></div>
- <div class="f sub" id="kcf" data-hint="For a game that draws each frame twice (two fields from one instant): such frames are found and their fields woven, keeping the whole detail in motion."><span class="l"><span class="t">30 fps games</span></span><input class="sw" type="checkbox" name="_k"></div>
- <div class="f sub adv" id="mvf" data-hint="The picture in grey, each block tinted by how it moves: blue left, yellow right, red up, green down; stronger is faster."><span class="l"><span class="t">Show the motion</span></span><input class="sw" type="checkbox" name="mv_dbg"></div>
+ <div class="f sub" id="mcf" data-hint="Filled-in lines come from the field before, moved block by block."><span class="l"><span class="t">Motion compensation</span><span class="chip hide" id="panc"></span></span><input class="sw" type="checkbox" name="_c"></div>
+ <div class="f sub" id="kcf" data-hint="For games that draw each frame twice: both fields are woven, full detail in motion."><span class="l"><span class="t">30 fps games</span></span><input class="sw" type="checkbox" name="_k"></div>
+ <div class="f sub adv" id="mvf" data-hint="Blue left, yellow right, red up, green down."><span class="l"><span class="t">Show motion</span></span><input class="sw" type="checkbox" name="mv_dbg"></div>
  <div class="f adv"><span class="l"><span class="t">Motion threshold</span></span><span class="rg"><input type="range" name="thr" min="0" max="32"><output></output></span></div>
  <div class="f adv"><span class="l"><span class="t">Top field is F=1</span></span><input class="sw" type="checkbox" name="top1"></div>
 </div>
-
 </div>
-<div class="col">
+
+<div class="c2">
 <h2>Anti-aliasing</h2><div class="grp">
- <div class="f" data-hint="Smooths the jagged edges of the game's own pictures."><span class="l"><span class="t">SMAA</span></span><input class="sw" type="checkbox" name="aa"></div>
- <div class="f adv" data-hint="Lower catches more edges."><span class="l"><span class="t">Edge threshold</span></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
- <div class="f adv" data-hint="How firmly an edge found in the frame before is kept, so still edges do not shimmer. 0 is off."><span class="l"><span class="t">Steady edges</span></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
+ <div class="f" data-hint="Smooths jagged edges."><span class="l"><span class="t">SMAA</span></span><input class="sw" type="checkbox" name="aa"></div>
+ <div class="f adv" data-hint="Lower finds more edges."><span class="l"><span class="t">Edge threshold</span></span><span class="rg"><input type="range" name="aa_thr" min="4" max="48"><output></output></span></div>
+ <div class="f adv" data-hint="Keeps last frame's edges so still edges do not shimmer. 0 is off."><span class="l"><span class="t">Steady edges</span></span><span class="rg"><input type="range" name="aa_keep" min="0" max="7"><output></output></span></div>
  <div class="f adv"><span class="l"><span class="t">Diagonal edges</span></span><input class="sw" type="checkbox" name="aa_diag"></div>
- <div class="f adv"><span class="l"><span class="t">Keep corners sharp</span></span><input class="sw" type="checkbox" name="aa_corner"></div>
- <div class="f adv" data-hint="Edges green, blends blue and red, in the picture's place."><span class="l"><span class="t">Show what it finds</span></span><input class="sw" type="checkbox" name="aa_dbg"></div>
+ <div class="f adv"><span class="l"><span class="t">Sharp corners</span></span><input class="sw" type="checkbox" name="aa_corner"></div>
+ <div class="f adv" data-hint="Edges green, blends blue and red."><span class="l"><span class="t">Show edges</span></span><input class="sw" type="checkbox" name="aa_dbg"></div>
 </div>
-
 <h2>Output</h2><div class="grp">
- <div class="f" data-hint="Keeps the output in step with the input: every field shown once, the delay steady."><span class="l"><span class="t">Frame lock</span><span class="chip hide" id="lkc"></span></span><input class="sw" type="checkbox" name="lock"></div>
- <div class="f" data-hint="Starts each output frame while its field is still coming in. Needs frame lock."><span class="l"><span class="t">Low latency</span><span class="chip hide" id="llc"></span></span><input class="sw" type="checkbox" name="lowlat"></div>
- <div class="f" data-hint="Text on the picture: what comes in, what is done to it, the delay."><span class="l"><span class="t">On-screen display</span></span><input class="sw" type="checkbox" name="osd"></div>
- <div class="f" data-hint="Off sends DVI: no sound and no InfoFrames."><span class="l"><span class="t">Sound over HDMI</span></span><input class="sw" type="checkbox" name="audio"></div>
- <div class="f" data-hint="A game's Pro Logic II sound decoded to five channels (1080p output)."><span class="l"><span class="t">Surround 5.1</span></span><input class="sw" type="checkbox" name="surround"></div>
+ <div class="f" data-hint="Output in step with the input: each field shown once, steady delay."><span class="l"><span class="t">Frame lock</span><span class="chip hide" id="lkc"></span></span><input class="sw" type="checkbox" name="lock"></div>
+ <div class="f" data-hint="Starts a frame while its field is still coming in. Needs frame lock."><span class="l"><span class="t">Low latency</span><span class="chip hide" id="llc"></span></span><input class="sw" type="checkbox" name="lowlat"></div>
+ <div class="f"><span class="l"><span class="t">On-screen display</span></span><input class="sw" type="checkbox" name="osd"></div>
+ <div class="f" data-hint="Off: DVI, no sound."><span class="l"><span class="t">HDMI audio</span></span><input class="sw" type="checkbox" name="audio"></div>
+ <div class="f" data-hint="Pro Logic II decoded to 5.1 (1080p only)."><span class="l"><span class="t">Surround 5.1</span></span><input class="sw" type="checkbox" name="surround"></div>
  <div class="f"><span class="l"><span class="t">Frame rate</span></span><span class="seg"><label><input type="radio" name="ntsc" value="1"><span>59.94 Hz</span></label><label><input type="radio" name="ntsc" value="0"><span>60 Hz</span></label></span></div>
  <div class="f adv"><span class="l"><span class="t">Test picture</span></span><input class="sw" type="checkbox" name="pattern"></div>
  <div class="f adv"><span class="l"><span class="t">Swap Cb / Cr</span></span><input class="sw" type="checkbox" name="swap"></div>
  <div class="f adv" data-hint="Off leaves the FPGA to a host tool."><span class="l"><span class="t">Run the scaler</span></span><input class="sw" type="checkbox" name="on"></div>
 </div>
-<h2>Screen capture</h2><div class="grp">
- <div class="f">
-  <span class="ctl wide"><span class="seg"><label title="480 &times; 270"><input type="radio" name="gs" value="4" form="none" checked><span>Small &middot; 2 s</span></label><label title="960 &times; 540"><input type="radio" name="gs" value="2" form="none"><span>Half &middot; 6 s</span></label><label title="1920 &times; 1080"><input type="radio" name="gs" value="1" form="none"><span>Full &middot; 25 s</span></label></span>
-  <button type="button" class="pri" id="gb" onclick="grab()" title="the picture going out, read back from the FPGA (held still while it is read)">Capture</button></span></div>
- <div id="gw" class="cap hide"><img id="gi" alt="capture"><div class="sl"><a id="gl" download="avscaler.png" class="btn">Save as PNG</a><span class="fname" id="gt"></span></div></div>
+<h2>Capture</h2><div class="grp">
+ <div class="f"><span class="ctl">
+  <span class="seg"><label title="480 &times; 270"><input type="radio" name="gs" value="4" form="none" checked><span>Small &middot; 2 s</span></label><label title="960 &times; 540"><input type="radio" name="gs" value="2" form="none"><span>Half &middot; 6 s</span></label><label title="1920 &times; 1080"><input type="radio" name="gs" value="1" form="none"><span>Full &middot; 25 s</span></label></span>
+  <button type="button" class="pri" id="gb" onclick="grab()" title="the picture going out (held still while it is read)">Capture</button></span></div>
+ <div id="gw" class="cap hide"><img id="gi" alt="capture"><div class="sl"><a id="gl" download="avscaler.png" class="btn">Save PNG</a><span class="fname" id="gt"></span></div></div>
 </div>
-</div>
+<div class="foot"><button type="button" id="rall" disabled>Reset to defaults</button></div>
 </div>
 </form>
 
-<div class="foot"><button type="button" id="rall" disabled>Reset to defaults</button></div>
-</main>
+<div class="c3">
+<div class="sta"><h2>Status</h2><div class="grp"><table><tbody id="vs"></tbody><tbody id="st"></tbody></table></div></div>
+<div><h2>Wi-Fi</h2><div class="grp">
+ <div class="f"><form id="wf" class="stack"><input type="text" name="ssid" placeholder="Network" required>
+  <input name="pass" type="password" placeholder="Password"><button class="pri">Join</button></form></div>
+</div></div>
+<div><h2>Maintenance</h2><div class="grp">
+ <div class="f"><span class="l"><span class="t">Scaler</span></span><button type="button" onclick="video('again=1','bringing it up')">Bring up again</button></div>
+ <div class="f"><span class="l" style="flex-basis:4em"><span class="t">Firmware</span></span><label class="btn"><input type="file" id="fw" hidden>Choose</label><span class="fname" id="fwn"></span><button type="button" onclick="ota()">Upload</button></div>
+ <div class="f adv"><span class="l"><span class="t">JTAG</span><span class="chip hide" id="fpc"></span></span><button type="button" onclick="fpga()">Read FPGA</button></div>
+</div></div>
+</div>
+</div>
 
-<main id="t_board" class="wrap hide">
-<div class="cols">
-<div class="col">
-<h2>Power</h2><div class="grp">
- <div class="f"><span class="l"><span class="t">The scaler</span><span class="chip" id="pwc"></span></span><button type="button" id="pwb">Stand by</button></div>
-</div>
-<h2>Wi-Fi network</h2><div class="grp">
- <div class="f"><form id="wf" class="stack"><input type="text" name="ssid" placeholder="Network name" required>
-  <input name="pass" type="password" placeholder="Password"><div><button class="pri">Save and join</button></div></form></div>
-</div>
-<h2>Maintenance</h2><div class="grp">
- <div class="f"><span class="l"><span class="t">Bring the scaler up again</span></span><button type="button" onclick="video('again=1','bringing it up again')">Bring up</button></div>
- <div class="f"><span class="l"><span class="t">Firmware update</span></span><label class="btn"><input type="file" id="fw" hidden>Choose avwifi.bin</label><span class="fname" id="fwn"></span><button type="button" onclick="ota()">Upload</button></div>
- <div class="f"><span class="l"><span class="t">FPGA over JTAG</span><span class="chip hide" id="fpc"></span></span><button type="button" onclick="fpga()">Read</button></div>
-</div>
-</div>
-<div class="col">
-<h2>Status</h2><div class="grp"><table><tbody id="vs"></tbody><tbody id="st"></tbody></table></div>
-</div>
-</div>
-<h2>Logs</h2><div class="grp">
- <div class="f"><details id="cond"><summary>FPGA console (last output)</summary><pre id="con"></pre></details></div>
- <div class="f"><details id="logd"><summary>Firmware log</summary><pre id="log"></pre></details></div>
+<h2>Logs</h2><div class="grp logs">
+ <div class="f"><details id="cond"><summary>FPGA console</summary><pre id="con"></pre></details></div>
+ <div class="f"><details id="logd"><summary>Firmware</summary><pre id="log"></pre></details></div>
 </div>
 </main>
 
 <script>
 const $=i=>document.getElementById(i),vf=$('vf'),F=vf.elements;
 let mt;const msg=t=>{const m=$('msg');m.textContent=t;m.classList.add('on');clearTimeout(mt);mt=setTimeout(()=>m.classList.remove('on'),3500)};
-const row=(k,v,c)=>'<tr'+(c?' class="'+c+'"':'')+'><td>'+k+'</td><td>'+v+'</td></tr>';
-const yes=(b,t,f)=>'<span class="'+(b?'ok':'bad')+'">'+(b?t:f)+'</span>';
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const kv=(k,v,a)=>'<tr'+(a?' class="adv"':'')+'><td>'+k+'</td><td>'+v+'</td></tr>';
+const B=(ok,t)=>ok?t:'<span class="bad">'+t+'</span>';
 const hide=(id,h)=>$(id).classList.toggle('hide',!!h);
 // a live state: s is ok, busy, bad or '' (idle); no text hides it
 function chip(id,s,t){const e=$(id);e.textContent=t||'';e.dataset.s=s||'';e.classList.toggle('hide',!t)}
 const sgn=x=>(x>0?'+':x<0?'−':'')+Math.abs(x);
+const X='×',D=' · ';
 const adv=()=>document.body.classList.contains('adv');
 const day=s=>new Date(s*1000).toISOString().slice(0,16).replace('T',' ');
+const dur=s=>s<3600?Math.round(s/60)+' min':Math.floor(s/3600)+' h '+Math.round(s%3600/60)+' min';
 
 // ---- the settings: what a row sets, its default, the resets ----
 // [setting, the bits of it]: the deinterlacer's three controls share mode (0 motion adaptive, 1 bob, 2 weave;
@@ -233,14 +231,11 @@ for(const r of rows){const t=r.querySelector('.t');if(!t)continue;
     b.title='what this does';b.setAttribute('aria-label',b.title);b.onclick=()=>r.classList.toggle('open');t.append(b);
     h.className='hint';h.textContent=r.dataset.hint;r.append(h)}
   if(keys(r).length){const b=document.createElement('button');b.type='button';b.className='rst';b.textContent='↺';
-    b.title='back to the default';b.setAttribute('aria-label',b.title);b.onclick=()=>reset(r,'back to the default');t.append(b)}}
-for(const r of document.querySelectorAll('#t_board .f[data-hint], #t_pic > .grp .f[data-hint]'))if(!r.querySelector('.ib')){
-  const t=r.querySelector('.t'),b=document.createElement('button'),h=document.createElement('div');b.type='button';b.className='ib';b.textContent='i';
-  b.onclick=()=>r.classList.toggle('open');t.append(b);h.className='hint';h.textContent=r.dataset.hint;r.append(h)}
+    b.title='default';b.setAttribute('aria-label','back to the default');b.onclick=()=>reset(r,'back to the default');t.append(b)}}
 let armed=0;
 $('rall').onclick=()=>{const b=$('rall');
-  if(!armed){b.textContent='Click again: every setting back to its default';armed=setTimeout(()=>{armed=0;b.textContent='Reset to defaults'},3500);return}
-  clearTimeout(armed);armed=0;b.textContent='Reset to defaults';reset(vf,'every setting back to its default')};
+  if(!armed){b.textContent='Click again to reset all';armed=setTimeout(()=>{armed=0;b.textContent='Reset to defaults'},3500);return}
+  clearTimeout(armed);armed=0;b.textContent='Reset to defaults';reset(vf,'all back to defaults')};
 
 // ---- the form ----
 function modeShow(){const m=+F.mode.value||0,b=m&3;
@@ -261,7 +256,7 @@ function send(note){video(new URLSearchParams(cur()),note)}
 let st;
 for(const n of ['_m','_c','_k'])for(const e of (F[n].length?[...F[n]]:[F[n]]))e.addEventListener('change',modeTake);
 vf.addEventListener('input',()=>{outs();marks()});
-// a setting changed: sent at once (a slider: when it is let go)
+// a setting changed: sent at once (a slider: when it is let go); the capture's size is no setting
 vf.addEventListener('change',e=>{if(e.target.type=='file'||e.target.form!=vf)return;clearTimeout(st);st=setTimeout(send,150)});
 vf.onsubmit=e=>{e.preventDefault();send()};
 
@@ -271,14 +266,14 @@ let tkey='',tab=null;
 function tabShow(v){const t=tab=v.tab,s=F.table,ok=!!t&&t.state>=0,key=ok?t.names.join('|'):'-';
   const nt=!!(v.net&&v.net.there),non=nt&&+v.set.net==1;
   hide('ntr',!nt);
-  chip('ntc',non?(v.net.state==0?'':'ok'):'',non?(v.net.state==2?(v.net.name||'own weights')+' · kept':v.net.state==1?'own weights · not kept':'built-in weights'):'');
+  chip('ntc',non&&v.net.state?'ok':'',non?(v.net.state==2?(v.net.name||'own weights'):v.net.state==1?'own weights, not saved':'built-in weights'):'');
   hide('tbr',!ok||non);hide('tbu',!ok);
   if(key!=tkey){tkey=key;const c=s.value;
     s.innerHTML='<option value="0">FSR</option>'+(ok&&t.names[1]&&t.names[2]?'<option value="1">Learnt</option>':'')+
       (ok?t.names.slice(3).map((n,i)=>n?'<option value="'+(i+2)+'">'+esc(n)+'</option>':'').join(''):'');s.value=c}
   const set=+v.set.table,want=set==0?0:set==1?1+(v.set.aa?1:0):set+1;
   hide('tbd',set<2);
-  if(!ok)chip('tbc');else if(t.bad)chip('tbc','bad',t.bad+' entries read back wrong');
+  if(!ok)chip('tbc');else if(t.bad)chip('tbc','bad',t.bad+' bad entries');
   else if(t.state==1||t.state==3)chip('tbc','busy',t.state==1?'changing':'starting');
   else if(t.slot>=0&&t.slot!=want)chip('tbc','busy','loading');else chip('tbc')}
 $('tbf').onchange=()=>$('tbn').textContent=$('tbf').files[0]?.name||'';
@@ -293,78 +288,77 @@ async function tabDrop(){const set=+F.table.value;if(set<2)return;
   video('table=0')}
 
 // ---- the board's state ----
-// a bring-up setting that changes the picture, left on while Advanced is hidden: said in the bar
-const BREAK={freeze:'freeze',pattern:'test picture',aa_dbg:'SMAA view',mv_dbg:'motion view',swap:'Cb/Cr swapped',top1:'top field F=1'};
+// a bring-up setting that changes the picture, left on while Advanced is hidden: named in the header
+const BREAK={freeze:'freeze',pattern:'test picture',aa_dbg:'edge view',mv_dbg:'motion view',swap:'Cb/Cr swapped',top1:'top field F=1'};
 const broken=o=>Object.keys(BREAK).filter(k=>def?o[k]!=def[k]:o[k]).map(k=>BREAK[k]);
 function bar(v){let s='ok',t;const x=[];
-  if(!v){s='bad';t='No answer from the board'}
+  if(!v){s='bad';t='No answer'}
   else{const sig=v.fields_s>=49&&v.fields_s<=61;
-    if(v.host){s='busy';t='Left to a host tool'}else if(!v.set.on){s='busy';t='Scaler not run'}else if(v.standby){s='';t='Standing by'}
-    else if(!v.fpga){s='bad';t='The FPGA does not answer'}else if(!v.ok){s='bad';t='Not brought up'}else if(!sig){s='bad';t='No input'}
-    else{t=(v.in&&v.in!='none'?v.in:v.pix+'×'+v.lines*2+'i')+' → 1080p'+(v.set.ntsc?'59.94':'60')+' · '+v.delay_ms.toFixed(0)+' ms';
-      if(!v.pll)x.push(['bad','output not locked']);
-      if(v.in&&v.in!='none'&&!v.in_ok)x.push(['busy','input not handled yet: test picture'])}
+    if(v.host){s='busy';t='Host tool'}else if(!v.set.on){s='busy';t='Scaler off'}else if(v.standby){s='';t='Standby'}
+    else if(!v.fpga){s='bad';t='FPGA not answering'}else if(!v.ok){s='bad';t='Not up'}else if(!sig){s='bad';t='No input'}
+    else{t=(v.in&&v.in!='none'?v.in:v.pix+X+v.lines*2+'i')+' → 1080p'+(v.set.ntsc?'59.94':'60')+D+v.delay_ms.toFixed(0)+' ms';
+      if(!v.pll)x.push(['bad','PLL unlocked']);
+      if(v.in&&v.in!='none'&&!v.in_ok)x.push(['busy','input not handled'])}
     if(v.fpga&&!v.standby&&!v.hpd)x.push(['','no display']);
-    if(v.temp_c>=85)x.push(['busy','FPGA '+v.temp_c.toFixed(0)+' °C']);
+    if(v.temp_c>=85)x.push(['busy',v.temp_c.toFixed(0)+' °C']);
     const br=broken(v.set);if(br.length&&!adv())x.push(['busy',br.join(', '),1])}
-  $('bar').innerHTML=[[s,t],...x].map(([s,t,a])=>'<span class="chip"'+(a?' data-adv="1" title="show the advanced settings"':'')+' data-s="'+s+'">'+esc(t)+'</span>').join('')}
-$('bar').onclick=e=>{if(e.target.dataset.adv)advSet(true);else tabTo('board')};
+  $('bar').innerHTML=[[s,t],...x].map(([s,t,a])=>'<span class="chip"'+(a?' data-adv="1" title="show advanced"':'')+' data-s="'+s+'">'+esc(t)+'</span>').join('')}
+$('bar').onclick=e=>{if(e.target.dataset.adv)advSet(true)};
+function power(v){const b=$('pwb');
+  if(!v){b.disabled=true;return}b.disabled=false;
+  const wake=v.standby||!v.fpga;b.lastChild.textContent=v.standby?'Wake':v.fpga?'Stand by':'Load again';
+  b.classList.toggle('pri',v.standby);b.onclick=()=>video('standby='+(wake?0:1),wake?'waking':'standing by')}
 let vfill=true,tun=0;
 function live(v){
-  chip('fillc',v.set.crop==1?'ok':'',v.set.crop==1?'showing '+v.shown[1]+' × '+v.shown[3]+' at '+v.shown[0]+', '+v.shown[2]:'');
-  chip('tnc',['','busy','ok','bad','bad'][v.tune]||'',['','tuning','tuned: '+(v.tune_gain-100)+' % sharper than the worst','the picture moved: pause the game, tune again','no picture to tune on'][v.tune]||'');
+  chip('fillc',v.set.crop==1?'ok':'',v.set.crop==1?v.shown[1]+' '+X+' '+v.shown[3]+' at '+v.shown[0]+', '+v.shown[2]:'');
+  chip('tnc',['','busy','ok','bad','bad'][v.tune]||'',['','tuning','tuned +'+(v.tune_gain-100)+' %','picture moved','no picture'][v.tune]||'');
   if(v.tune==2&&tun==1)vfill=true;tun=v.tune;
   const L=v.relay&&v.set.lock?v.lock:0;
-  chip('lkc',['','bad','busy','ok'][L],['','no input','getting in step · '+(v.lock_us/1000).toFixed(1)+' ms','in step · '+sgn(v.lock_ppm)+' ppm'][L]);
-  chip('llc',!v.set.lowlat?'':v.ll?'ok':v.set.lock?'busy':'',!v.set.lowlat?'':v.ll?'begun '+v.ll_lines+' lines in':v.set.lock?'waiting for frame lock':'needs frame lock');
-  const mc=(v.set.mode&11)==8;chip('panc',mc&&v.pan[0]?'ok':'',mc&&v.pan[0]?'pans '+sgn(v.pan[1])+' px, '+sgn(v.pan[2])+' lines':'');
-  chip('pwc',v.standby?'':v.fpga?'ok':'bad',v.standby?'standing by':v.fpga?'on':'the FPGA does not answer');
-  const b=$('pwb');b.textContent=v.standby?'Wake':v.fpga?'Stand by':'Load it again';b.onclick=()=>video('standby='+(v.fpga&&!v.standby?1:0))}
-function vtable(v){const sig=v.fields_s>=49&&v.fields_s<=61;
+  chip('lkc',['','bad','busy','ok'][L],['','no input','locking'+D+(v.lock_us/1000).toFixed(1)+' ms','locked'+D+sgn(v.lock_ppm)+' ppm'][L]);
+  chip('llc',!v.set.lowlat?'':v.ll?'ok':v.set.lock?'busy':'',!v.set.lowlat?'':v.ll?v.ll_lines+' lines':v.set.lock?'waiting for lock':'needs frame lock');
+  const mc=(v.set.mode&11)==8;chip('panc',mc&&v.pan[0]?'ok':'',mc&&v.pan[0]?'pan '+sgn(v.pan[1])+', '+sgn(v.pan[2]):'')}
+function vtable(v){const sig=v.fields_s>=49&&v.fields_s<=61,named=v.in&&v.in!='none';
   $('vs').innerHTML=
-    row('Scaler',v.host?'left to the host on the console port':!v.set.on?'not run by the link':
-      yes(v.fpga,'FPGA answers (build '+day(v.build)+')','no FPGA image answers')+' &middot; '+yes(v.ok,'brought up','NOT brought up')+' ('+v.ups+'x)')+
-    row('Output','1080p &middot; transceiver PLL '+yes(v.pll,'locked','not locked')+' &middot; display '+yes(v.hpd,'present','not seen'))+
-    row('Input',(v.in&&v.in!='none'?'<b>'+v.in+'</b> '+v.in_hz.toFixed(2)+' Hz'+(v.in_ok?'':' <b class="bad">not handled yet: the test picture is shown</b>')+' &middot; ':'')+v.pix+' x '+v.lines+' a field, '+v.fields_s+' fields/s, pixel clock '+(v.llc_khz/1000).toFixed(3)+' MHz &middot; '+
-      yes(v.hist,'four fields in order','no field history (bob)')+' &middot; '+v.frames_s+' frames/s out')+
-    row('Delay',sig?v.delay_ms.toFixed(1)+' ms from a line captured to it shown ('+(v.delay_ms/16.68).toFixed(2)+' frames)':'-')+
-    (v.store?row('Kept in the board',v.store.there?(v.store.set?'the settings, the tables and the network\'s weights: in the board\'s own flash':'its flash is there; nothing kept in it yet')+(v.store.busy?' &middot; writing':'')+(v.store.failed?' &middot; <b class="bad">a write failed</b>':''):'this FPGA image keeps nothing itself: the link holds the settings and the tables'):'')+
-    row('FPGA',(v.temp_c>-100?v.temp_c.toFixed(1)+' &deg;C':'temperature not measured')+' &middot; its CPU '+yes(v.cpu,'runs','does not run')+(v.relay?' the scaler (program '+day(v.cpu_build)+'); the link relays':v.fpga?' &middot; the link runs the scaler itself':''))+
-    row('Shown',v.shown[1]+' x '+v.shown[3]+' from '+v.shown[0]+', '+v.shown[2]+' of 720 x 480'+(v.set.wide?' &middot; 16:9':' &middot; 4:3'))}
+    kv('Input',sig?(named?v.in+D:'')+v.in_hz.toFixed(2)+' Hz'+(named&&!v.in_ok?D+B(0,'not handled'):''):B(0,'none'))+
+    kv('Field',v.pix+' '+X+' '+v.lines+D+v.fields_s+'/s'+D+(v.llc_khz/1000).toFixed(3)+' MHz'+(v.hist?'':D+B(0,'no history')))+
+    kv('Shown',v.shown[1]+' '+X+' '+v.shown[3]+' at '+v.shown[0]+', '+v.shown[2]+D+(v.set.wide?'16:9':'4:3'))+
+    kv('Output','1080p'+(v.set.ntsc?'59.94':'60')+D+v.frames_s+' fps'+D+B(v.pll,v.pll?'PLL locked':'PLL unlocked'))+
+    kv('Display',B(v.hpd,v.hpd?'connected':'not seen'))+
+    kv('Delay',sig?v.delay_ms.toFixed(1)+' ms'+D+(v.delay_ms/16.68).toFixed(2)+' frames':'–')+
+    kv('FPGA',v.fpga?(v.temp_c>-100?v.temp_c.toFixed(1)+' °C'+D:'')+B(v.ok,v.ok?'up':'not up')+(v.ups>1?' ('+v.ups+X+')':'')+D+'CPU '+B(v.cpu,v.cpu?'runs':'stopped'):B(0,'not answering'))+
+    kv('Builds',v.fpga?'FPGA '+day(v.build)+(v.relay?D+'CPU '+day(v.cpu_build):''):'-',1)+
+    (v.store?kv('Saved',!v.store.there?'in the link':v.store.failed?B(0,'write failed'):v.store.busy?'writing':v.store.set?'in flash':'nothing yet'):'')}
 async function vstat(){const v=await (await fetch('/api/video')).json();
-  bar(v);live(v);if(tabNow=='board')vtable(v);tabShow(v);if(vfill){vfill=false;fill(v.set)}}
+  bar(v);power(v);live(v);vtable(v);tabShow(v);if(vfill){vfill=false;fill(v.set)}}
 async function bstat(){
   const s=await (await fetch('/api/status')).json(),w=s.wifi,j=s.jtag,c=s.console,f=s.firmware;
   $('st').innerHTML=
-    row('Network',yes(w.joined,esc(w.ssid)+' &middot; '+w.ip+' &middot; '+w.rssi+' dBm, channel '+w.channel,'not joined'+(w.ssid?' ('+esc(w.ssid)+')':'')))+
-    row('Name',esc(w.host)+'.local &middot; '+w.mac+(w.ap?' &middot; access point '+esc(w.ap_ssid)+' open':''))+
-    row('JTAG','port '+j.port+' &middot; '+(j.connected?'in use by '+j.peer:'free')+' &middot; '+j.sessions+' sessions, '+j.bits+' bits, TCK '+j.tck_ns+' ns (fastest '+j.fastest_ns+')')+
-    row('Console','port '+c.port+' at '+c.baud+' baud &middot; '+(c.tcp?'client '+c.peer:'no client')+(c.usb?' &middot; USB':'')+' &middot; '+c.to_fpga+' bytes out, '+c.from_fpga+' in')+
-    row('Firmware',esc(f.version)+' &middot; built '+f.built+' &middot; '+f.chip+', slot '+f.slot+' &middot; up '+f.uptime_s+' s, '+f.heap+' bytes free'+(f.heap_int?' ('+f.heap_int+' of the chip\'s own, '+f.heap_int_min+' at the least)':''));
+    kv('Wi-Fi',w.joined?esc(w.ssid)+D+w.rssi+' dBm'+D+'ch '+w.channel:B(0,'not joined'))+
+    kv('Address',esc(w.ip)+D+esc(w.host)+'.local'+(w.ap?D+'AP '+esc(w.ap_ssid):''))+
+    kv('Firmware',esc(f.version)+D+'up '+dur(f.uptime_s))+
+    kv('Memory',f.heap_int?Math.round(f.heap_int/1024)+' KB own'+D+'low '+Math.round(f.heap_int_min/1024)+' KB':Math.round(f.heap/1024)+' KB',1)+
+    kv('JTAG',':'+j.port+D+(j.connected?'in use by '+esc(j.peer):'free'),1)+
+    kv('Console',':'+c.port+D+(c.tcp?'client '+esc(c.peer):'no client'),1);
   // (the logs only while they are open: the link's memory and time are short)
   if($('cond').open)$('con').textContent=await (await fetch('/api/console')).text();
   if($('logd').open)$('log').textContent=await (await fetch('/api/log')).text()}
-// every 3 s while the page is seen; the board tab's details only while it is open
-let tabNow='pic',grabbing=false;
+// every 3 s while the page is seen
+let grabbing=false;
 async function poll(){if(grabbing||document.hidden)return;
-  try{await vstat()}catch(e){bar(null)}
-  if(tabNow=='board')try{await bstat()}catch(e){}
+  try{await vstat()}catch(e){bar(null);power(null)}
+  try{await bstat()}catch(e){}
   if(!def)defs()}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 for(const d of ['cond','logd'])$(d).addEventListener('toggle',()=>{if($(d).open)poll()});
 
-// ---- the tabs and Advanced (both remembered) ----
-function tabTo(t){tabNow=t;for(const b of document.querySelectorAll('.tabs button'))b.classList.toggle('on',b.dataset.t==t);
-  hide('t_pic',t!='pic');hide('t_board',t!='board');document.querySelector('.advsw').classList.toggle('hide',t!='pic');
-  history.replaceState(null,'',t=='board'?'#board':location.pathname);poll()}
-for(const b of document.querySelectorAll('.tabs button'))b.onclick=()=>tabTo(b.dataset.t);
+// ---- Advanced (remembered in this browser) ----
 function advSet(on){document.body.classList.toggle('adv',on);$('advb').checked=on;try{localStorage.setItem('av.adv',on?'1':'')}catch(e){}}
 let keep='';try{keep=localStorage.getItem('av.adv')}catch(e){}
 advSet(!!keep);$('advb').onchange=e=>{advSet(e.target.checked);poll()};
 
-// ---- the board tab's tools ----
+// ---- maintenance ----
 async function fpga(){try{const f=await (await fetch('/api/fpga')).json();
-  chip('fpc',f.busy?'busy':f.answers?'ok':'bad',f.busy?'in use by a client':'ID '+f.idcode+(f.answers?' answers':' nothing answers')+' · status '+f.status)}catch(e){msg('no answer from the board')}}
+  chip('fpc',f.busy?'busy':f.answers?'ok':'bad',f.busy?'in use':'ID '+f.idcode+D+(f.answers?'answers':'no answer')+D+'status '+f.status)}catch(e){msg('no answer from the board')}}
 $('wf').onsubmit=async e=>{e.preventDefault();
   try{msg(await (await fetch('/api/wifi',{method:'POST',body:new URLSearchParams(new FormData($('wf')))})).text())}catch(e){msg('no answer from the board')}};
 $('fw').onchange=()=>$('fwn').textContent=$('fw').files[0]?.name||'';
@@ -374,15 +368,15 @@ async function ota(){const f=$('fw').files[0];if(!f){msg('choose avwifi.bin firs
 // a capture: the link answers nothing else meanwhile
 async function grab(){
   if(grabbing)return;grabbing=true;$('gb').disabled=true;const t0=Date.now(),step=document.querySelector('[name=gs]:checked').value;
-  const tick=setInterval(()=>$('gb').textContent='Capturing '+Math.round((Date.now()-t0)/1000)+' s',500);
+  const tick=setInterval(()=>$('gb').textContent=Math.round((Date.now()-t0)/1000)+' s',500);
   try{
     const r=await fetch('/api/grab?step='+step+'&t='+t0);if(!r.ok)throw await r.text();
     const bmp=await createImageBitmap(await r.blob()),c=document.createElement('canvas');
     c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);
     const u=c.toDataURL('image/png');$('gi').src=u;$('gl').href=u;hide('gw',0);
-    $('gt').textContent=bmp.width+' × '+bmp.height+' in '+Math.round((Date.now()-t0)/1000)+' s';
+    $('gt').textContent=bmp.width+' '+X+' '+bmp.height+D+Math.round((Date.now()-t0)/1000)+' s';
   }catch(e){msg('capture failed: '+e)}
   clearInterval(tick);$('gb').textContent='Capture';$('gb').disabled=false;grabbing=false}
 
-defs();tabTo(location.hash=='#board'?'board':'pic');setInterval(poll,3000);
+defs();poll();setInterval(poll,3000);
 </script></body></html>
