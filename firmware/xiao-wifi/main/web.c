@@ -13,6 +13,7 @@
  *   GET  /api/video        JSON: the scaler as the link runs it (scaler.c): the picture in, the settings
  *   GET  /api/grab?step=N  the picture going out, read back from the FPGA: a BMP (N 1, 2, 4, 8: 4 is 480 x 270)
  *   POST /api/video        a form, any of: on, ntsc, mode, thr, aa, aa_thr, sharp, swap, top1, pattern, freeze, audio, aa_dbg,
+ *                          standby (1: the FPGA halted; 0: loaded again from its flash),
  *                          aa_diag, aa_corner, aa_keep (0 to 7), crop (0 all, 1 found, 2 set), crop_x, crop_w, crop_y, crop_h, wide (16:9), nr (noise reduction 0 to 3),
  *                          dn (the sharpening leaves noise alone), phase (the decoder's sampling
  *                          phase, 0 to 31), osd (the on-screen text), lock (the output in step
@@ -149,7 +150,14 @@ static esp_err_t get_fpga(httpd_req_t *req)
     char out[160];
     uint32_t id, status;
     int n;
-    if (fpga_read(&id, &status))
+    struct scaler_state t;
+    struct scaler_settings v;
+    scaler_get(&t, &v);
+    /* (halted, it is parked in its configuration mode: a word over JTAG lets it out, and it loads
+     * its flash's image again: not asked) */
+    if (t.standby)
+        n = snprintf(out, sizeof out, "{\"busy\":false,\"standby\":true,\"idcode\":\"-\",\"status\":\"standing by\",\"answers\":true}");
+    else if (fpga_read(&id, &status))
         /* all ones or all zeros: nothing answers (no SOM, no power, a JTAG line open) */
         n = snprintf(out, sizeof out, "{\"busy\":false,\"idcode\":\"0x%08x\",\"status\":\"0x%08x\",\"answers\":%s}",
                      (unsigned)id, (unsigned)status, id != 0 && id != 0xFFFFFFFF ? "true" : "false");
@@ -520,13 +528,13 @@ static esp_err_t get_video(httpd_req_t *req)
     esc(netname, sizeof netname, nn2);
 #define B(x) ((x) ? "true" : "false")
     int n = snprintf(out, OUT,
-                     "{\"host\":%s,\"fpga\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
+                     "{\"host\":%s,\"fpga\":%s,\"standby\":%s,\"ok\":%s,\"hpd\":%s,\"pll\":%s,\"hist\":%s,\"build\":%u,\"ups\":%u,"
                      "\"in\":\"%s\",\"in_ok\":%s,\"in_lines\":%u,\"in_hz\":%.2f,"
                      "\"pix\":%u,\"lines\":%u,\"fields_s\":%u,\"frames_s\":%u,\"llc_khz\":%u,"
                      "\"set\":{\"on\":%d,\"ntsc\":%d,\"mode\":%u,\"thr\":%u,\"aa\":%d,\"aa_thr\":%u,\"sharp\":%u,\"swap\":%d,"
                      "\"top1\":%d,\"pattern\":%d,\"freeze\":%d,\"audio\":%d,\"aa_dbg\":%d,\"aa_diag\":%d,\"aa_corner\":%d,\"crop\":%u,"
                      "\"crop_x\":%u,\"crop_w\":%u,\"crop_y\":%u,\"crop_h\":%u,\"wide\":%d,\"nr\":%u,\"dn\":%d,\"phase\":%u,\"osd\":%d,\"lock\":%d,\"lowlat\":%d,\"surround\":%d,\"table\":%u,\"mv_dbg\":%d,\"net\":%u,\"aa_keep\":%u},\"ll\":%s,\"ll_lines\":%u,\"lock\":%u,\"lock_us\":%d,\"lock_ppm\":%.1f,\"tune\":%u,\"tune_gain\":%u,\"temp_c\":%.2f,\"delay_ms\":%.2f,\"cpu\":%s,\"relay\":%s,\"cpu_build\":%u,\"shown\":[%u,%u,%u,%u],\"pan\":[%d,%d,%d,%.1f],\"tab\":{\"have\":%u,\"slot\":%d,\"state\":%d,\"bad\":%u,\"ms\":%u,\"names\":[%s]},\"net\":{\"there\":%s,\"under\":%u,\"state\":%u,\"name\":\"%s\"},\"store\":{\"there\":%s,\"set\":%s,\"busy\":%s,\"failed\":%s}}",
-                     B(t.host), B(t.fpga), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
+                     B(t.host), B(t.fpga), B(t.standby), B(t.ok), B(t.hpd), B(t.pll), B(t.hist), (unsigned)t.build, (unsigned)t.ups,
                      in_names[t.in_std < sizeof in_names / sizeof in_names[0] ? t.in_std : 0], B(t.in_ok || !t.cpu), t.in_lines, t.in_hz100 / 100.0,
                      t.pix, t.lines, t.fields_s, t.frames_s, (unsigned)t.llc_khz, v.on, v.ntsc, v.mode, v.thr, v.aa,
                      v.aa_thr, v.sharp, v.swap, v.top1, v.pattern, v.freeze, v.audio, v.aa_dbg, v.aa_diag, v.aa_corner, v.crop, v.crop_x, v.crop_w, v.crop_y,
@@ -595,6 +603,8 @@ static esp_err_t post_video(httpd_req_t *req)
         scaler_measure();
     if (field(body, "again", f, sizeof f) && atoi(f))
         scaler_again();
+    if (field(body, "standby", f, sizeof f))
+        scaler_standby(atoi(f) != 0);
     return httpd_resp_sendstr(req, "set\n");
 }
 

@@ -116,8 +116,29 @@ static int say(char *msg, size_t max, int at, const char *fmt, ...)
 void gowin_reload(void)
 {
     tms_seq(0x1F, 6);               /* Test-Logic-Reset, Run-Test/Idle */
+    command(CONFIG_DISABLE);        /* (out of the configuration mode, if gowin_halt() left it there) */
+    command(NOOP);
     command(RELOAD);
     command(NOOP);
+}
+
+bool gowin_halt(void)
+{
+    /* Erased and then let out of its configuration mode, the FPGA loads its flash's image again at
+     * once (18 s later it runs: tried 2026-11-15).  So it is erased and LEFT in that mode: it waits
+     * there for a configuration over JTAG that does not come.  gowin_reload() lets it out. */
+    tms_seq(0x1F, 6);               /* Test-Logic-Reset, Run-Test/Idle */
+    command(CONFIG_ENABLE);
+    if (!poll(ST_EDIT_MODE, ST_EDIT_MODE))
+        return false;
+    command(ERASE_SRAM);
+    command(NOOP);
+    idle_us(10000);
+    if (!poll(ST_MEMORY_ERASE, ST_MEMORY_ERASE))
+        return false;
+    command(XFER_DONE);
+    command(NOOP);
+    return !(status() & ST_DONE_FINAL);
 }
 
 bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowin_opt *o, char *msg, size_t max)

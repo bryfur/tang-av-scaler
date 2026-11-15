@@ -25,3 +25,7 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
 
 /* The FPGA configures itself afresh from its flash (as at power-on).  The caller holds the JTAG port. */
 void gowin_reload(void);
+
+/* The FPGA's configuration taken away: it does nothing, its pins let go, until it is loaded again
+ * (gowin_reload, its RECONFIG button, or the power).  true: it is blank.  The caller holds the JTAG port. */
+bool gowin_halt(void);

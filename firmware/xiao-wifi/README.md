@@ -99,6 +99,12 @@ for the network.
 
 The link is found as `avscaler.local` (mDNS); `AVX_HOST` names another host or address.
 
+Standby: `POST /api/video` with `standby=1` halts the FPGA (`main/gowin.c gowin_halt()`: erased
+and left in its configuration mode: let out of it, it loads its flash's image again at once), as
+the board's first button held a second does (the FPGA's CPU asks the link: `link.h` `standby`);
+`standby=0` loads it again, as its RECONFIG button does. While it is halted nothing is said to it
+over JTAG (`GET /api/fpga` answers without asking): a word there lets it out.
+
 There are no passwords on its ports: whoever is on the local network can load the FPGA and update
 the link.
 

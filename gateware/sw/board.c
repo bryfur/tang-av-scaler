@@ -380,6 +380,12 @@ static bool lock_seed;                  /* (brought up anew: the trim to begin f
 
 void board_lock(void)
 {
+    /* the first button (SW1: low while pressed), held a second: the board is to stand by.  The
+     * program cannot halt the FPGA it runs in: it asks the link to (link.h: standby) */
+    static uint8_t held;
+    held = REG(R_STAT) & 1 ? 0 : held < 255 ? held + 1 : 255;
+    if (held == 10)
+        st.standby = 1;
     uint32_t lat = REG(R_LAT);
     int32_t e, u;
     if (st.host)

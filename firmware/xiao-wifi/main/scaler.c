@@ -519,12 +519,15 @@ static void transmit_check(const struct link_status *ls, bool host)
              (unsigned)((uint64_t)tx * 800000 >> 25), (unsigned)((uint64_t)ref * 800000 >> 25), reloads);
 }
 
+static bool halt_want, halted;         /* stand by asked for from the page; the FPGA is halted */
+
 static bool cpu_second(struct scaler_state *s)
 {
     static uint32_t up_was;
     static int silent;
     static bool given;                  /* this CPU run has our settings */
     static bool seen_cpu;
+    static int halt_tries;
     const uint8_t rq = LINK_STATUS;
     uint8_t a[1 + sizeof(struct link_status) + 8];      /* (room for more: a longer status is not ours) */
     struct link_status ls;
@@ -553,6 +556,24 @@ static bool cpu_second(struct scaler_state *s)
     if (!alive)
         return true;
     silent = 0;
+    /* stand by: asked by the board's button (the CPU says so) or by the page: the FPGA's configuration
+     * taken away, once nothing waits to be kept in the board's flash (ten seconds for that at most) */
+    if ((ls.standby || halt_want) && !host) {
+        if (!(ls.store & LINK_STORE_BUSY) || ++halt_tries > 10) {
+            halt_tries = 0;
+            halt_want = false;
+            if (jtag_take(false)) {
+                halted = gowin_halt();
+                jtag_give();
+                ESP_LOGW(TAG, "stand by: the FPGA %s", halted ? "halted" : "would NOT be halted");
+                if (halted) {
+                    s->fpga = false;
+                    return false;
+                }
+            }
+        }
+    } else
+        halt_tries = 0;
     if (host != (ls.host != 0))
         cmd(host ? LINK_CMD_HOST_ON : LINK_CMD_HOST_OFF);
     /* the settings: ours to a CPU that has just begun; after that the CPU's are the ones that count
@@ -646,6 +667,7 @@ static void task(void *arg)
         cpu_mode = cpu_second(&s);
         crumb[0] = 3;
         if (cpu_mode) {
+            halted = false;
             xSemaphoreTake(lock, portMAX_DELAY);
             state = s;
             xSemaphoreGive(lock);
@@ -772,9 +794,27 @@ static void task(void *arg)
                 frames_was = dstat >> 16;
             }
         }
+        /* (halted: until it answers again: its RECONFIG button, the power, or a wake from here) */
+        if (s.fpga)
+            halted = false;
+        s.standby = halted;
         xSemaphoreTake(lock, portMAX_DELAY);
         state = s;
         xSemaphoreGive(lock);
+    }
+}
+
+void scaler_standby(bool on)
+{
+    if (on) {
+        halt_want = true;
+        return;
+    }
+    halt_want = false;
+    if (jtag_take(false)) {
+        gowin_reload();
+        jtag_give();
+        ESP_LOGW(TAG, "wake: the FPGA loads its image");
     }
 }
 

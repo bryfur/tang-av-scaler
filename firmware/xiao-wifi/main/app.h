@@ -101,6 +101,7 @@ struct scaler_state {
     uint16_t tab_ms;    /* the time putting it in took */
     bool net_there;     /* the FPGA's design has the network */
     uint8_t net_state;  /* whose weights it has (link.h LINK_NET_*): 0 the design's, 1 given since, 2 the ones the board keeps */
+    bool standby;       /* the FPGA is halted (its configuration taken away): the RECONFIG button or a wake loads it again */
     uint8_t store;      /* the board's own storage (link.h LINK_STORE_*): 1 its flash answers, 2 it keeps the
                          * settings, 4 something waits to be kept, 8 something could not be */
     uint16_t net_under; /* rows it was late for (counted by the FPGA: none while a picture comes in) */
@@ -118,6 +119,7 @@ bool scaler_cpu(void);          /* the FPGA's CPU runs the scaler (the link rela
 void scaler_get(struct scaler_state *s, struct scaler_settings *v);
 void scaler_set(const struct scaler_settings *v);
 void scaler_again(void);
+void scaler_standby(bool on);   /* the FPGA halted (true: once what it keeps is written), or loaded again from its flash */
 void scaler_measure(void);      /* where the picture is: found again */
 void scaler_tune(void);         /* the decoder's sampling phase: each tried (on a still picture), the sharpest kept */
 

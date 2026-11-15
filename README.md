@@ -62,6 +62,7 @@ stretched the plain way, then the scaler's output; the corner says which.
 | Output | 1080p60 (59.94 Hz) HDMI from the FPGA's own transceivers; the console's sound as HDMI audio (two channels of L-PCM at 48 kHz, its clock from the PLL the pixel clock comes from); AVI and audio InfoFrames. Runs a display, a capture device and an AV receiver (picture and sound). |
 | On screen | An on-screen display: what comes in and goes out, what is done to the picture, the delay, the lock, the FPGA's temperature. |
 | Storage | The board keeps its own settings, scaler tables and network weights, in the upper half of the SOM's configuration flash: it starts as it was left, with or without the XIAO ([gateware/docs/storage.md](gateware/docs/storage.md)). The design can write only above the bitstream. |
+| Standby | The board's first button held a second, or the page: the FPGA is halted (its configuration taken away over JTAG by the XIAO and the chip left waiting), so nothing in it runs. The RECONFIG button or the page loads it again: a picture some 25 s later, as it was left. There is no switch in the board's supply: the SOM's and the other chips' standing current stays. |
 | Control | A web page on the XIAO: every setting (applied as it is changed, kept across power cycles), status, a screen capture of the output read back from the FPGA, firmware update over Wi-Fi. |
 
 ## What it looks like

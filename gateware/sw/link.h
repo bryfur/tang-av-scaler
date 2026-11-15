@@ -13,7 +13,7 @@
  * new number: a link whose firmware has another gives the CPU its own program (2026-11-13: without
  * that, a firmware from before the tables read this status as its own shorter one, took what lay
  * where its settings had been for the settings, and kept them) */
-#define LINK_MAGIC   0x37435641u
+#define LINK_MAGIC   0x38435641u
 
 enum {
     LINK_STATUS = 0x01,                 /* -> struct link_status */
@@ -164,7 +164,10 @@ struct link_status {
     uint8_t net_state;      /* whose weights it has: LINK_NET_* */
     uint16_t net_under;     /* rows the network was late for, since the program began (there should be none
                              * while a picture comes in) */
-    uint16_t pad2;          /* 0 (no gap before the settings, none at the end) */
+    uint8_t standby;        /* the board's button was held: the link is asked to halt the FPGA (it takes its
+                             * configuration away over JTAG: nothing runs, nothing is lost: what must be
+                             * kept is in the flash; the RECONFIG button or the link loads it again) */
+    uint8_t pad2;           /* 0 (no gap before the settings, none at the end) */
     struct link_settings set;
 };
 _Static_assert(sizeof(struct link_status) == 84 + sizeof(struct link_settings), "link_status: a gap, or a new member not counted here");
