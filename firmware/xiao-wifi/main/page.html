@@ -70,8 +70,11 @@ button:disabled{opacity:.45;cursor:default}button:disabled:hover{border-color:va
 .nums{display:flex;gap:.4em;flex-wrap:wrap}
 .ctl{display:flex;align-items:center;justify-content:space-between;gap:.6em;flex-wrap:wrap;flex:1 1 100%}
 .fname{color:var(--dim);font-size:.85em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:12em}
-.foot{display:flex;justify-content:center;padding:1.4em 0 0}
-.foot button{background:none;color:var(--dim)}
+/* a card's reset: in its heading, faint until something in the card differs from its default */
+h2{display:flex;align-items:center;justify-content:space-between;min-height:1.7em}
+.sec{font:500 1.18em/1 system-ui,-apple-system,"Segoe UI",sans-serif;text-transform:none;letter-spacing:0;background:none;border:0;border-radius:6px;padding:.25em .45em;margin-right:-.45em;color:var(--acc);cursor:pointer}
+.sec:hover{background:color-mix(in srgb,var(--acc) 12%,transparent)}
+.sec:disabled{color:var(--dim);opacity:.4;background:none;cursor:default}
 /* the status: names and values, red only where something is wrong */
 table{border-collapse:collapse;width:100%;font-size:.92em;font-variant-numeric:tabular-nums}
 td{padding:.42em 1em;vertical-align:top}td:first-child{color:var(--dim);white-space:nowrap;width:1%;padding-right:.2em}
@@ -163,7 +166,6 @@ pre{position:absolute;inset:0;margin:0;background:#0a0b0e;color:#cfd3dc;padding:
  <div class="f adv"><span class="l"><span class="t">Swap Cb / Cr</span></span><input class="sw" type="checkbox" name="swap"></div>
  <div class="f adv" data-hint="Off leaves the FPGA to a host tool."><span class="l"><span class="t">Run the scaler</span></span><input class="sw" type="checkbox" name="on"></div>
 </div>
-<div class="foot"><button type="button" id="rall" disabled>Reset to defaults</button></div>
 </div>
 </form>
 
@@ -223,11 +225,14 @@ function cur(){const o={};
   for(const e of F){if(!e.name||e.name[0]=='_'||e.type=='radio'&&!e.checked)continue;o[e.name]=e.type=='checkbox'?(e.checked?1:0):+e.value}
   return o}
 const rows=[...vf.querySelectorAll('.f')];
-function marks(){if(!def)return;const o=cur();let any=false;
-  for(const r of rows){const c=keys(r).some(k=>differs(o,k));r.classList.toggle('chg',c);any=any||c}
-  $('rall').disabled=!any}
-function reset(el,note){if(!def)return;const o=cur();
-  for(const [k,m] of keys(el))if(k in def)o[k]=m?(o[k]&~m)|(def[k]&m):def[k];
+const cards=[...vf.querySelectorAll('.grp')];
+function marks(){if(!def)return;const o=cur();
+  for(const r of rows)r.classList.toggle('chg',keys(r).some(k=>differs(o,k)));
+  for(const g of cards)g.previousElementSibling.querySelector('.sec').disabled=!seen(g).some(k=>differs(o,k))}
+// a card's reset covers the rows shown (the hidden bring-up ones only with Advanced on)
+const seen=g=>[...g.querySelectorAll('.f')].filter(r=>r.offsetParent).flatMap(keys);
+function reset(el,note,ks){if(!def)return;const o=cur();
+  for(const [k,m] of ks||keys(el))if(k in def)o[k]=m?(o[k]&~m)|(def[k]&m):def[k];
   fill(o);send(note)}
 for(const r of rows){const t=r.querySelector('.t');if(!t)continue;
   if(r.dataset.hint){const b=document.createElement('button'),h=document.createElement('div');b.type='button';b.className='ib';b.textContent='i';
@@ -235,10 +240,9 @@ for(const r of rows){const t=r.querySelector('.t');if(!t)continue;
     h.className='hint';h.textContent=r.dataset.hint;r.append(h)}
   if(keys(r).length){const b=document.createElement('button');b.type='button';b.className='rst';b.textContent='↺';
     b.title='default';b.setAttribute('aria-label','back to the default');b.onclick=()=>reset(r,'back to the default');t.append(b)}}
-let armed=0;
-$('rall').onclick=()=>{const b=$('rall');
-  if(!armed){b.textContent='Click again to reset all';armed=setTimeout(()=>{armed=0;b.textContent='Reset to defaults'},3500);return}
-  clearTimeout(armed);armed=0;b.textContent='Reset to defaults';reset(vf,'all back to defaults')};
+for(const g of cards){const h=g.previousElementSibling,n=h.textContent,b=document.createElement('button');
+  b.type='button';b.className='sec';b.textContent='\u21ba Reset';b.disabled=true;b.title=n.toLowerCase()+': every setting back to its default';
+  b.onclick=()=>reset(g,n+': back to defaults',seen(g));h.append(b)}
 
 // ---- the form ----
 function modeShow(){const m=+F.mode.value||0,b=m&3;
@@ -357,7 +361,8 @@ async function poll(){if(grabbing||document.hidden)return;
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
 
 // ---- Advanced (remembered in this browser) ----
-function advSet(on){document.body.classList.toggle('adv',on);$('advb').checked=on;try{localStorage.setItem('av.adv',on?'1':'')}catch(e){}}
+function advSet(on){document.body.classList.toggle('adv',on);$('advb').checked=on;try{localStorage.setItem('av.adv',on?'1':'')}catch(e){}
+  if(typeof marks=='function')marks()}
 let keep='';try{keep=localStorage.getItem('av.adv')}catch(e){}
 advSet(!!keep);$('advb').onchange=e=>{advSet(e.target.checked);poll()};
 
