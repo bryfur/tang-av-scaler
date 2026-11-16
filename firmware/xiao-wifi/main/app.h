@@ -45,9 +45,6 @@ struct console_state {
 void console_get(struct console_state *s);
 size_t console_tail(char *dst, size_t max);     /* the last bytes the FPGA sent */
 bool console_busy(void);                        /* a host is on the TCP port */
-/* the link's own words with the FPGA's monitor: tx sent whole, then rxn bytes of answer waited for
- * (not passed on to a listener); false if they do not come in ms */
-bool console_xfer(const uint8_t *tx, size_t txn, uint8_t *rx, size_t rxn, int ms);
 
 /* scaler.c: the board brought up and kept up by the link itself; the picture's settings */
 struct scaler_settings {

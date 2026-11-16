@@ -3,8 +3,8 @@
 The GW5AST-138 has a hard RISC-V core beside the fabric (Andes A25 "AE350", run at 800 MHz in the
 fpc console's design). Since 2026-11-12 the scaler has it (`rtl/cpu.v`, its program in `sw/`): it
 runs at 800 MHz (400 until 2026-11-13) beside the picture's path, reaches every register the monitor does, and writes the
-on-screen text. The rest is still logic, and what is slow and rare is still done by the ESP32
-through a UART (`firmware/xiao-wifi/main/scaler.c`). This note sorts the design's parts by whether
+on-screen text. The rest is still logic. (Before it, what is slow and rare was done by the ESP32
+through the monitor's UART: since 2026-11-16 the link only relays.) This note sorts the design's parts by whether
 the CPU would do them better; "Where it stands" at the end says what is done.
 
 What it does not change: the paths that are hard to close are every pixel's (the scaler, the
@@ -84,8 +84,7 @@ for is whatever happens once a line, once a field, or once in a while.
   firmware, if the one that runs is older or does not answer): a new CPU program is a firmware
   update, no bitstream.
 - The on-screen text (`rtl/osd.v`, `sw/osd.c`).
-- With an FPGA image that has no CPU (the SOM's flash, until it is written again) the link does
-  it all itself as before (`scaler.c`: it asks the SPI port for the ID register first).
+- An FPGA image that has no CPU is not run by the link (it did it all itself until 2026-11-16).
 - A host tool on the monitor (`tools/*.py`): the link tells the CPU, which leaves the scaler alone
   meanwhile; `tools/cpu.py load` puts a program in from the host.
 - Cost: 25 block RAMs (75 % used now), some 800 LUTs, the system clock's Fmax 75 -> 58 MHz (50

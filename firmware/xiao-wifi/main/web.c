@@ -396,41 +396,25 @@ static esp_err_t post_load(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* GET /api/grab?step=N: the picture as the FPGA sends it (gateware/rtl/grab.v: eight rows a frame,
- * read back through the monitor), every Nth row and column (N 1, 2, 4 or 8: 4 is 480 x 270, in
- * some seven seconds), a BMP.  The fields are held still meanwhile: the rows are of several frames. */
-static bool mon_rd(uint8_t addr, uint32_t *v)
-{
-    uint8_t tx[2] = {'R', addr}, rx[4];
-    bool ok = console_xfer(tx, 2, rx, 4, 400);
-    *v = ok ? rx[0] | rx[1] << 8 | rx[2] << 16 | (uint32_t)rx[3] << 24 : 0;
-    return ok;
-}
-
-static void mon_wr(uint8_t addr, uint32_t v)
-{
-    uint8_t tx[6] = {'W', addr, v, v >> 8, v >> 16, v >> 24};
-    console_xfer(tx, 6, NULL, 0, 0);
-}
-
+/* GET /api/grab?step=N: the picture as the FPGA sends it (gateware/rtl/grab.v), read out by its CPU
+ * (gateware/sw/main.c) a row a message: every Nth row and column (N 1, 2, 4 or 8: 4 is 480 x 270, in
+ * some three seconds), a BMP.  The fields are held still meanwhile. */
 static esp_err_t get_grab(httpd_req_t *req)
 {
-    enum { VID = 0x30, GRAB = 0x38, GRABD = 0x39, N = 480 };
-    static uint8_t *tx, *rx, *line;
-    if (!tx)
-        tx = big(2 * N), rx = big(4 * N), line = big(3 * 1920);
+    static uint8_t *rx, *line;
+    if (!rx)
+        rx = big(1 + 3 * 600), line = big(3 * 1920);
     char q[32], f[8];
     int step = 4;
     if (httpd_req_get_url_query_str(req, q, sizeof q) == ESP_OK && httpd_query_key_value(q, "step", f, sizeof f) == ESP_OK)
         step = atoi(f);
     if (step != 1 && step != 2 && step != 4 && step != 8)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "step=1, 2, 4 or 8");
-    struct scaler_state t;
-    struct scaler_settings v;
-    uint32_t vid, x;
-    scaler_get(&t, &v);
-    if (scaler_cpu()) {
-        /* the FPGA's CPU reads it out (gateware/sw/main.c), a row a message: some 3 s for 480 x 270 */
+    if (!scaler_cpu()) {
+        httpd_resp_set_status(req, "503 Service Unavailable");
+        return httpd_resp_sendstr(req, "the FPGA's CPU does not answer\n");
+    }
+    {
         int w = 1920 / step, h = 1080 / step;
         uint32_t size = 54 + 3u * w * h;
         uint8_t hd[54] = {'B', 'M', size, size >> 8, size >> 16, size >> 24, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0,
@@ -463,51 +447,6 @@ static esp_err_t get_grab(httpd_req_t *req)
             ESP_LOGW("web", "grab: the CPU did not answer all of it");
         return e == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : e;
     }
-    if (t.host || !t.fpga || !mon_rd(VID, &vid)) {
-        httpd_resp_set_status(req, "503 Service Unavailable");
-        return httpd_resp_sendstr(req, "the FPGA is not the link's to ask\n");
-    }
-    int w = 1920 / step, h = 1080 / step;
-    uint32_t size = 54 + 3u * w * h;
-    uint8_t hd[54] = {'B', 'M', size, size >> 8, size >> 16, size >> 24, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0,
-                      w, w >> 8, 0, 0, -h, -h >> 8, 0xFF, 0xFF, 1, 0, 24, 0};     /* (the rows from the top) */
-    httpd_resp_set_type(req, "image/bmp");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-store");
-    httpd_resp_set_hdr(req, "Content-Disposition", "inline; filename=\"avscaler.bmp\"");
-    esp_err_t e = httpd_resp_send_chunk(req, (const char *)hd, sizeof hd);
-    for (int k = 0; k < N; k++)
-        tx[2 * k] = 'R', tx[2 * k + 1] = GRABD;
-    mon_wr(VID, vid | 2);
-    vTaskDelay(pdMS_TO_TICKS(150));
-    bool ok = true;
-    for (int y = 0; y < h && e == ESP_OK; ) {
-        mon_wr(GRAB, (uint32_t)step << 12 | (y * step));
-        x = 0;
-        for (int n = 0; n < 60 && !(x >> 31); n++) {
-            vTaskDelay(pdMS_TO_TICKS(10));
-            mon_rd(GRAB, &x);
-        }
-        ok &= x >> 31;
-        /* (the rows the design takes a frame: GRAB's bits 19:16; a design from before: eight) */
-        int rows = x >> 16 & 15 ? x >> 16 & 15 : 8;
-        for (int k = 0; k < rows && y < h && e == ESP_OK; k++, y++) {
-            mon_wr(GRABD, (uint32_t)k << 11);
-            for (int i = 0; i < w; i += N) {
-                int n = w - i < N ? w - i : N;
-                if (!console_xfer(tx, 2 * n, rx, 4 * n, 1000)) {
-                    memset(rx, 0, 4 * n);
-                    ok = false;
-                }
-                for (int p = 0; p < n; p++)
-                    memcpy(line + 3 * (i + p), rx + 4 * p, 3);      /* (blue, green, red: as a BMP has them) */
-            }
-            e = httpd_resp_send_chunk(req, (const char *)line, 3 * w);
-        }
-    }
-    mon_wr(VID, vid);
-    if (!ok)
-        ESP_LOGW("web", "grab: the FPGA did not answer all of it");
-    return e == ESP_OK ? httpd_resp_send_chunk(req, NULL, 0) : e;
 }
 
 /* the settings as JSON, the names POST /api/video takes */

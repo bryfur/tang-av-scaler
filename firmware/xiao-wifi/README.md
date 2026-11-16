@@ -1,9 +1,9 @@
 # The Wi-Fi debug link
 
 Firmware for a Seeed XIAO ESP32-C5 (or ESP32-S3) in the AV board's XIAO sockets (rev C-A, C-B):
-the FPGA loaded and debugged over Wi-Fi, with no cable to a PC. `../xiao` is the wired firmware
-(an ESP32-S3 on its USB); this one does the same work over the network, and over the XIAO's USB
-serial port too when a cable is in.
+the FPGA loaded and debugged over Wi-Fi, with no cable to a PC (and over the XIAO's USB serial port
+too when a cable is in); the board's web page and its API, over Wi-Fi and over Bluetooth LE (the
+app: `../../android`).
 
 | What | Where | With |
 |---|---|---|
@@ -17,11 +17,9 @@ With the FPGA's own CPU there (`gateware/rtl/cpu.v`, `gateware/sw`) the CPU runs
 the link relays over its SPI port (`main/link.c`, `gateware/sw/link.h`): the settings kept in
 flash given to the CPU when it begins, the page's changes and commands passed on, what the CPU
 says shown, and the CPU's program itself (a copy is built into this firmware: `build.sh` makes it;
-the CPU gets it if the one it runs is older). With an FPGA image that has no CPU (an older one),
-as before: the link brings the board up by itself and keeps
-it up (`main/scaler.c`): the clock chip, the HDMI redriver, the display's SCDC, the transceiver
-lanes, the ADV7181D for 480i component, the picture's settings; again after the FPGA is reloaded or
-a display is plugged in. No host and no script: power, a source, a display.
+the CPU gets it if the one it runs is older). No host and no script: power, a source, a display.
+(An FPGA image without the CPU is not run by the link: until 2026-11-16 the link brought such a
+board up itself through the FPGA's monitor.)
 
 The web page shows what comes in and goes out and sets (each as it is changed): the part of the
 signal shown (all, the picture found inside its black border, or as set), 4:3 or 16:9, the noise

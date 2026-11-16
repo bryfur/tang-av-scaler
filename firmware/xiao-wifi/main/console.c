@@ -31,11 +31,6 @@ static int client = -1;
 static SemaphoreHandle_t lock;          /* client, tail */
 static char *tail;                      /* (big(): TAIL bytes) */
 static size_t tail_head, tail_used;
-/* the link's own exchange with the monitor (console_xfer): the UART's writers one at a time; the
- * FPGA's bytes to mon_buf while mon_want of them are waited for */
-static SemaphoreHandle_t mon_lock, mon_done;
-static uint8_t *volatile mon_buf;       /* (the caller's) */
-static volatile size_t mon_want, mon_n;
 
 static void from_fpga(void *arg)
 {
@@ -53,16 +48,6 @@ static void from_fpga(void *arg)
         if (more)
             n += uart_read_bytes(FPGA_UART, buf + 1, more, 0);
         state.from_fpga += n;
-        if (mon_want) {                         /* the link's own answer: nobody else's */
-            for (int k = 0; k < n && mon_n < mon_want; k++)
-                mon_buf[mon_n++] = buf[k];
-            if (mon_n >= mon_want) {
-                mon_want = 0;
-                xSemaphoreGive(mon_done);
-            }
-            continue;
-        }
-
         xSemaphoreTake(lock, portMAX_DELAY);
         for (int k = 0; k < n; k++) {
             tail[tail_head] = buf[k];
@@ -173,9 +158,7 @@ static void from_tcp(void *arg)
             drop_client();
             continue;
         }
-        xSemaphoreTake(mon_lock, portMAX_DELAY);
         uart_write_bytes(FPGA_UART, buf, n);
-        xSemaphoreGive(mon_lock);
         state.to_fpga += n;
     }
 }
@@ -185,30 +168,10 @@ bool console_busy(void)
     return state.tcp;
 }
 
-bool console_xfer(const uint8_t *tx, size_t txn, uint8_t *rx, size_t rxn, int ms)
-{
-    bool ok = true;
-    xSemaphoreTake(mon_lock, portMAX_DELAY);
-    xSemaphoreTake(mon_done, 0);
-    mon_n = 0;
-    mon_buf = rx;
-    mon_want = rxn;
-    uart_write_bytes(FPGA_UART, tx, txn);
-    state.to_fpga += txn;
-    if (rxn) {
-        ok = xSemaphoreTake(mon_done, pdMS_TO_TICKS(ms)) == pdTRUE;
-        mon_want = 0;
-    }
-    xSemaphoreGive(mon_lock);
-    return ok;
-}
-
 void console_start(void)
 {
     lock = xSemaphoreCreateMutex();
     tail = big(TAIL);
-    mon_lock = xSemaphoreCreateMutex();
-    mon_done = xSemaphoreCreateBinary();
     usb_serial_jtag_driver_config_t usb = {.tx_buffer_size = 16384, .rx_buffer_size = 16384};
     usb_serial_jtag_driver_install(&usb);
 
