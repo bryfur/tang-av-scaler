@@ -63,7 +63,7 @@ output{min-width:2em;text-align:right;font-variant-numeric:tabular-nums;color:va
 .seg input{position:absolute;opacity:0;pointer-events:none}
 .seg label:has(input:checked){background:var(--card);box-shadow:0 0 0 1px var(--line);color:var(--text)}
 .seg label:has(input:focus-visible){outline:2px solid var(--acc)}
-button,.btn{background:var(--in);border:1px solid var(--line);border-radius:8px;padding:.38em .9em;cursor:pointer;display:inline-block}
+button,.btn{text-decoration:none;color:inherit;background:var(--in);border:1px solid var(--line);border-radius:8px;padding:.38em .9em;cursor:pointer;display:inline-block}
 button:hover,.btn:hover{border-color:var(--acc)}button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
 button:disabled{opacity:.45;cursor:default}button:disabled:hover{border-color:var(--line)}
 .lnk{border:0;background:none;padding:0;color:var(--acc);font-size:.82em}
@@ -78,22 +78,26 @@ td{padding:.42em 1em;vertical-align:top}td:first-child{color:var(--dim);white-sp
 tr+tr td,tbody+tbody tr:first-child td{border-top:1px solid var(--line)}
 .bad{color:var(--bad)}
 .stack{display:flex;flex-wrap:wrap;gap:.5em;flex:1 1 100%}.stack input{flex:1 1 7em;min-width:0}
-.cap{padding:0 1em 1em}.cap img{width:100%;border-radius:8px;display:block;background:#000}
-.cap .sl{margin-top:.6em}
-/* the logs: one row under everything */
-.logs .f{align-items:flex-start}
-pre{background:#0a0b0e;color:#cfd3dc;padding:.7em;border-radius:8px;overflow:auto;max-height:22em;font-size:12px;margin:.5em 0 0}
-details{flex:1 1 100%;min-width:0}details>summary{cursor:pointer;color:var(--dim);padding:.2em 0}
 #msg{position:fixed;left:50%;bottom:1.2em;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.5em 1em;box-shadow:0 6px 24px #0006;white-space:pre-wrap;max-width:90vw;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 #msg.on{opacity:1}
 main{padding-bottom:2.5em}
+/* the bottom band: the capture's frame and the logs' console, the same height */
+.band{align-self:stretch;display:flex;flex-direction:column}.band .grp{flex:1;display:flex;flex-direction:column}
+.shot{aspect-ratio:16/9;background:#000;display:grid;place-items:center;color:#5d6472;font-size:.85em}
+.shot img{width:100%;height:100%;object-fit:contain;display:block}
+.sp{flex:1}
+.blog .f{border-bottom:1px solid var(--line)}
+.lgw{flex:1;position:relative;min-height:16em}
+pre{position:absolute;inset:0;margin:0;background:#0a0b0e;color:#cfd3dc;padding:.7em 1em;overflow:auto;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-all}
 /* the dashboard: one column on a phone; two (the board below, in two of its own) on a middle screen;
  * three on a wide one (the board on the right).  Fixed: no card moves when Advanced shows more */
 .dash{display:grid;gap:0 1.5em;align-items:start}.dash>form{display:contents}
 @media(min-width:62em){.wrap{max-width:68em}.dash{grid-template-columns:1fr 1fr}
   .c3{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:0 1.5em;align-items:start}.c3 .sta{grid-row:span 2}
-  .logs{display:grid;grid-template-columns:1fr 1fr}.logs .f+.f{margin-top:0;border-top:0;border-left:1px solid var(--line)}}
-@media(min-width:94em){.wrap{max-width:110em}.dash{grid-template-columns:1fr 1fr 1fr}.c3{grid-column:auto;display:block}}
+}
+@media(min-width:94em){.wrap{max-width:110em}.dash{grid-template-columns:1fr 1fr 1fr}.c3{grid-column:auto;display:block}.blog{grid-column:span 2}}
+/* (side by side: the capture's frame sets the band's height, the console fills it) */
+@media(min-width:62em){.lgw{min-height:10em}}
 </style></head><body>
 <header><div class="wrap"><div class="hd">
  <h1>AV scaler</h1><div id="bar"></div>
@@ -159,12 +163,6 @@ main{padding-bottom:2.5em}
  <div class="f adv"><span class="l"><span class="t">Swap Cb / Cr</span></span><input class="sw" type="checkbox" name="swap"></div>
  <div class="f adv" data-hint="Off leaves the FPGA to a host tool."><span class="l"><span class="t">Run the scaler</span></span><input class="sw" type="checkbox" name="on"></div>
 </div>
-<h2>Capture</h2><div class="grp">
- <div class="f"><span class="ctl">
-  <span class="seg"><label title="480 &times; 270"><input type="radio" name="gs" value="4" form="none" checked><span>Small &middot; 2 s</span></label><label title="960 &times; 540"><input type="radio" name="gs" value="2" form="none"><span>Half &middot; 6 s</span></label><label title="1920 &times; 1080"><input type="radio" name="gs" value="1" form="none"><span>Full &middot; 25 s</span></label></span>
-  <button type="button" class="pri" id="gb" onclick="grab()" title="the picture going out (held still while it is read)">Capture</button></span></div>
- <div id="gw" class="cap hide"><img id="gi" alt="capture"><div class="sl"><a id="gl" download="avscaler.png" class="btn">Save PNG</a><span class="fname" id="gt"></span></div></div>
-</div>
 <div class="foot"><button type="button" id="rall" disabled>Reset to defaults</button></div>
 </div>
 </form>
@@ -181,12 +179,17 @@ main{padding-bottom:2.5em}
  <div class="f adv"><span class="l"><span class="t">JTAG</span><span class="chip hide" id="fpc"></span></span><button type="button" onclick="fpga()">Read FPGA</button></div>
 </div></div>
 </div>
+<div class="band bcap"><h2>Capture</h2><div class="grp">
+ <div class="shot"><img id="gi" alt="capture" class="hide"><span id="gph">No capture yet</span></div>
+ <div class="f"><span class="seg"><label title="480 &times; 270"><input type="radio" name="gs" value="4" checked><span>Small &middot; 2 s</span></label><label title="960 &times; 540"><input type="radio" name="gs" value="2"><span>Half &middot; 6 s</span></label><label title="1920 &times; 1080"><input type="radio" name="gs" value="1"><span>Full &middot; 25 s</span></label></span>
+  <span class="sp"></span><a id="gl" download="avscaler.png" class="btn hide">Save</a><button type="button" class="pri" id="gb" onclick="grab()" title="the picture going out (held still while it is read)">Capture</button></div>
+</div></div>
+<div class="band blog"><h2>Logs</h2><div class="grp">
+ <div class="f"><span class="seg"><label><input type="radio" name="lg" value="console" checked><span>FPGA console</span></label><label><input type="radio" name="lg" value="log"><span>Firmware</span></label></span></div>
+ <div class="lgw"><pre id="lgp"></pre></div>
+</div></div>
 </div>
 
-<h2>Logs</h2><div class="grp logs">
- <div class="f"><details id="cond"><summary>FPGA console</summary><pre id="con"></pre></details></div>
- <div class="f"><details id="logd"><summary>Firmware</summary><pre id="log"></pre></details></div>
-</div>
 </main>
 
 <script>
@@ -339,9 +342,12 @@ async function bstat(){
     kv('Memory',f.heap_int?Math.round(f.heap_int/1024)+' KB own'+D+'low '+Math.round(f.heap_int_min/1024)+' KB':Math.round(f.heap/1024)+' KB',1)+
     kv('JTAG',':'+j.port+D+(j.connected?'in use by '+esc(j.peer):'free'),1)+
     kv('Console',':'+c.port+D+(c.tcp?'client '+esc(c.peer):'no client'),1);
-  // (the logs only while they are open: the link's memory and time are short)
-  if($('cond').open)$('con').textContent=await (await fetch('/api/console')).text();
-  if($('logd').open)$('log').textContent=await (await fetch('/api/log')).text()}
+  await logs()}
+// the log shown (only that one fetched); kept at its end while it is read there
+async function logs(){const p=$('lgp'),end=p.scrollHeight-p.scrollTop-p.clientHeight<24,
+    t=await (await fetch('/api/'+document.querySelector('[name=lg]:checked').value)).text();
+  if(p.textContent!=t){p.textContent=t;if(end)p.scrollTop=p.scrollHeight}}
+for(const e of document.querySelectorAll('[name=lg]'))e.onchange=()=>{$('lgp').textContent='';logs().catch(()=>{})};
 // every 3 s while the page is seen
 let grabbing=false;
 async function poll(){if(grabbing||document.hidden)return;
@@ -349,7 +355,6 @@ async function poll(){if(grabbing||document.hidden)return;
   try{await bstat()}catch(e){}
   if(!def)defs()}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll()});
-for(const d of ['cond','logd'])$(d).addEventListener('toggle',()=>{if($(d).open)poll()});
 
 // ---- Advanced (remembered in this browser) ----
 function advSet(on){document.body.classList.toggle('adv',on);$('advb').checked=on;try{localStorage.setItem('av.adv',on?'1':'')}catch(e){}}
@@ -373,8 +378,8 @@ async function grab(){
     const r=await fetch('/api/grab?step='+step+'&t='+t0);if(!r.ok)throw await r.text();
     const bmp=await createImageBitmap(await r.blob()),c=document.createElement('canvas');
     c.width=bmp.width;c.height=bmp.height;c.getContext('2d').drawImage(bmp,0,0);
-    const u=c.toDataURL('image/png');$('gi').src=u;$('gl').href=u;hide('gw',0);
-    $('gt').textContent=bmp.width+' '+X+' '+bmp.height+D+Math.round((Date.now()-t0)/1000)+' s';
+    const u=c.toDataURL('image/png');$('gi').src=u;$('gl').href=u;hide('gi',0);hide('gph',1);hide('gl',0);
+    $('gi').title=bmp.width+' '+X+' '+bmp.height+D+Math.round((Date.now()-t0)/1000)+' s';
   }catch(e){msg('capture failed: '+e)}
   clearInterval(tick);$('gb').textContent='Capture';$('gb').disabled=false;grabbing=false}
 
