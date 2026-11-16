@@ -6,10 +6,10 @@
  * Bluetooth, with no second set of handlers.  The web server closing the connection closes the
  * channel, and the other way round.
  *
- * The channels give the whole board away (firmware, the FPGA's loads), so they are opened only on
- * a link that is encrypted and authenticated: LE Secure Connections with a passkey the board shows
- * (it has no keyboard): six digits, in GET /api/status ("ble.passkey") and the firmware's log,
- * typed on the phone.  The bond is kept (NVS): a phone pairs once.
+ * Anyone in range may open a channel: no pairing asked for (the user's choice, 2026-11-16: a
+ * passkey the board had to show somewhere was no way to pair; the network already lets anyone on it
+ * at the same API).  A phone that pairs anyway (Linux does) gets LE Secure Connections, Just Works
+ * (no code), the bond kept.
  *
  * NimBLE's host and its buffers are in the PSRAM (CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL), as are
  * the channels' buffers here: the chip's own RAM is short (app.h big()). */
@@ -155,11 +155,7 @@ static int on_l2cap(struct ble_l2cap_event *ev, void *arg)
     struct chan *c;
     switch (ev->type) {
     case BLE_L2CAP_EVENT_COC_ACCEPT:
-        /* only on an encrypted, authenticated link (paired with the passkey) */
-        if (ble_gap_conn_find(ev->accept.conn_handle, &d) != 0 || !d.sec_state.encrypted || !d.sec_state.authenticated) {
-            ESP_LOGW(TAG, "a channel refused: the link is not paired");
-            return BLE_HS_EAUTHEN;
-        }
+        (void)d;
         LOCK();
         c = find(NULL);
         int s = c ? web_connect() : -1;
@@ -515,10 +511,10 @@ static void start_task(void *arg)
     ble_hs_cfg.reset_cb = on_reset;
     ble_hs_cfg.sync_cb = on_sync;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
-    /* LE Secure Connections, a passkey the board shows, the bond kept */
-    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_DISP_ONLY;
+    /* (a phone that pairs: LE Secure Connections, Just Works, the bond kept) */
+    ble_hs_cfg.sm_io_cap = BLE_SM_IO_CAP_NO_IO;
     ble_hs_cfg.sm_bonding = 1;
-    ble_hs_cfg.sm_mitm = 1;
+    ble_hs_cfg.sm_mitm = 0;
     ble_hs_cfg.sm_sc = 1;
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;

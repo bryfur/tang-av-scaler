@@ -157,8 +157,11 @@ void wifi_start(void)
 
     mdns_init();
     mdns_hostname_set(state.host);
-    mdns_instance_name_set("AV scaler debug link");
-    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
+    mdns_instance_name_set("Tang AV Scaler");
+    /* (the app finds the board by this: _http._tcp with board=tang-av-scaler; api: the HTTP API's
+     * version, also over Bluetooth: ble.c) */
+    mdns_txt_item_t txt[] = {{"board", "tang-av-scaler"}, {"api", "1"}};
+    mdns_service_add(NULL, "_http", "_tcp", 80, txt, 2);
     mdns_service_add(NULL, "_xvc", "_tcp", 2542, NULL, 0);
 }
 

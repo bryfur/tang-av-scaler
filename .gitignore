@@ -36,3 +36,11 @@ tools/capview/
 # the case's working files (check.py, render.py); the print STLs and case.step are kept
 hardware/case/out/*-fitted.stl
 hardware/case/out/*.json
+# the Android app's builds (app/android); its release signing key never goes in the repository
+app/android/.gradle/
+app/android/.kotlin/
+app/android/build/
+app/android/app/build/
+app/android/local.properties
+*.jks
+*.keystore

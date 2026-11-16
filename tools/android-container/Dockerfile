@@ -1,4 +1,5 @@
-# avandroid: the Android toolchain for app/android (README.md), built by build.sh on fpga.
+# avandroid: the Android toolchain for app/android, built by build.sh on fpga.  (The platform and
+# build-tools are the ones AGP 9.5.1 asks for: the SDK here is read-only, nothing is fetched at build time.)
 # JDK 21, the Android SDK's command-line tools, platform-tools (adb), one platform and one
 # build-tools.  Gradle itself comes from the project's wrapper; its downloads and adb's key
 # live in named volumes (androidrun), so they survive the container.
@@ -10,8 +11,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 
 ENV ANDROID_HOME=/opt/android-sdk
 ARG CMDLINE_TOOLS=16111833
-ARG PLATFORM=android-37.1
-ARG BUILD_TOOLS=37.0.0
+ARG PLATFORM=android-37.0
+ARG BUILD_TOOLS=36.0.0
 RUN mkdir -p $ANDROID_HOME/cmdline-tools \
     && curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-${CMDLINE_TOOLS}_latest.zip -o /tmp/ct.zip \
     && unzip -q /tmp/ct.zip -d /tmp/ct && mv /tmp/ct/cmdline-tools $ANDROID_HOME/cmdline-tools/latest \

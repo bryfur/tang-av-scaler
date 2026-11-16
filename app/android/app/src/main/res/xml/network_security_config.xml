@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The board serves plain HTTP on the local network (an ESP32 with no certificate to show) -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
