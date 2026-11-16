@@ -149,7 +149,7 @@ class BoardModel(app: Application) : AndroidViewModel(app) {
             try {
                 refreshVideo(t)
                 if (n % (if (slow) 4 else 2) == 0) status.value = JSONObject(t.get("/api/status").text)
-                if (logsOpen.value && n % (if (slow) 3 else 1) == 0) logText.value = t.get("/api/${logKind.value}").text
+                if (logsOpen.value && logsShown && n % (if (slow) 3 else 1) == 0) logText.value = t.get("/api/${logKind.value}").text
                 fails = 0
                 if (link.value !is Link.Up) link.value = Link.Up(t)
             } catch (e: Exception) {
@@ -294,6 +294,9 @@ class BoardModel(app: Application) : AndroidViewModel(app) {
                 "ID ${f.optString("idcode")} · ${if (f.optBoolean("answers")) "answers" else "no answer"} · status ${f.optString("status")}"
         } catch (e: Exception) { messages.tryEmit("no answer from the board") }
     }
+
+    private var logsShown = false
+    fun logsOnScreen(on: Boolean) { logsShown = on }
 
     fun openLogs(open: Boolean) {
         logsOpen.value = open

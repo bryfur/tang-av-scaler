@@ -42,6 +42,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -52,6 +54,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -212,40 +218,42 @@ private fun Waiting(link: Link, onChoose: () -> Unit) {
 
 // ---- the dashboard: one column on a phone, two on a middle screen, three on a wide one ----
 
+private enum class Page(val title: String) { SETTINGS("Settings"), STATUS("Status"), BOARD("Board") }
+
+/** Three pages, swiped between or chosen by their tab: the picture's settings; what the board is doing
+ * (and a capture of it); the board itself. */
 @Composable
 private fun Dashboard(vm: BoardModel) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val cols = when {
-            maxWidth >= 1100.dp -> 3
-            maxWidth >= 640.dp -> 2
-            else -> 1
+    val p = LocalPal.current
+    val pager = rememberPagerState(pageCount = { Page.entries.size })
+    val scope = rememberCoroutineScope()
+    // (the logs fetched only while their page is the one shown)
+    LaunchedEffect(pager.settledPage) { vm.logsOnScreen(pager.settledPage == Page.BOARD.ordinal) }
+    Column(Modifier.fillMaxSize()) {
+        PrimaryTabRow(pager.currentPage, containerColor = p.bg, contentColor = p.text, divider = { Hairline() }) {
+            for (t in Page.entries) Tab(pager.currentPage == t.ordinal, { scope.launch { pager.animateScrollToPage(t.ordinal) } }, text = {
+                Text(t.title, fontSize = 15.sp, color = if (pager.currentPage == t.ordinal) p.text else p.dim)
+            })
         }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp)) {
-            val c1: @Composable () -> Unit = { Settings(vm, Section.PICTURE); Settings(vm, Section.DEINT) }
-            val c2: @Composable () -> Unit = { Settings(vm, Section.AA); Settings(vm, Section.OUTPUT) }
-            val c3: @Composable () -> Unit = { Status(vm); WifiCard(vm); Maintenance(vm) }
-            when (cols) {
-                3 -> Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Column(Modifier.weight(1f)) { c1() }
-                    Column(Modifier.weight(1f)) { c2() }
-                    Column(Modifier.weight(1f)) { c3() }
+        HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1, verticalAlignment = Alignment.Top) { page ->
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val wide = maxWidth >= 640.dp
+                // (a page's cards: side by side where the screen is wide, one under another on a phone)
+                val two: @Composable (@Composable () -> Unit, @Composable () -> Unit) -> Unit = { a, b ->
+                    if (wide) Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                        Column(Modifier.weight(1f)) { a() }
+                        Column(Modifier.weight(1f)) { b() }
+                    } else { a(); b() }
                 }
-                2 -> {
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Column(Modifier.weight(1f)) { c1() }
-                        Column(Modifier.weight(1f)) { c2() }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        Column(Modifier.weight(1f)) { Status(vm) }
-                        Column(Modifier.weight(1f)) { WifiCard(vm); Maintenance(vm) }
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 48.dp)) {
+                    when (Page.entries[page]) {
+                        Page.SETTINGS -> two({ Settings(vm, Section.PICTURE); Settings(vm, Section.DEINT) },
+                            { Settings(vm, Section.AA); Settings(vm, Section.OUTPUT) })
+                        Page.STATUS -> two({ Status(vm) }, { CaptureCard(vm) })
+                        Page.BOARD -> two({ WifiCard(vm); Maintenance(vm) }, { Logs(vm) })
                     }
                 }
-                else -> { c1(); c2(); c3() }
             }
-            if (cols >= 2) Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Column(Modifier.weight(1f)) { CaptureCard(vm) }
-                Column(Modifier.weight(if (cols == 3) 2f else 1f)) { Logs(vm) }
-            } else { CaptureCard(vm); Logs(vm) }
         }
     }
 }
