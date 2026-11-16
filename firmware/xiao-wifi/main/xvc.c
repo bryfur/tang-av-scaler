@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "jtag.h"
 #include "lwip/sockets.h"
 #include "xvc_core.h"
@@ -90,7 +91,9 @@ static void serve(void *arg)
         uint64_t bits0 = stats.bits;
         const struct xvc_io io = {.ctx = (void *)(intptr_t)fd, .rd = rd, .wr = wr, .shift = shift,
                                   .set_period = jtag_set_period};
+        ble_quiet(true);        /* (Bluetooth's advertising slows the network's answers: ble.c) */
         int rc = xvc_serve(&io, buf, &stats);
+        ble_quiet(false);
         state.connected = false;
         jtag_give();
         close(fd);
@@ -101,7 +104,8 @@ static void serve(void *arg)
 
 void xvc_start(void)
 {
-    xTaskCreate(serve, "xvc", 4096, NULL, 5, NULL);
+    /* (its stack in the PSRAM: it never touches this chip's flash) */
+    xTaskCreateWithCaps(serve, "xvc", 4096, NULL, 5, NULL, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
 
 void xvc_get(struct xvc_state *s)

@@ -115,6 +115,11 @@ static esp_err_t get_status(httpd_req_t *req)
     console_get(&c);
     esc(ssid, sizeof ssid, w.ssid);
     esc(host, sizeof host, w.host);
+    struct ble_state b;
+    ble_get(&b);
+    char pk[12] = "";
+    if (b.passkey)
+        snprintf(pk, sizeof pk, "%06u", (unsigned)b.passkey);
     const esp_app_desc_t *app = esp_app_get_description();
     const esp_partition_t *part = esp_ota_get_running_partition();
     int n = snprintf(out, OUT,
@@ -126,7 +131,8 @@ static esp_err_t get_status(httpd_req_t *req)
                      "\"tck_ns\":%u,\"fastest_ns\":%u},"
                      "\"console\":{\"port\":%d,\"baud\":%d,\"tcp\":%s,\"usb\":%s,\"peer\":\"%s\","
                      "\"to_fpga\":%u,\"from_fpga\":%u,\"lost\":%u},"
-                     "\"pads\":{\"tms\":%u,\"tck\":%u,\"tdi\":%u,\"tdo\":%u}}",
+                     "\"pads\":{\"tms\":%u,\"tck\":%u,\"tdi\":%u,\"tdo\":%u},"
+                     "\"ble\":{\"on\":%s,\"addr\":\"%s\",\"connected\":%d,\"peer\":\"%s\",\"encrypted\":%s,\"passkey\":\"%s\",\"chans\":%d,\"err\":\"%s\",\"mem\":\"%s\"}}",
                      app->project_name, app->version, app->date, app->time, app->idf_ver, CONFIG_IDF_TARGET,
                      part ? part->label : "?", (unsigned long long)(esp_timer_get_time() / 1000000),
                      (unsigned)esp_get_free_heap_size(), (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
@@ -138,7 +144,8 @@ static esp_err_t get_status(httpd_req_t *req)
                      PORT_CONSOLE, UART_BAUD, c.tcp ? "true" : "false", c.usb ? "true" : "false", c.peer,
                      (unsigned)c.to_fpga, (unsigned)c.from_fpga, (unsigned)c.lost,
                      (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TMS & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TCK & 1),
-                     (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDI & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDO & 1));
+                     (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDI & 1), (unsigned)(REG_READ(GPIO_IN_REG) >> PIN_TDO & 1),
+                     b.on ? "true" : "false", b.addr, b.connected, b.peer, b.encrypted ? "true" : "false", pk, b.chans, b.err, b.mem);
     httpd_resp_set_type(req, "application/json");
     esp_err_t e = httpd_resp_send(req, out, n);
     if (e == ESP_OK)
@@ -236,6 +243,7 @@ static esp_err_t post_ota(httpd_req_t *req)
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "the body: a firmware image that fits the slot");
     if (esp_ota_begin(part, OTA_SIZE_UNKNOWN, &h) != ESP_OK)
         return httpd_resp_send_500(req);
+    ble_quiet(true);        /* (Bluetooth's advertising slows the upload: ble.c) */
     char *buf = malloc(4096);
     size_t left = req->content_len;
     esp_err_t e = buf ? ESP_OK : ESP_ERR_NO_MEM;
@@ -251,6 +259,7 @@ static esp_err_t post_ota(httpd_req_t *req)
         left -= r;
     }
     free(buf);
+    ble_quiet(false);
     if (e != ESP_OK) {
         esp_ota_abort(h);
         return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "the upload broke off: nothing changed");
@@ -292,7 +301,9 @@ static void load_task(void *arg)
     int64_t t0 = esp_timer_get_time();
     char msg[600];
     crumb[1] = 1;
+    ble_quiet(true);        /* (Bluetooth's advertising slows the network's answers: ble.c) */
     bool ok = gowin_load(load.data, load.len, load.sum, &load.opt, msg, sizeof msg);
+    ble_quiet(false);
     crumb[1] = 2;
     jtag_give();
     free(load.data);

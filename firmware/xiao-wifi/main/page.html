@@ -16,6 +16,8 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px so
 h1{font-size:1.15em;margin:0;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
 #bar{display:flex;gap:.4em;flex-wrap:wrap;flex:1 1 auto;order:1}
 #bar .chip{font-size:.84em;padding:.2em .7em}#bar .chip[data-adv]{cursor:pointer}
+/* a phone pairing over Bluetooth: the digits to type on it, large */
+#pair{order:2;font-size:.95em;padding:.25em .8em;--c:var(--acc)}#pair b{font-size:1.15em;letter-spacing:.12em;font-variant-numeric:tabular-nums}
 .advsw{display:flex;align-items:center;gap:.5em;font-size:.88em;color:var(--dim);cursor:pointer;margin-left:auto;order:2}
 #pwb{order:3;display:inline-flex;align-items:center;gap:.4em;white-space:nowrap}
 #pwb:before{content:"\23FB";font-size:1.05em;line-height:1}
@@ -102,7 +104,7 @@ pre{position:absolute;inset:0;margin:0;background:#0a0b0e;color:#cfd3dc;padding:
 @media(min-width:62em){.lgw{min-height:10em}}
 </style></head><body>
 <header><div class="wrap"><div class="hd">
- <h1>Tang AV Scaler</h1><div id="bar"></div>
+ <h1>Tang AV Scaler</h1><div id="bar"></div><span class="chip hide" id="pair"></span>
  <label class="advsw">Advanced <input class="sw" type="checkbox" id="advb"></label>
  <button type="button" id="pwb">Stand by</button>
 </div></div></header>
@@ -344,7 +346,10 @@ async function bstat(){
     kv('Firmware',esc(f.version)+D+'up '+dur(f.uptime_s))+
     kv('Memory',f.heap_int?Math.round(f.heap_int/1024)+' KB own'+D+'low '+Math.round(f.heap_int_min/1024)+' KB':Math.round(f.heap/1024)+' KB',1)+
     kv('JTAG',':'+j.port+D+(j.connected?'in use by '+esc(j.peer):'free'),1)+
-    kv('Console',':'+c.port+D+(c.tcp?'client '+esc(c.peer):'no client'),1);
+    kv('Console',':'+c.port+D+(c.tcp?'client '+esc(c.peer):'no client'),1)+
+    (s.ble?kv('Bluetooth',!s.ble.on?B(0,esc(s.ble.err||'off')):s.ble.connected?(s.ble.connected>1?s.ble.connected+' phones':'a phone')+(s.ble.encrypted?D+'paired':'')+(s.ble.chans?D+s.ble.chans+' open':''):'waiting for a phone'):'');
+  // (pairing: the passkey the phone asks for)
+  const pk=s.ble&&s.ble.passkey;$('pair').innerHTML=pk?'Bluetooth pairing: type <b>'+esc(pk)+'</b> on the phone':'';hide('pair',!pk);
   await logs()}
 // the log shown (only that one fetched); kept at its end while it is read there
 async function logs(){const p=$('lgp'),end=p.scrollHeight-p.scrollTop-p.clientHeight<24,

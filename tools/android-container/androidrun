@@ -1,0 +1,31 @@
+#!/bin/bash
+# androidrun CMD [ARGS...]: run CMD in the avandroid container, in the current directory
+# (which must be under ~/devel, the tree the container mounts at the same path).  With no
+# CMD, a shell.  On a host without Docker access (bryan-cc) it runs itself on
+# $ANDROIDRUN_HOST (default fpga) over ssh.
+#   androidrun ./gradlew assembleDebug        (in app/android)
+#   androidrun adb pair 192.168.1.50:37123 123456
+# Host networking (adb reaches the phone's wireless debugging port); Gradle's downloads and
+# adb's key in the named volumes avandroid-gradle and avandroid-adb.
+set -e
+devel=$HOME/devel
+dir=$(pwd -P)
+case $dir in
+    "$devel"|"$devel"/*) ;;
+    *) echo "androidrun: $dir is not under $devel" >&2; exit 2 ;;
+esac
+[ $# -gt 0 ] || set -- bash
+
+if ! docker info >/dev/null 2>&1; then
+    host=${ANDROIDRUN_HOST:-fpga}
+    tty=; [ -t 0 ] && [ -t 1 ] && tty=-t
+    exec ssh $tty -o ControlMaster=no -o ControlPath=none "$host" \
+        "cd $(printf %q "$dir") && $(printf '%q ' "$(realpath "$0")" "$@")"
+fi
+
+tty=; [ -t 0 ] && [ -t 1 ] && tty=-t
+exec docker run --rm -i $tty --init --network host \
+    --user "$(id -u):$(id -g)" -e HOME="$HOME" -e TERM -e ANDROIDRUN_UMASK="$(umask)" \
+    -v avandroid-gradle:"$HOME/.gradle" -v avandroid-adb:"$HOME/.android" \
+    -v "$devel:$devel" -w "$dir" \
+    avandroid:latest "$@"

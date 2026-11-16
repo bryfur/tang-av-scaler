@@ -8,6 +8,22 @@
 void logbuf_init(void);
 size_t logbuf_copy(char *dst, size_t max);
 
+/* ble.c: the web server's API over Bluetooth LE (L2CAP channels, paired with a passkey) */
+void ble_start(void);
+struct ble_state {
+    bool on;                /* the stack is up, advertising */
+    int connected;          /* phones connected */
+    bool encrypted;         /* a link paired and encrypted */
+    bool bonded;            /* a bond made (kept) */
+    uint32_t passkey;       /* while pairing: the six digits to type on the phone (else 0) */
+    int chans;              /* channels open (each one a connection to the web server) */
+    char addr[18], peer[18];
+    char err[48];           /* why it is not up (else "") */
+    char mem[24];           /* the chip's own RAM free before and after it started */
+};
+void ble_get(struct ble_state *s);
+void ble_quiet(bool on);    /* advertising paused (nested) while Wi-Fi does latency-bound work */
+
 /* xvc.c: JTAG over TCP */
 void xvc_start(void);
 struct xvc_state {

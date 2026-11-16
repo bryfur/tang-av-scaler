@@ -19,6 +19,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "freertos/idf_additions.h"
 #include "lwip/sockets.h"
 
 #define FPGA_UART UART_NUM_1
@@ -38,7 +39,8 @@ static volatile size_t mon_want, mon_n;
 
 static void from_fpga(void *arg)
 {
-    static uint8_t buf[2048];
+    enum { BUF = 2048 };
+    uint8_t *buf = big(BUF);
     for (;;) {
         /* whatever is there, at once: wait for the first byte, take the rest without waiting */
         int n = uart_read_bytes(FPGA_UART, buf, 1, portMAX_DELAY);
@@ -46,8 +48,8 @@ static void from_fpga(void *arg)
             continue;
         size_t more = 0;
         uart_get_buffered_data_len(FPGA_UART, &more);
-        if (more > sizeof buf - 1)
-            more = sizeof buf - 1;
+        if (more > BUF - 1)
+            more = BUF - 1;
         if (more)
             n += uart_read_bytes(FPGA_UART, buf + 1, more, 0);
         state.from_fpga += n;
@@ -97,9 +99,10 @@ static void from_fpga(void *arg)
 
 static void from_usb(void *arg)
 {
-    static uint8_t buf[1024];
+    enum { BUF = 1024 };
+    uint8_t *buf = big(BUF);
     for (;;) {
-        int n = usb_serial_jtag_read_bytes(buf, sizeof buf, portMAX_DELAY);
+        int n = usb_serial_jtag_read_bytes(buf, BUF, portMAX_DELAY);
         if (n <= 0)
             continue;
         uart_write_bytes(FPGA_UART, buf, n);
@@ -120,7 +123,8 @@ static void drop_client(void)
 
 static void from_tcp(void *arg)
 {
-    static uint8_t buf[1024];
+    enum { BUF = 1024 };
+    uint8_t *buf = big(BUF);
     int ls = socket(AF_INET, SOCK_STREAM, 0);
     int one = 1;
     setsockopt(ls, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
@@ -164,7 +168,7 @@ static void from_tcp(void *arg)
             }
             continue;
         }
-        int n = recv(client, buf, sizeof buf, 0);
+        int n = recv(client, buf, BUF, 0);
         if (n <= 0) {
             drop_client();
             continue;
@@ -216,9 +220,11 @@ void console_start(void)
     uart_set_pin(FPGA_UART, PIN_TX, PIN_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     gpio_set_pull_mode(PIN_RX, GPIO_PULLUP_ONLY);
 
-    xTaskCreate(from_fpga, "from_fpga", 4096, NULL, 10, NULL);
-    xTaskCreate(from_usb, "from_usb", 4096, NULL, 10, NULL);
-    xTaskCreate(from_tcp, "from_tcp", 4096, NULL, 10, NULL);
+    /* (their stacks in the PSRAM: none of them touches the flash, and the chip's own RAM is for
+     * Wi-Fi and Bluetooth) */
+    xTaskCreateWithCaps(from_fpga, "from_fpga", 4096, NULL, 10, NULL, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    xTaskCreateWithCaps(from_usb, "from_usb", 4096, NULL, 10, NULL, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    xTaskCreateWithCaps(from_tcp, "from_tcp", 4096, NULL, 10, NULL, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
 
 void console_get(struct console_state *s)

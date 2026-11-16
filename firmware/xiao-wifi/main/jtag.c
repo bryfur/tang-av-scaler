@@ -5,6 +5,7 @@
  * way through the two level translators and back (U22, the FPGA, U23, 470 R) has all of it.
  * Interrupts stay on: one only stretches a clock. */
 
+#include "app.h"
 #include "jtag.h"
 
 #include <string.h>
@@ -70,12 +71,15 @@ void jtag_shift(const uint8_t *tms, const uint8_t *tdi, uint8_t *tdo, uint32_t n
 
 static uint32_t timed_ps(uint32_t turns)
 {
-    static uint8_t z[2048];
+    enum { Z = 2048 };
+    static uint8_t *z;
+    if (!z)
+        z = big(Z);
     int64_t t0 = esp_timer_get_time();
-    shift(z, z, z, sizeof z * 8, 0, 0, 0, turns);
+    shift(z, z, z, Z * 8, 0, 0, 0, turns);
     int64_t t = esp_timer_get_time() - t0;
-    memset(z, 0, sizeof z);
-    return (uint32_t)(t * 1000000 / (sizeof z * 8));
+    memset(z, 0, Z);
+    return (uint32_t)(t * 1000000 / (Z * 8));
 }
 
 void jtag_init(void)

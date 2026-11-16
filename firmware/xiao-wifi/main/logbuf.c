@@ -9,7 +9,7 @@
 #include "freertos/FreeRTOS.h"
 
 #define RING 8192
-static char ring[RING];
+static char *ring;          /* (in the PSRAM: logbuf_init) */
 static size_t head, used;
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 
@@ -33,7 +33,9 @@ static int to_ring(const char *fmt, va_list ap)
 
 void logbuf_init(void)
 {
-    esp_log_set_vprintf(to_ring);
+    ring = big(RING);
+    if (ring)
+        esp_log_set_vprintf(to_ring);
 }
 
 size_t logbuf_copy(char *dst, size_t max)

@@ -15,6 +15,7 @@
  *   bitstream through the data register, first bit first; 0x0A and the 16-bit sum of its
  *   configuration words; 0x08 0x3A 0x02; Done Final. */
 
+#include "app.h"
 #include "gowin.h"
 
 #include <stdarg.h>
@@ -59,10 +60,13 @@ static uint32_t scan(uint32_t out, uint32_t n)      /* in a shift state: n bits,
 
 static void idle(uint32_t clocks)                   /* clocks in Run-Test/Idle */
 {
-    static uint8_t z[512], q[512];
+    enum { Z = 512 };
+    static uint8_t *z, *q;
+    if (!z)
+        z = big(Z), q = big(Z);
     while (clocks) {
-        uint32_t n = clocks > sizeof z * 8 ? sizeof z * 8 : clocks;
-        memset(z, 0, sizeof z);
+        uint32_t n = clocks > Z * 8 ? Z * 8 : clocks;
+        memset(z, 0, Z);
         jtag_shift(z, z, q, n);
         clocks -= n;
     }
@@ -131,7 +135,10 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
     uint32_t gap_ms = o->gap_ms, pre_ms = o->pre_ms;
     bool reverse = o->reverse;
     static const uint8_t rev4[16] = {0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15};
-    static uint8_t tdi[2048], tms[2048];
+    enum { TD = 2048 };
+    static uint8_t *tdi, *tms;
+    if (!tdi)
+        tdi = big(TD), tms = big(TD);
     int at = 0;
     uint32_t st;
 
@@ -208,7 +215,7 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
     command(INIT_ADDR);
     command(XFER_WRITE);
     tms_seq(0x1, 3);                /* Select-DR, Capture-DR, Shift-DR */
-    memset(tms, 0, sizeof tms);
+    memset(tms, 0, TD);
     size_t done = 0;
     if (o->spi_hz && reverse && len > 64 && jtag_bulk_begin(o->spi_hz)) {
         /* all but the last byte by the SPI master (jtag.c); the last here, its last bit with TMS */
@@ -218,14 +225,14 @@ bool gowin_load(const uint8_t *data, size_t len, uint16_t sum, const struct gowi
         at = say(msg, max, at, "the bitstream by SPI at %u Hz\n", (unsigned)o->spi_hz);
     }
     while (done < len) {
-        size_t n = len - done > sizeof tdi ? sizeof tdi : len - done;
+        size_t n = len - done > TD ? TD : len - done;
         for (size_t k = 0; k < n; k++)      /* a byte's first bit is its top one; jtag_shift's the low one */
             tdi[k] = reverse ? rev4[data[done + k] & 15] << 4 | rev4[data[done + k] >> 4] : data[done + k];
         done += n;
         if (done == len)
             tms[n - 1] = 0x80;              /* the last bit leaves Shift-DR */
         jtag_shift(tms, tdi, tdi, n * 8);
-        if (!o->hold && (done & 0xFFFF) < sizeof tdi)
+        if (!o->hold && (done & 0xFFFF) < TD)
             vTaskDelay(2);                  /* the other tasks their turn, each 64 KB */
     }
     tms_seq(0x1, 2);                /* Update-DR, Run-Test/Idle */
