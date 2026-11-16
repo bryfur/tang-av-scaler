@@ -25,7 +25,6 @@ h2{font-size:.74em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim
 .grp{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .f{display:flex;align-items:center;flex-wrap:wrap;gap:.45em 1em;padding:.6em 1em;min-height:3.1em;border-top:1px solid var(--line);margin-top:-1px}
 .f.sub{padding-left:2.2em}
-.f.adv{box-shadow:inset 3px 0 0 color-mix(in srgb,var(--acc) 50%,transparent)}
 .l{flex:1 1 9em;display:flex;flex-direction:column;align-items:flex-start;gap:.3em;min-width:0}
 .t{display:flex;align-items:center;gap:.35em;position:relative}
 .sl{display:flex;align-items:center;gap:.5em;flex-wrap:wrap}
@@ -41,8 +40,8 @@ h2{font-size:.74em;text-transform:uppercase;letter-spacing:.08em;color:var(--dim
 .chip[data-s=ok]{--c:var(--ok)}.chip[data-s=busy]{--c:var(--warn)}.chip[data-s=bad]{--c:var(--bad)}
 .chip[data-s=busy]:before{animation:pulse 1.1s ease-in-out infinite}
 @keyframes pulse{50%{opacity:.2}}
-/* not at its default: a dot before the name, the reset beside it */
-.f.chg .t:before{content:"";position:absolute;left:-.8em;top:50%;width:.4em;height:.4em;margin-top:-.2em;border-radius:50%;background:var(--acc)}
+/* not at its default: a bar at the row's left edge, the reset beside its name */
+.f.chg{box-shadow:inset 3px 0 0 var(--acc)}
 .rst{display:none;border:0;background:none;padding:0 .2em;color:var(--dim);font-size:1em;line-height:1;cursor:pointer}
 .f.chg .rst{display:inline}.rst:hover{color:var(--acc)}
 @media(hover:hover){.f.chg .rst{opacity:0}.f.chg:hover .rst,.rst:focus-visible{opacity:1}}
