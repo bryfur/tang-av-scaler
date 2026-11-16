@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -286,7 +287,7 @@ private fun Control(vm: BoardModel, s: Spec, f: Form, v: JSONObject?) {
                 SegmentedButton(
                     selected = value == n, onClick = { vm.change(s.key, n) },
                     shape = SegmentedButtonDefaults.itemShape(i, c.options.size), icon = {}, colors = segColors(),
-                ) { Text(label, maxLines = 1, fontSize = 13.sp) }
+                ) { Text(label, maxLines = 1, softWrap = false, fontSize = 13.sp) }
             }
         }
         is Ctl.Range -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -423,7 +424,7 @@ private fun CaptureCard(vm: BoardModel) {
             SingleChoiceSegmentedButtonRow {
                 opts.forEachIndexed { i, (n, label) ->
                     SegmentedButton(step == n, { step = n }, SegmentedButtonDefaults.itemShape(i, opts.size), icon = {}, colors = segColors()) {
-                        Text(label, fontSize = 13.sp)
+                        Text(label, fontSize = 13.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
@@ -539,15 +540,13 @@ private fun Logs(vm: BoardModel) {
     val text by vm.logText.collectAsState()
     Heading("Logs")
     Card {
-        FlowRow(
-            Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
-            itemVerticalAlignment = Alignment.CenterVertically,
-        ) {
-            val opts = listOf("console" to "FPGA console", "log" to "Firmware")
-            SingleChoiceSegmentedButtonRow {
+        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            val opts = listOf("console" to "FPGA", "log" to "Firmware")
+            // (its own width, the names on one line: Hide at the far end)
+            SingleChoiceSegmentedButtonRow(Modifier.width(IntrinsicSize.Max)) {
                 opts.forEachIndexed { i, (k, label) ->
                     SegmentedButton(kind == k, { vm.showLog(k); vm.openLogs(true) }, SegmentedButtonDefaults.itemShape(i, opts.size), icon = {}, colors = segColors()) {
-                        Text(label, fontSize = 13.sp)
+                        Text(label, fontSize = 13.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
