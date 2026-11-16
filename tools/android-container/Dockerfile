@@ -1,4 +1,4 @@
-# avandroid: the Android toolchain for app/android, built by build.sh on fpga.  (The platform and
+# avandroid: the Android toolchain for android/ (the app), built by build.sh on fpga.  (The platform and
 # build-tools are the ones AGP 9.5.1 asks for: the SDK here is read-only, nothing is fetched at build time.)
 # JDK 21, the Android SDK's command-line tools, platform-tools (adb), one platform and one
 # build-tools.  Gradle itself comes from the project's wrapper; its downloads and adb's key

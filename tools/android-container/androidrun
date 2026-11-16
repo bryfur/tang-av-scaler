@@ -3,7 +3,7 @@
 # (which must be under ~/devel, the tree the container mounts at the same path).  With no
 # CMD, a shell.  On a host without Docker access (bryan-cc) it runs itself on
 # $ANDROIDRUN_HOST (default fpga) over ssh.
-#   androidrun ./gradlew assembleDebug        (in app/android)
+#   androidrun ./gradlew assembleDebug        (in android/)
 #   androidrun adb pair 192.168.1.50:37123 123456
 # Host networking (adb reaches the phone's wireless debugging port); Gradle's downloads and
 # adb's key in the named volumes avandroid-gradle and avandroid-adb.

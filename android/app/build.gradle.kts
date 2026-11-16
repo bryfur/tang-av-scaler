@@ -5,6 +5,16 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// The release's signing key: never in the repository.  The release workflow (.github/workflows/
+// android.yml) writes it from the repository's secrets and names it here; without it a release
+// build comes out unsigned (a local check that it builds).
+val keystore = System.getenv("TANGAV_KEYSTORE")?.let { file(it) }?.takeIf { it.exists() }
+
+// The version: from the release's tag (app-v1.2.3 -> 1.2.3) and the workflow's run number; a local
+// build is 0.0-dev.
+val tag = System.getenv("TANGAV_VERSION")?.removePrefix("app-v")
+val build = System.getenv("TANGAV_BUILD")?.toIntOrNull() ?: 1
+
 android {
     namespace = "io.github.bryfur.tangav"
     compileSdk = 37
@@ -12,13 +22,23 @@ android {
         applicationId = "io.github.bryfur.tangav"
         minSdk = 29                 // (BluetoothDevice.createL2capChannel)
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = build
+        versionName = tag ?: "0.0-dev"
+    }
+    signingConfigs {
+        if (keystore != null) create("release") {
+            storeFile = keystore
+            storePassword = System.getenv("TANGAV_STORE_PASSWORD")
+            keyAlias = System.getenv("TANGAV_KEY_ALIAS")
+            keyPassword = System.getenv("TANGAV_KEY_PASSWORD")
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
     buildFeatures { compose = true }
