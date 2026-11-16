@@ -128,20 +128,15 @@ private fun Header(vm: BoardModel, onChoose: () -> Unit) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Tang AV Scaler", color = p.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                 modifier = Modifier.weight(1f))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Advanced", color = p.dim, fontSize = 13.sp)
-                Spacer(Modifier.width(6.dp))
-                Switch(adv, { vm.setAdvanced(it) })
-            }
             Power(vm, v)
         }
-        FlowRow(
-            Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.CenterVertically,
+        // (the chips on one line, scrolled sideways where they do not fit)
+        Row(
+            Modifier.fillMaxWidth().padding(top = 8.dp).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically,
         ) {
             Way(link, onChoose)
-            for ((t, s, a) in barChips(v, link, adv, def)) Chip(t, s, big = true,
-                modifier = if (a) Modifier.clickable { vm.setAdvanced(true) } else Modifier)
+            for ((t, s, _) in barChips(v, link, adv, def)) Chip(t, s, big = true)
             val pk = st?.optJSONObject("ble")?.optString("passkey").orEmpty()
             if (pk.isNotEmpty()) Chip("Bluetooth pairing: $pk", St.BUSY, big = true)
         }

@@ -44,7 +44,8 @@ class BoardModel(app: Application) : AndroidViewModel(app) {
     val defaults = MutableStateFlow<Form?>(null)
     /** What the controls show: the board's settings, with this phone's changes not yet echoed back. */
     val form = MutableStateFlow<Form>(emptyMap())
-    val advanced = MutableStateFlow(prefs.getBoolean("advanced", false))
+    /** (always on: the app shows every setting; the web page keeps its Advanced switch) */
+    val advanced = MutableStateFlow(true)
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val capture = MutableStateFlow<Bitmap?>(null)
     val busy = MutableStateFlow<String?>(null)          // a long job's progress (a capture, an upload)
